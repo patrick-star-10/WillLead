@@ -148,7 +148,9 @@ export function App() {
               contractAddress={wallet.contractAddress}
               ownerAddress={wallet.ownerAddress}
               connectionLabel={wallet.connectionLabel}
+              balanceContextLabel={wallet.balanceContextLabel}
               balanceLabel={wallet.balanceLabel}
+              assetBalances={wallet.assetBalances}
               runtimeStatus={wallet.runtimeStatus}
               isConnected={wallet.isConnected}
               automationCreditLabel={automation.creditLabel}

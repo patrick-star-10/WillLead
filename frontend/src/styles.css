@@ -383,6 +383,36 @@ button:disabled {
   gap: 12px;
 }
 
+.asset-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.asset-chip {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(248, 242, 232, 0.92);
+  border: 1px solid rgba(175, 138, 94, 0.12);
+}
+
+.asset-chip span {
+  color: #92775c;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.asset-empty-state {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(248, 242, 232, 0.92);
+  border: 1px solid rgba(175, 138, 94, 0.12);
+  color: #7b634b;
+}
+
 .metric-tile {
   display: grid;
   gap: 6px;

@@ -5,7 +5,9 @@ export type WalletState = {
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
   connectionLabel: string
+  balanceContextLabel: string
   balanceLabel: string
+  assetBalances: AssetBalance[]
   runtimeStatus: string
   isConnected: boolean
   lastSyncedAt: string
@@ -71,4 +73,10 @@ export type WalletConnectResult = {
 export type InjectedWalletOption = {
   id: string
   label: string
+}
+
+export type AssetBalance = {
+  symbol: string
+  balanceLabel: string
+  kind: 'native' | 'erc20'
 }

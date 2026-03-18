@@ -1,6 +1,7 @@
 import {
   formatEther,
   getAddress,
+  parseAbi,
   parseAbiItem,
   parseEther,
   zeroAddress,
@@ -15,6 +16,7 @@ import { willLeadWalletAbi } from '../contracts/abi/willLeadWallet'
 import { contractAddresses } from '../contracts/addresses'
 import type {
   ActionResult,
+  AssetBalance,
   AutomationCreditState,
   ExecutionProof,
   AutomationFundingValues,
@@ -46,6 +48,11 @@ import {
 
 const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const emptyAddress = '0x0000000000000000000000000000000000000000'
+const erc20Abi = parseAbi([
+  'function balanceOf(address account) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)'
+])
 
 function isConfiguredAddress(value: string) {
   return value.toLowerCase() !== emptyAddress
@@ -80,6 +87,17 @@ function formatRuntimeStatus(status: number) {
 
 function formatAmount(amount: bigint) {
   return `${formatEther(amount)} ETH`
+}
+
+function formatTokenAmount(amount: bigint, decimals: number) {
+  const decimalFactor = 10n ** BigInt(decimals)
+  const whole = amount / decimalFactor
+  const fraction = amount % decimalFactor
+
+  if (fraction === 0n) return whole.toString()
+
+  const paddedFraction = fraction.toString().padStart(decimals, '0').slice(0, 4).replace(/0+$/, '')
+  return paddedFraction ? `${whole}.${paddedFraction}` : whole.toString()
 }
 
 function toTokenAddress(tokenInput: string): Address {
@@ -143,15 +161,18 @@ export async function readWalletState(
   const reactiveClient = getReactivePublicClient()
   const walletAddress = getAddress(contractAddresses.wallet)
   const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
+  const isWalletContractConfigured = isConfiguredAddress(walletAddress)
 
-  if (!destinationClient || !isConfiguredAddress(walletAddress)) {
+  if (!destinationClient) {
     return {
       wallet: {
         contractAddress: walletAddress,
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
-        balanceLabel: '0.42 ETH',
+        balanceContextLabel: 'Connected Sepolia wallet balance',
+        balanceLabel: 'Unavailable',
+        assetBalances: [],
         runtimeStatus: 'active',
         isConnected: ownerAddress !== null,
         lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
@@ -173,8 +194,8 @@ export async function readWalletState(
       },
       automation: {
         creditLabel: 'Mock',
-        availableBalance: '0.012 ETH',
-        minRequiredBalance: '0.005 ETH'
+        availableBalance: 'Unavailable',
+        minRequiredBalance: 'Unavailable'
       },
       executionProofs: [
         {
@@ -205,6 +226,56 @@ export async function readWalletState(
     }
   }
 
+  if (!isWalletContractConfigured) {
+    const connectedBalance =
+      ownerAddress !== null ? await destinationClient.getBalance({ address: getAddress(ownerAddress) }) : 0n
+
+    return {
+      wallet: {
+        contractAddress: walletAddress,
+        ownerAddress,
+        connectionSource,
+        connectionLabel: formatConnectionLabel(connectionSource),
+        balanceContextLabel: 'Connected Sepolia wallet balance',
+        balanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
+        assetBalances:
+          ownerAddress !== null
+            ? [
+                {
+                  symbol: 'ETH',
+                  balanceLabel: formatAmount(connectedBalance),
+                  kind: 'native'
+                }
+              ]
+            : [],
+        runtimeStatus: 'inactive',
+        isConnected: ownerAddress !== null,
+        lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
+        lastExecutionNonce: 0,
+        lastExecutedAt: 'Never',
+        lastSignalHash: zeroHash,
+        destinationBalanceDelta: '0 ETH',
+        listenerPaused: false,
+        callbackGasLimit: '0'
+      },
+      intent: {
+        token: 'native',
+        recipient: 'Not configured',
+        amountPerExecution: '0',
+        maxExecutions: 0,
+        executedCount: 0,
+        minAutomationBalance: '0',
+        enabled: false
+      },
+      automation: {
+        creditLabel: 'Unavailable',
+        availableBalance: 'Unavailable',
+        minRequiredBalance: 'Unavailable'
+      },
+      executionProofs: []
+    }
+  }
+
   const [summary, balance, lastExecutionNonce, lastExecutedAt, lastSignalHash] = await Promise.all([
     destinationClient.readContract({
       address: walletAddress,
@@ -232,6 +303,7 @@ export async function readWalletState(
   const [status, token, recipient, amountPerExecution, maxExecutions, executedCount, automationFloor] =
     summary
   const listenerState = await readReactiveListenerState(reactiveListenerAddress)
+  const assetBalances = await readTrackedAssets(destinationClient, walletAddress, balance, token)
 
   const automation = await readAutomationCredit(walletAddress, automationFloor)
   const proofs = await readExecutionProofs(
@@ -248,7 +320,9 @@ export async function readWalletState(
       ownerAddress,
       connectionSource,
       connectionLabel: formatConnectionLabel(connectionSource),
+      balanceContextLabel: 'Destination wallet contract balance',
       balanceLabel: formatAmount(balance),
+      assetBalances,
       runtimeStatus: formatRuntimeStatus(status),
       isConnected: ownerAddress !== null,
       lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
@@ -271,6 +345,52 @@ export async function readWalletState(
     automation,
     executionProofs: proofs
   }
+}
+
+async function readTrackedAssets(
+  destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>,
+  walletAddress: Address,
+  nativeBalance: bigint,
+  intentToken: Address
+): Promise<AssetBalance[]> {
+  const balances: AssetBalance[] = [
+    {
+      symbol: 'ETH',
+      balanceLabel: formatAmount(nativeBalance),
+      kind: 'native'
+    }
+  ]
+
+  if (intentToken === zeroAddress) return balances
+
+  try {
+    const [tokenBalance, decimals, symbol] = await Promise.all([
+      destinationClient.readContract({
+        address: intentToken,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [walletAddress]
+      }) as Promise<bigint>,
+      destinationClient.readContract({
+        address: intentToken,
+        abi: erc20Abi,
+        functionName: 'decimals'
+      }) as Promise<number>,
+      destinationClient.readContract({
+        address: intentToken,
+        abi: erc20Abi,
+        functionName: 'symbol'
+      }) as Promise<string>
+    ])
+
+    balances.push({
+      symbol,
+      balanceLabel: `${formatTokenAmount(tokenBalance, decimals)} ${symbol}`,
+      kind: 'erc20'
+    })
+  } catch {}
+
+  return balances
 }
 
 async function readReactiveListenerState(reactiveListenerAddress: Address) {

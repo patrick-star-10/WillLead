@@ -54,7 +54,9 @@ const initialWalletState: WalletState = {
   ownerAddress: null,
   connectionSource: 'disconnected',
   connectionLabel: 'Not connected',
-  balanceLabel: '0.42 ETH',
+  balanceContextLabel: 'Connected Sepolia wallet balance',
+  balanceLabel: 'Unavailable',
+  assetBalances: [],
   runtimeStatus: 'active',
   isConnected: false,
   lastSyncedAt: '2026-03-18 06:10 PST',
@@ -77,9 +79,9 @@ const initialIntentState: IntentState = {
 }
 
 const initialAutomationState: AutomationCreditState = {
-  creditLabel: 'Healthy',
-  availableBalance: '0.012 ETH',
-  minRequiredBalance: '0.005 ETH'
+  creditLabel: 'Unavailable',
+  availableBalance: 'Unavailable',
+  minRequiredBalance: 'Unavailable'
 }
 
 const initialProofs: ExecutionProof[] = [

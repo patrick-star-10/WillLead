@@ -1,10 +1,14 @@
 import { useState } from 'react'
 
+import type { AssetBalance } from '../types/willlead'
+
 type WalletHeaderProps = {
   contractAddress: string
   ownerAddress: string | null
   connectionLabel: string
+  balanceContextLabel: string
   balanceLabel: string
+  assetBalances: AssetBalance[]
   runtimeStatus: string
   isConnected: boolean
   automationCreditLabel: string
@@ -38,7 +42,7 @@ export function WalletHeader(props: WalletHeaderProps) {
       </div>
       <div className="wallet-balance-row">
         <div>
-          <p className="section-note">Destination wallet balance</p>
+          <p className="section-note">{props.balanceContextLabel}</p>
           <p className="wallet-balance">{props.balanceLabel}</p>
         </div>
         <div className="identity-stack">
@@ -52,6 +56,21 @@ export function WalletHeader(props: WalletHeaderProps) {
           </div>
         </div>
       </div>
+      {props.assetBalances.length > 0 ? (
+        <div className="asset-strip">
+          {props.assetBalances.map((asset) => (
+            <div className="asset-chip" key={`${asset.kind}-${asset.symbol}`}>
+              <span>{asset.symbol}</span>
+              <strong>{asset.balanceLabel}</strong>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="asset-empty-state">
+          Asset balances are unavailable until a Sepolia RPC or destination wallet contract is
+          configured.
+        </div>
+      )}
       <div className="metric-strip">
         <div className="metric-tile">
           <span>Connection</span>
