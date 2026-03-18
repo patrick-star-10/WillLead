@@ -86,7 +86,7 @@ function formatRuntimeStatus(status: number) {
 }
 
 function formatAmount(amount: bigint) {
-  return `${formatEther(amount)} ETH`
+  return `${formatDecimalString(formatEther(amount), 3)} ETH`
 }
 
 function formatTokenAmount(amount: bigint, decimals: number) {
@@ -96,8 +96,16 @@ function formatTokenAmount(amount: bigint, decimals: number) {
 
   if (fraction === 0n) return whole.toString()
 
-  const paddedFraction = fraction.toString().padStart(decimals, '0').slice(0, 4).replace(/0+$/, '')
+  const paddedFraction = fraction.toString().padStart(decimals, '0').slice(0, 3).replace(/0+$/, '')
   return paddedFraction ? `${whole}.${paddedFraction}` : whole.toString()
+}
+
+function formatDecimalString(value: string, maxDecimals: number) {
+  const [whole, fraction] = value.split('.')
+  if (!fraction) return whole
+
+  const trimmedFraction = fraction.slice(0, maxDecimals).replace(/0+$/, '')
+  return trimmedFraction ? `${whole}.${trimmedFraction}` : whole
 }
 
 function toTokenAddress(tokenInput: string): Address {
@@ -162,6 +170,20 @@ export async function readWalletState(
   const walletAddress = getAddress(contractAddresses.wallet)
   const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
   const isWalletContractConfigured = isConfiguredAddress(walletAddress)
+  const connectedBalance =
+    destinationClient && ownerAddress !== null
+      ? await destinationClient.getBalance({ address: getAddress(ownerAddress) })
+      : 0n
+  const connectedAssetBalances =
+    ownerAddress !== null
+      ? [
+          {
+            symbol: 'ETH',
+            balanceLabel: formatAmount(connectedBalance),
+            kind: 'native' as const
+          }
+        ]
+      : []
 
   if (!destinationClient) {
     return {
@@ -173,6 +195,8 @@ export async function readWalletState(
         balanceContextLabel: 'Connected Sepolia wallet balance',
         balanceLabel: 'Unavailable',
         assetBalances: [],
+        connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
+        connectedAssetBalances,
         runtimeStatus: 'active',
         isConnected: ownerAddress !== null,
         lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
@@ -248,6 +272,8 @@ export async function readWalletState(
                 }
               ]
             : [],
+        connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
+        connectedAssetBalances,
         runtimeStatus: 'inactive',
         isConnected: ownerAddress !== null,
         lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
@@ -323,6 +349,8 @@ export async function readWalletState(
       balanceContextLabel: 'Destination wallet contract balance',
       balanceLabel: formatAmount(balance),
       assetBalances,
+      connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
+      connectedAssetBalances,
       runtimeStatus: formatRuntimeStatus(status),
       isConnected: ownerAddress !== null,
       lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),

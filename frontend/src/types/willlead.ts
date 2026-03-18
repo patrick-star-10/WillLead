@@ -8,6 +8,8 @@ export type WalletState = {
   balanceContextLabel: string
   balanceLabel: string
   assetBalances: AssetBalance[]
+  connectedBalanceLabel: string
+  connectedAssetBalances: AssetBalance[]
   runtimeStatus: string
   isConnected: boolean
   lastSyncedAt: string

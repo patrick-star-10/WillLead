@@ -257,6 +257,10 @@ button:disabled {
   gap: 22px;
 }
 
+.automation-panel {
+  gap: 22px;
+}
+
 .proof-panel {
   width: min(100%, 980px);
 }
@@ -342,11 +346,31 @@ button:disabled {
   border: 1px solid rgba(175, 138, 94, 0.16);
 }
 
+.wallet-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.automation-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(174, 202, 170, 0.16), rgba(255, 248, 238, 0.92));
+  border: 1px solid rgba(120, 159, 111, 0.14);
+}
+
 .wallet-balance {
   margin: 6px 0 0;
-  font-size: clamp(2.2rem, 5vw, 3.6rem);
-  line-height: 0.95;
+  max-width: 100%;
+  font-size: clamp(1.5rem, 3.6vw, 3rem);
+  line-height: 1;
   letter-spacing: -0.05em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .identity-stack {
@@ -387,6 +411,12 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+}
+
+.dual-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .asset-chip {
@@ -732,6 +762,9 @@ button:disabled {
     flex-direction: column;
   }
 
+  .automation-hero,
+  .wallet-balance-grid,
+  .dual-asset-grid,
   .identity-stack,
   .metric-strip {
     grid-template-columns: 1fr;

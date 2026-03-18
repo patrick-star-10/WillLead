@@ -57,6 +57,8 @@ const initialWalletState: WalletState = {
   balanceContextLabel: 'Connected Sepolia wallet balance',
   balanceLabel: 'Unavailable',
   assetBalances: [],
+  connectedBalanceLabel: 'Unavailable',
+  connectedAssetBalances: [],
   runtimeStatus: 'active',
   isConnected: false,
   lastSyncedAt: '2026-03-18 06:10 PST',

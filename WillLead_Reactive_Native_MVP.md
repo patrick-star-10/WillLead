@@ -24,7 +24,94 @@
 4. 自动执行有明确的资金语义，前端能展示 callback 所需的 automation credit。
 5. 钱包能解释“为什么被触发、执行了几次、最后一次结果是什么”。
 
+## 2.1 当前版本还缺的原生能力
+
+基于现在已经实现的仓库，WillLead 已经具备 `Reactive-enabled wallet prototype` 的形状，但距离“更像原生钱包”还差下面这些能力。
+
+### 必补缺口
+
+1. 真实测试网闭环验证  
+   现在代码和脚本已经齐了，但还需要真正确认  
+   `Base Sepolia -> Reactive Lasna -> Sepolia`  
+   这条链已经稳定跑通。
+
+2. 钱包资产视图还不完整  
+   目前前端只展示原生币和当前 `intent.token` 对应资产，离“钱包”还差：
+   - 多资产展示
+   - 更明确地区分 `EOA balance` 和 `wallet contract balance`
+   - 更清楚的 token metadata 展示
+
+3. 自动执行 credit 还不是完整钱包能力  
+   现在已经有 `top up automation credit`，但还缺：
+   - credit 来源和用途说明
+   - credit 耗尽后的明确状态
+   - credit top-up 历史或最近一次补充记录
+
+4. 订阅管理还不是钱包的一等能力  
+   现在 Reactive subscription 主要由 listener 承担，钱包端还缺：
+   - 当前订阅来源说明
+   - 订阅开关的产品化表达
+   - 对“这个钱包为何会响应这个 signal”的可解释性
+
+5. 失败处理还不够钱包级  
+   当前有 pause / skip / duplicate 防护，但还缺：
+   - callback 失败原因归类
+   - recover / retry 策略
+   - credit 不足、资产不足、intent 不匹配等错误的前端可见状态
+
+### 可增强缺口
+
+1. 本地网页钱包已经有创建 / 导入助记词能力，但还不是成熟的钱包体验  
+   还缺：
+   - 助记词确认流程
+   - 导出 / 备份提醒
+   - 多账户或多钱包切换
+   - 明确的 session / persistent wallet 管理
+
+2. Activity 还偏 proof panel，不是完整钱包历史  
+   还缺：
+   - user action history
+   - execution history
+   - funding history
+   - failed execution history
+
+3. Intent 还是单 intent 模型  
+   这对 MVP 是对的，但如果要更像原生钱包，后续要支持：
+   - 多 intent
+   - intent priority
+   - intent 状态筛选
+   - intent 模板化
+
 ## 3. MVP 范围
+
+这一版把 MVP 拆成三个层级，避免“已经实现的 demo 能力”和“要讲成原生钱包还必须补的能力”混在一起。
+
+### Layer A: 当前已实现的 MVP
+
+- 钱包可连接浏览器钱包
+- 钱包可创建 / 导入网页钱包
+- 前端可配置单条 transfer intent
+- listener 可监听 signal 并构造 callback
+- wallet 可接收 callback 并执行固定金额转账
+- 前端可展示 runtime / automation credit / proof
+- 脚本可完成 deploy / bootstrap / readiness / demo cycle
+
+### Layer B: 必须补齐后才更适合讲成 reactive-native wallet
+
+- 真实测试网闭环跑通并留存证据
+- 区分 `connected wallet` 与 `destination wallet contract` 资产语义
+- 让 automation credit 成为更完整的钱包能力展示
+- 明确 listener / subscription 与 wallet 的关系
+- 明确失败、暂停、耗尽、跳过的状态说明
+
+### Layer C: 后续扩展
+
+- 多 intent
+- DCA 包装层
+- 多钱包 / 多账户
+- 更完整的钱包历史
+- 更完整的 token portfolio
+- 更成熟的网页钱包备份与恢复体验
 
 ### 必须做
 
@@ -44,6 +131,22 @@
 - 完整执行历史索引系统
 
 说明：如果后面还有时间，DCA 可以作为固定金额转账的包装层追加，但第一版不要先做。
+
+## 3.1 修订后的方案主线
+
+为了让方案更贴近“Reactive 原生钱包”，后续实现建议不再只围绕“把 callback 跑通”，而是按下面顺序推进：
+
+1. 先把 `connected wallet` 和 `destination wallet contract` 资产语义彻底分开  
+   目标：用户一眼能看懂自己当前连接的钱包和执行 intent 的钱包是不是同一个地址。
+
+2. 再把 `automation credit` 做成钱包一级信息  
+   目标：用户能看懂自动执行资金够不够、什么时候补过、耗尽会怎样。
+
+3. 再把 `listener / subscription` 做成钱包运行时能力  
+   目标：用户能看懂这个钱包为什么会对某类 signal 响应。
+
+4. 最后用真实测试网闭环把“Reactive-native”讲成立  
+   目标：不仅能看，还能证明前端离线后 intent 仍继续执行。
 
 ## 4. 核心产品模型
 

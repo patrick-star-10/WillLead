@@ -1,5 +1,6 @@
 import { startTransition, useDeferredValue, useEffect, useState, useTransition } from 'react'
 
+import { AutomationCapabilityPanel } from '../components/AutomationCapabilityPanel'
 import { IntentForm } from '../components/IntentForm'
 import { ProofPanel } from '../components/ProofPanel'
 import { RuntimePanel } from '../components/RuntimePanel'
@@ -148,21 +149,30 @@ export function App() {
               contractAddress={wallet.contractAddress}
               ownerAddress={wallet.ownerAddress}
               connectionLabel={wallet.connectionLabel}
+              connectedBalanceLabel={wallet.connectedBalanceLabel}
+              connectedAssetBalances={wallet.connectedAssetBalances}
               balanceContextLabel={wallet.balanceContextLabel}
               balanceLabel={wallet.balanceLabel}
               assetBalances={wallet.assetBalances}
               runtimeStatus={wallet.runtimeStatus}
               isConnected={wallet.isConnected}
-              automationCreditLabel={automation.creditLabel}
-              automationAvailableBalance={automation.availableBalance}
-              automationMinRequiredBalance={automation.minRequiredBalance}
               executedCount={intent.executedCount}
               maxExecutions={intent.maxExecutions}
-              listenerPaused={wallet.listenerPaused}
               lastSyncedAt={wallet.lastSyncedAt}
+            />
+          ) : null}
+
+          {activeSection === 'overview' ? (
+            <AutomationCapabilityPanel
+              availableBalance={automation.availableBalance}
+              callbackGasLimit={wallet.callbackGasLimit}
+              creditLabel={automation.creditLabel}
               isPending={isActionPending}
-              onRefresh={handleRefresh}
+              lastSyncedAt={wallet.lastSyncedAt}
+              listenerPaused={wallet.listenerPaused}
+              minRequiredBalance={automation.minRequiredBalance}
               onFundAutomation={(amount) => void fundAutomation({ amount })}
+              onRefresh={handleRefresh}
             />
           ) : null}
 
