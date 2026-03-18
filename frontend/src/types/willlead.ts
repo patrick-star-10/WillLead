@@ -1,6 +1,10 @@
+export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
+
 export type WalletState = {
   contractAddress: string
   ownerAddress: string | null
+  connectionSource: WalletConnectionSource
+  connectionLabel: string
   balanceLabel: string
   runtimeStatus: string
   isConnected: boolean
@@ -54,4 +58,17 @@ export type ActionResult = {
 
 export type AutomationFundingValues = {
   amount: string
+}
+
+export type WalletConnectResult = {
+  address: string
+  source: Exclude<WalletConnectionSource, 'disconnected'>
+  mnemonic?: string
+  providerId?: string
+  providerLabel?: string
+}
+
+export type InjectedWalletOption = {
+  id: string
+  label: string
 }

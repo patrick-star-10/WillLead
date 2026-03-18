@@ -3,12 +3,14 @@ import { startTransition, useDeferredValue, useEffect, useState, useTransition }
 import { IntentForm } from '../components/IntentForm'
 import { ProofPanel } from '../components/ProofPanel'
 import { RuntimePanel } from '../components/RuntimePanel'
+import { WalletConnectModal } from '../components/WalletConnectModal'
 import { WalletHeader } from '../components/WalletHeader'
 import { useAutomationCredit } from '../hooks/useAutomationCredit'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
 import { useIntentState } from '../hooks/useIntentState'
 import { useWalletState } from '../hooks/useWalletState'
 import { useWalletStore } from '../store/walletStore'
+import { getBrowserWalletOptions } from '../lib/willlead'
 
 const sections = [
   {
@@ -43,7 +45,11 @@ export function App() {
   const automation = useAutomationCredit()
   const executionEvents = useExecutionEvents()
   const deferredEvents = useDeferredValue(executionEvents)
-  const connectWallet = useWalletStore((state) => state.connectWallet)
+  const initializeWallet = useWalletStore((state) => state.initializeWallet)
+  const connectBrowserWallet = useWalletStore((state) => state.connectBrowserWallet)
+  const createWebWallet = useWalletStore((state) => state.createWebWallet)
+  const importWebWallet = useWalletStore((state) => state.importWebWallet)
+  const disconnectWallet = useWalletStore((state) => state.disconnectWallet)
   const refreshChainState = useWalletStore((state) => state.refreshChainState)
   const submitIntent = useWalletStore((state) => state.submitIntent)
   const fundAutomation = useWalletStore((state) => state.fundAutomation)
@@ -58,10 +64,12 @@ export function App() {
   const [, startUiTransition] = useTransition()
   const [activeSection, setActiveSection] =
     useState<(typeof sections)[number]['id']>('overview')
+  const [isWalletModalOpen, setWalletModalOpen] = useState(false)
+  const browserWalletOptions = getBrowserWalletOptions()
 
   useEffect(() => {
-    void refreshChainState()
-  }, [refreshChainState])
+    void initializeWallet()
+  }, [initializeWallet])
 
   const handleRefresh = () => {
     startUiTransition(() => {
@@ -86,12 +94,22 @@ export function App() {
             </p>
           </div>
           <div className="hero-actions">
-            <button className="primary-button" onClick={() => void connectWallet()} type="button">
-              {wallet.isConnected ? 'Reconnect Wallet' : 'Connect Wallet'}
+            <button
+              className="primary-button"
+              onClick={() => {
+                if (wallet.isConnected) {
+                  void disconnectWallet()
+                  return
+                }
+                setWalletModalOpen(true)
+              }}
+              type="button"
+            >
+              {wallet.isConnected ? 'Disconnect Wallet' : 'Connect Wallet'}
             </button>
             <p className="hero-action-note">
               {wallet.isConnected
-                ? 'Wallet ready for onchain intent updates.'
+                ? `${wallet.connectionLabel} connected. Click above to disconnect this session.`
                 : 'Connect first, then configure the transfer plan.'}
             </p>
           </div>
@@ -129,6 +147,7 @@ export function App() {
             <WalletHeader
               contractAddress={wallet.contractAddress}
               ownerAddress={wallet.ownerAddress}
+              connectionLabel={wallet.connectionLabel}
               balanceLabel={wallet.balanceLabel}
               runtimeStatus={wallet.runtimeStatus}
               isConnected={wallet.isConnected}
@@ -180,6 +199,22 @@ export function App() {
           {activeSection === 'activity' ? <ProofPanel events={deferredEvents} /> : null}
         </section>
       </section>
+
+      <WalletConnectModal
+        browserWalletOptions={browserWalletOptions}
+        currentAddress={wallet.ownerAddress}
+        currentConnectionLabel={wallet.connectionLabel}
+        isOpen={isWalletModalOpen}
+        isPending={isActionPending}
+        onClose={() => setWalletModalOpen(false)}
+        onConnectBrowserWallet={async (providerId) => {
+          await connectBrowserWallet(providerId)
+        }}
+        onCreateWebWallet={async () => createWebWallet()}
+        onImportWebWallet={async (mnemonic) => {
+          await importWebWallet(mnemonic)
+        }}
+      />
     </main>
   )
 }

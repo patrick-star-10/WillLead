@@ -3,10 +3,14 @@ import { create } from 'zustand'
 import {
   configureIntent,
   connectOwnerWallet,
+  createOwnerWebWallet,
+  disconnectOwnerWallet,
   emitSignal,
+  importOwnerWebWallet,
   pauseIntent,
   pauseReactiveListener,
   readWalletState,
+  restoreOwnerWallet,
   resumeIntent,
   resumeReactiveListener,
   topUpAutomationCredit
@@ -30,7 +34,11 @@ type WillLeadStore = {
   isPending: boolean
   statusMessage: string
   errorMessage: string | null
-  connectWallet: () => Promise<void>
+  initializeWallet: () => Promise<void>
+  connectBrowserWallet: (providerId: string) => Promise<void>
+  createWebWallet: () => Promise<string>
+  importWebWallet: (mnemonic: string) => Promise<void>
+  disconnectWallet: () => Promise<void>
   refreshChainState: () => Promise<void>
   submitIntent: (values: IntentFormValues) => Promise<void>
   fundAutomation: (values: AutomationFundingValues) => Promise<void>
@@ -44,6 +52,8 @@ type WillLeadStore = {
 const initialWalletState: WalletState = {
   contractAddress: '0xA11CE0000000000000000000000000000000BEEF',
   ownerAddress: null,
+  connectionSource: 'disconnected',
+  connectionLabel: 'Not connected',
   balanceLabel: '0.42 ETH',
   runtimeStatus: 'active',
   isConnected: false,
@@ -107,32 +117,134 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
   isPending: false,
   statusMessage: 'Ready to bind a wallet and configure the first intent.',
   errorMessage: null,
-  connectWallet: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Connecting owner wallet...' })
+  initializeWallet: async () => {
+    set({ isPending: true, errorMessage: null, statusMessage: 'Preparing wallet session...' })
 
     try {
-      const ownerAddress = await connectOwnerWallet()
-      const snapshot = await readWalletState(ownerAddress)
+      const restored = await restoreOwnerWallet()
+      const snapshot = await readWalletState(
+        restored?.address ?? null,
+        restored?.source ?? 'disconnected'
+      )
 
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: `Connected owner ${ownerAddress}`,
+        statusMessage: restored
+          ? `Restored web wallet ${restored.address}`
+          : 'Ready to connect a browser wallet or create a web wallet.',
         errorMessage: null
       })
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to connect wallet',
-        statusMessage: 'Wallet connection failed.'
+        errorMessage: error instanceof Error ? error.message : 'Failed to initialize wallet',
+        statusMessage: 'Wallet session initialization failed.'
       })
+    }
+  },
+  connectBrowserWallet: async (providerId) => {
+    set({ isPending: true, errorMessage: null, statusMessage: 'Connecting browser wallet...' })
+
+    try {
+      const result = await connectOwnerWallet(providerId)
+      const snapshot = await readWalletState(result.address, result.source)
+
+      set({
+        ...snapshot,
+        wallet: {
+          ...snapshot.wallet,
+          connectionLabel: result.providerLabel ?? snapshot.wallet.connectionLabel
+        },
+        isPending: false,
+        statusMessage: `Connected ${result.providerLabel ?? 'browser wallet'} ${result.address}`,
+        errorMessage: null
+      })
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : 'Failed to connect browser wallet',
+        statusMessage: 'Browser wallet connection failed.'
+      })
+      throw error
+    }
+  },
+  createWebWallet: async () => {
+    set({ isPending: true, errorMessage: null, statusMessage: 'Creating web wallet...' })
+
+    try {
+      const result = await createOwnerWebWallet()
+      const snapshot = await readWalletState(result.address, result.source)
+
+      set({
+        ...snapshot,
+        isPending: false,
+        statusMessage: `Created web wallet ${result.address}`,
+        errorMessage: null
+      })
+
+      return result.mnemonic ?? ''
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : 'Failed to create web wallet',
+        statusMessage: 'Web wallet creation failed.'
+      })
+      throw error
+    }
+  },
+  importWebWallet: async (mnemonic) => {
+    set({ isPending: true, errorMessage: null, statusMessage: 'Importing web wallet...' })
+
+    try {
+      const result = await importOwnerWebWallet(mnemonic)
+      const snapshot = await readWalletState(result.address, result.source)
+
+      set({
+        ...snapshot,
+        isPending: false,
+        statusMessage: `Imported web wallet ${result.address}`,
+        errorMessage: null
+      })
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : 'Failed to import web wallet',
+        statusMessage: 'Web wallet import failed.'
+      })
+      throw error
+    }
+  },
+  disconnectWallet: async () => {
+    set({ isPending: true, errorMessage: null, statusMessage: 'Disconnecting wallet session...' })
+
+    try {
+      await disconnectOwnerWallet()
+      const snapshot = await readWalletState(null, 'disconnected')
+
+      set({
+        ...snapshot,
+        isPending: false,
+        statusMessage: 'Wallet disconnected.',
+        errorMessage: null
+      })
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : 'Failed to disconnect wallet',
+        statusMessage: 'Wallet disconnect failed.'
+      })
+      throw error
     }
   },
   refreshChainState: async () => {
     set({ isPending: true, errorMessage: null, statusMessage: 'Refreshing wallet state...' })
 
     try {
-      const snapshot = await readWalletState(get().wallet.ownerAddress)
+      const snapshot = await readWalletState(
+        get().wallet.ownerAddress,
+        get().wallet.connectionSource
+      )
       set({
         ...snapshot,
         isPending: false,
@@ -262,7 +374,7 @@ async function applyPostAction(
   get: () => WillLeadStore,
   action: ActionResult
 ) {
-  const snapshot = await readWalletState(get().wallet.ownerAddress)
+  const snapshot = await readWalletState(get().wallet.ownerAddress, get().wallet.connectionSource)
 
   set((state) => ({
     ...snapshot,

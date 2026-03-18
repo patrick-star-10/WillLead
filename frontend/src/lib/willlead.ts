@@ -20,11 +20,15 @@ import type {
   AutomationFundingValues,
   IntentFormValues,
   IntentState,
+  WalletConnectResult,
+  WalletConnectionSource,
   WalletState
 } from '../types/willlead'
 import {
+  disconnectBrowserWalletSession,
   getDestinationPublicClient,
   getDestinationWalletClient,
+  getInjectedWalletOptions,
   getOriginPublicClient,
   getOriginWalletClient,
   getReactivePublicClient,
@@ -33,6 +37,12 @@ import {
 } from './clients'
 import { destinationChain, originChain, reactiveChain } from './chains'
 import { txExplorerLink } from './explorers'
+import {
+  createWebWallet,
+  disconnectWalletSession,
+  importWebWallet,
+  restoreWebWallet
+} from './webWallet'
 
 const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const emptyAddress = '0x0000000000000000000000000000000000000000'
@@ -80,11 +90,49 @@ function toTokenAddress(tokenInput: string): Address {
   return getAddress(tokenInput)
 }
 
-export async function connectOwnerWallet() {
-  return requestWalletAddress()
+export function getBrowserWalletOptions() {
+  return getInjectedWalletOptions()
 }
 
-export async function readWalletState(ownerAddress: string | null): Promise<{
+export async function connectOwnerWallet(providerId: string) {
+  const { address, providerId: connectedProviderId, providerLabel } = await requestWalletAddress(
+    providerId
+  )
+  return {
+    address,
+    source: 'browser',
+    providerId: connectedProviderId,
+    providerLabel
+  } satisfies WalletConnectResult
+}
+
+export async function createOwnerWebWallet() {
+  return createWebWallet()
+}
+
+export async function importOwnerWebWallet(mnemonic: string) {
+  return importWebWallet(mnemonic)
+}
+
+export async function restoreOwnerWallet() {
+  return restoreWebWallet()
+}
+
+export async function disconnectOwnerWallet() {
+  disconnectWalletSession()
+  disconnectBrowserWalletSession()
+}
+
+function formatConnectionLabel(source: WalletConnectionSource) {
+  if (source === 'browser') return 'Browser Wallet'
+  if (source === 'web') return 'Web Wallet'
+  return 'Not connected'
+}
+
+export async function readWalletState(
+  ownerAddress: string | null,
+  connectionSource: WalletConnectionSource = 'disconnected'
+): Promise<{
   wallet: WalletState
   intent: IntentState
   automation: AutomationCreditState
@@ -101,6 +149,8 @@ export async function readWalletState(ownerAddress: string | null): Promise<{
       wallet: {
         contractAddress: walletAddress,
         ownerAddress,
+        connectionSource,
+        connectionLabel: formatConnectionLabel(connectionSource),
         balanceLabel: '0.42 ETH',
         runtimeStatus: 'active',
         isConnected: ownerAddress !== null,
@@ -196,6 +246,8 @@ export async function readWalletState(ownerAddress: string | null): Promise<{
     wallet: {
       contractAddress: walletAddress,
       ownerAddress,
+      connectionSource,
+      connectionLabel: formatConnectionLabel(connectionSource),
       balanceLabel: formatAmount(balance),
       runtimeStatus: formatRuntimeStatus(status),
       isConnected: ownerAddress !== null,

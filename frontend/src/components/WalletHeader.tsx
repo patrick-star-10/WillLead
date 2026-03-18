@@ -3,6 +3,7 @@ import { useState } from 'react'
 type WalletHeaderProps = {
   contractAddress: string
   ownerAddress: string | null
+  connectionLabel: string
   balanceLabel: string
   runtimeStatus: string
   isConnected: boolean
@@ -55,6 +56,7 @@ export function WalletHeader(props: WalletHeaderProps) {
         <div className="metric-tile">
           <span>Connection</span>
           <strong>{props.isConnected ? 'Wallet connected' : 'Connect wallet'}</strong>
+          <small>{props.connectionLabel}</small>
         </div>
         <div className="metric-tile">
           <span>Automation credit</span>
