@@ -1,4 +1,9 @@
 import type { AssetBalance } from '../types/willlead'
+import {
+  translateConnectionLabel,
+  translateRuntimeStatus,
+  useCopy
+} from '../lib/i18n'
 
 type WalletHeaderProps = {
   contractAddress: string
@@ -22,30 +27,29 @@ function shortenAddress(value: string | null) {
 }
 
 export function WalletHeader(props: WalletHeaderProps) {
+  const { copy, locale } = useCopy()
   const remainingExecutions = Math.max(props.maxExecutions - props.executedCount, 0)
 
   return (
     <article className="panel wallet-panel">
       <div className="panel-header">
-        <p className="panel-kicker">Wallet Overview</p>
-        <span className={`status-pill status-${props.runtimeStatus.toLowerCase()}`}>
-          {props.runtimeStatus}
-        </span>
+        <p className="panel-kicker">{copy.walletOverviewKicker}</p>
+        <span className={`status-pill status-${props.runtimeStatus.toLowerCase()}`}>{translateRuntimeStatus(props.runtimeStatus, locale)}</span>
       </div>
       <div className="wallet-balance-grid">
         <div className="wallet-balance-row">
           <div>
-            <p className="section-note">Connected signing wallet balance</p>
+            <p className="section-note">{copy.controllerWalletBalance}</p>
             <p className="wallet-balance">{props.connectedBalanceLabel}</p>
           </div>
           <div className="identity-stack">
             <div className="identity-chip">
-              <span>Owner</span>
+              <span>{copy.controller}</span>
               <strong>{shortenAddress(props.ownerAddress)}</strong>
             </div>
             <div className="identity-chip">
-              <span>Signer</span>
-              <strong>{props.connectionLabel}</strong>
+              <span>{copy.signingSource}</span>
+              <strong>{translateConnectionLabel(props.connectionLabel, locale)}</strong>
             </div>
           </div>
         </div>
@@ -56,19 +60,19 @@ export function WalletHeader(props: WalletHeaderProps) {
           </div>
           <div className="identity-stack">
             <div className="identity-chip">
-              <span>Destination wallet</span>
+              <span>{copy.autonomousWallet}</span>
               <strong>{shortenAddress(props.contractAddress)}</strong>
             </div>
             <div className="identity-chip">
-              <span>Execution mode</span>
-              <strong>Reactive callback</strong>
+              <span>{copy.executionMode}</span>
+              <strong>{copy.reactiveCallback}</strong>
             </div>
           </div>
         </div>
       </div>
       <div className="dual-asset-grid">
         <div>
-          <p className="section-note">Connected wallet assets</p>
+          <p className="section-note">{copy.controllerWalletAssets}</p>
           {props.connectedAssetBalances.length > 0 ? (
             <div className="asset-strip">
               {props.connectedAssetBalances.map((asset) => (
@@ -79,11 +83,11 @@ export function WalletHeader(props: WalletHeaderProps) {
               ))}
             </div>
           ) : (
-            <div className="asset-empty-state">Connect a Sepolia wallet to load signer assets.</div>
+            <div className="asset-empty-state">{copy.controllerAssetsEmpty}</div>
           )}
         </div>
         <div>
-          <p className="section-note">Destination wallet assets</p>
+          <p className="section-note">{copy.autonomousWalletAssets}</p>
           {props.assetBalances.length > 0 ? (
             <div className="asset-strip">
               {props.assetBalances.map((asset) => (
@@ -94,32 +98,38 @@ export function WalletHeader(props: WalletHeaderProps) {
               ))}
             </div>
           ) : (
-            <div className="asset-empty-state">
-              Destination wallet assets are unavailable until a contract address is configured.
-            </div>
+            <div className="asset-empty-state">{copy.autonomousAssetsEmpty}</div>
           )}
         </div>
       </div>
       <div className="metric-strip">
         <div className="metric-tile">
-          <span>Connection</span>
-          <strong>{props.isConnected ? 'Wallet connected' : 'Connect wallet'}</strong>
-          <small>{props.connectionLabel}</small>
+          <span>{copy.connection}</span>
+          <strong>{props.isConnected ? copy.walletConnected : copy.connectWalletShort}</strong>
+          <small>{translateConnectionLabel(props.connectionLabel, locale)}</small>
         </div>
         <div className="metric-tile">
-          <span>Execution runway</span>
-          <strong>{remainingExecutions} left</strong>
-          <small>{props.executedCount} / {props.maxExecutions} used</small>
+          <span>{copy.executionRunway}</span>
+          <strong>
+            {locale === 'zh-CN'
+              ? `${remainingExecutions}${copy.remainingLeft}`
+              : `${remainingExecutions} ${copy.remainingLeft}`}
+          </strong>
+          <small>
+            {locale === 'zh-CN'
+              ? `${copy.usedCount} ${props.executedCount} / ${props.maxExecutions}`
+              : `${props.executedCount} / ${props.maxExecutions} ${copy.usedCount}`}
+          </small>
         </div>
         <div className="metric-tile">
-          <span>Runtime status</span>
-          <strong>{props.runtimeStatus}</strong>
-          <small>Wallet execution state</small>
+          <span>{copy.runtimeStatus}</span>
+          <strong>{translateRuntimeStatus(props.runtimeStatus, locale)}</strong>
+          <small>{copy.runtimeStatus}</small>
         </div>
         <div className="metric-tile">
-          <span>Last sync</span>
+          <span>{copy.lastSync}</span>
           <strong>{props.lastSyncedAt}</strong>
-          <small>Latest chain snapshot</small>
+          <small>{copy.latestChainSnapshot}</small>
         </div>
       </div>
     </article>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { useCopy } from '../lib/i18n'
 import type { IntentFormValues } from '../types/willlead'
 
 type IntentFormProps = {
@@ -17,6 +18,7 @@ type IntentFormProps = {
 }
 
 export function IntentForm(props: IntentFormProps) {
+  const { copy } = useCopy()
   const [form, setForm] = useState<IntentFormValues>({
     token: props.token,
     recipient: props.recipient,
@@ -47,16 +49,16 @@ export function IntentForm(props: IntentFormProps) {
     <article className="panel">
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">Transfer Plan</p>
-          <p className="section-note">Define the transfer this wallet should keep executing.</p>
+          <p className="panel-kicker">{copy.transferPlanKicker}</p>
+          <p className="section-note">{copy.transferPlanNote}</p>
         </div>
         <span className={`status-pill ${props.enabled ? 'status-active' : 'status-inactive'}`}>
-          {props.enabled ? 'Enabled' : 'Disabled'}
+          {props.enabled ? copy.enabled : copy.disabled}
         </span>
       </div>
       <dl className="data-list form-grid">
         <div>
-          <dt>Token</dt>
+          <dt>{copy.token}</dt>
           <dd>
             <input
               className="field"
@@ -66,7 +68,7 @@ export function IntentForm(props: IntentFormProps) {
           </dd>
         </div>
         <div>
-          <dt>Recipient</dt>
+          <dt>{copy.recipient}</dt>
           <dd>
             <input
               className="field"
@@ -78,7 +80,7 @@ export function IntentForm(props: IntentFormProps) {
           </dd>
         </div>
         <div>
-          <dt>Amount / Execution</dt>
+          <dt>{copy.amountPerExecution}</dt>
           <dd>
             <input
               className="field"
@@ -90,7 +92,7 @@ export function IntentForm(props: IntentFormProps) {
           </dd>
         </div>
         <div>
-          <dt>Max Executions</dt>
+          <dt>{copy.maxExecutions}</dt>
           <dd>
             <input
               className="field"
@@ -107,11 +109,11 @@ export function IntentForm(props: IntentFormProps) {
           </dd>
         </div>
         <div>
-          <dt>Remaining</dt>
+          <dt>{copy.remaining}</dt>
           <dd>{remainingExecutions}</dd>
         </div>
         <div>
-          <dt>Min Automation Balance</dt>
+          <dt>{copy.minAutomationBalance}</dt>
           <dd>
             <input
               className="field"
@@ -125,13 +127,13 @@ export function IntentForm(props: IntentFormProps) {
       </dl>
       <div className="action-row">
         <button className="primary-button" onClick={() => props.onSubmit(form)} type="button">
-          {props.isPending ? 'Saving...' : 'Save Transfer Plan'}
+          {props.isPending ? copy.saving : copy.saveTransferPlan}
         </button>
         <button className="secondary-button" onClick={props.onPause} type="button">
-          Pause Plan
+          {copy.pausePlan}
         </button>
         <button className="secondary-button" onClick={props.onResume} type="button">
-          Resume Plan
+          {copy.resumePlan}
         </button>
       </div>
     </article>

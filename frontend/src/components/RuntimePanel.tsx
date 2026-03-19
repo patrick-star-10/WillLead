@@ -1,3 +1,5 @@
+import { translateRuntimeStatus, useCopy } from '../lib/i18n'
+
 type RuntimePanelProps = {
   runtimeStatus: string
   lastExecutionNonce: number
@@ -13,52 +15,51 @@ type RuntimePanelProps = {
 }
 
 export function RuntimePanel(props: RuntimePanelProps) {
+  const { copy, locale } = useCopy()
   return (
     <article className="panel">
       <div className="panel-header">
         <div>
-          <p className="panel-kicker">Automation Engine</p>
-          <p className="section-note">Monitor the relay path that turns source signals into transfers.</p>
+          <p className="panel-kicker">{copy.automationEngineKicker}</p>
+          <p className="section-note">{copy.automationEngineNote}</p>
         </div>
-        <span className={`status-pill status-${props.runtimeStatus.toLowerCase()}`}>
-          {props.runtimeStatus}
-        </span>
+        <span className={`status-pill status-${props.runtimeStatus.toLowerCase()}`}>{translateRuntimeStatus(props.runtimeStatus, locale)}</span>
       </div>
       <dl className="data-list">
         <div>
-          <dt>Last Execution Nonce</dt>
+          <dt>{copy.lastExecutionNonce}</dt>
           <dd>{props.lastExecutionNonce}</dd>
         </div>
         <div>
-          <dt>Last Executed At</dt>
+          <dt>{copy.lastExecutedAt}</dt>
           <dd>{props.lastExecutedAt}</dd>
         </div>
         <div>
-          <dt>Last Signal Hash</dt>
+          <dt>{copy.lastSignalHash}</dt>
           <dd>{props.lastSignalHash}</dd>
         </div>
         <div>
-          <dt>Balance Delta</dt>
+          <dt>{copy.balanceDelta}</dt>
           <dd>{props.destinationBalanceDelta}</dd>
         </div>
         <div>
-          <dt>Listener Status</dt>
-          <dd>{props.listenerPaused ? 'Paused' : 'Active'}</dd>
+          <dt>{copy.listenerStatus}</dt>
+          <dd>{props.listenerPaused ? copy.paused : copy.active}</dd>
         </div>
         <div>
-          <dt>Callback Gas Limit</dt>
+          <dt>{copy.callbackGasLimit}</dt>
           <dd>{props.callbackGasLimit}</dd>
         </div>
       </dl>
       <div className="action-row">
         <button className="primary-button" onClick={props.onTriggerSignal} type="button">
-          {props.isPending ? 'Triggering...' : 'Emit Source Signal'}
+          {props.isPending ? copy.triggering : copy.emitSourceSignal}
         </button>
         <button className="secondary-button" onClick={props.onPauseListener} type="button">
-          Pause Listener
+          {copy.pauseListener}
         </button>
         <button className="secondary-button" onClick={props.onResumeListener} type="button">
-          Resume Listener
+          {copy.resumeListener}
         </button>
       </div>
     </article>

@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import {
+  translateConnectionLabel,
+  useCopy
+} from '../lib/i18n'
 import type { InjectedWalletOption } from '../types/willlead'
 
 type WalletConnectModalProps = {
@@ -14,12 +18,13 @@ type WalletConnectModalProps = {
   onImportWebWallet: (mnemonic: string) => Promise<void>
 }
 
-function shortenAddress(value: string | null) {
-  if (!value) return 'No wallet connected'
+function shortenAddress(value: string | null, fallback: string) {
+  if (!value) return fallback
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
 export function WalletConnectModal(props: WalletConnectModalProps) {
+  const { copy, locale } = useCopy()
   const [activeMode, setActiveMode] = useState<'choose' | 'browser' | 'web'>('choose')
   const [createdMnemonic, setCreatedMnemonic] = useState('')
   const [importMnemonic, setImportMnemonic] = useState('')
@@ -57,14 +62,15 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
       >
         <div className="wallet-modal-header">
           <div>
-            <p className="panel-kicker">Wallet Access</p>
-            <h3>Choose how this app should sign transactions</h3>
+            <p className="panel-kicker">{copy.walletAccess}</p>
+            <h3>{copy.chooseSigningMethod}</h3>
             <p className="section-note">
-              Current signer: {props.currentConnectionLabel} · {shortenAddress(props.currentAddress)}
+              {copy.currentSigner}: {translateConnectionLabel(props.currentConnectionLabel, locale)} ·{' '}
+              {shortenAddress(props.currentAddress, copy.noWalletConnected)}
             </p>
           </div>
           <button className="secondary-button" onClick={props.onClose} type="button">
-            Close
+            {copy.close}
           </button>
         </div>
 
@@ -74,9 +80,9 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
             onClick={() => setActiveMode('browser')}
             type="button"
           >
-            <span className="wallet-choice-kicker">Option 1</span>
-            <strong>Connect other wallet</strong>
-            <p>Use the injected browser wallet flow you already had, such as MetaMask or Rabby.</p>
+            <span className="wallet-choice-kicker">{copy.option1}</span>
+            <strong>{copy.connectOtherWallet}</strong>
+            <p>{copy.connectOtherWalletNote}</p>
           </button>
 
           <button
@@ -84,11 +90,9 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
             onClick={() => setActiveMode('web')}
             type="button"
           >
-            <span className="wallet-choice-kicker">Option 2</span>
-            <strong>Create wallet</strong>
-            <p>
-              Generate or import a mnemonic and let this app act as an independent web wallet.
-            </p>
+            <span className="wallet-choice-kicker">{copy.option2}</span>
+            <strong>{copy.createWallet}</strong>
+            <p>{copy.createWalletNote}</p>
           </button>
         </div>
 
@@ -96,13 +100,11 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
           <div className="wallet-list-panel">
             <div className="wallet-list-header">
               <button className="secondary-button" onClick={() => setActiveMode('choose')} type="button">
-                Back
+                {copy.back}
               </button>
               <div>
-                <strong>Choose browser wallet</strong>
-                <p className="section-note">
-                  Each click explicitly chooses which injected wallet to connect.
-                </p>
+                <strong>{copy.chooseBrowserWallet}</strong>
+                <p className="section-note">{copy.chooseBrowserWalletNote}</p>
               </div>
             </div>
             <div className="browser-wallet-list">
@@ -118,13 +120,11 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
                     type="button"
                   >
                     <span>{wallet.label}</span>
-                    <strong>Connect</strong>
+                    <strong>{copy.connect}</strong>
                   </button>
                 ))
               ) : (
-                <div className="browser-wallet-empty">
-                  No injected wallet detected in this browser.
-                </div>
+                <div className="browser-wallet-empty">{copy.noInjectedWallet}</div>
               )}
             </div>
           </div>
@@ -134,18 +134,16 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
           <div className="web-wallet-panel">
             <div className="web-wallet-actions">
               <button className="primary-button" onClick={handleCreateWebWallet} type="button">
-                {props.isPending ? 'Generating...' : 'Generate mnemonic'}
+                {props.isPending ? copy.generating : copy.generateMnemonic}
               </button>
-              <p className="section-note">
-                A generated wallet is saved locally in this browser for this MVP.
-              </p>
+              <p className="section-note">{copy.generatedWalletNote}</p>
             </div>
 
             {mnemonicWords.length > 0 ? (
               <div className="mnemonic-panel">
                 <div className="mnemonic-panel-header">
-                  <strong>Recovery phrase</strong>
-                  <span>Write these 12 words down before closing this dialog.</span>
+                  <strong>{copy.recoveryPhrase}</strong>
+                  <span>{copy.recoveryPhraseNote}</span>
                 </div>
                 <div className="mnemonic-grid">
                   {mnemonicWords.map((word, index) => (
@@ -160,13 +158,13 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
 
             <div className="import-panel">
               <label className="import-label" htmlFor="mnemonic-import">
-                Import an existing mnemonic
+                {copy.importMnemonic}
               </label>
               <textarea
                 className="field mnemonic-textarea"
                 id="mnemonic-import"
                 onChange={(event) => setImportMnemonic(event.target.value)}
-                placeholder="paste your 12 or 24 word recovery phrase"
+                placeholder={copy.importMnemonicPlaceholder}
                 value={importMnemonic}
               />
               <div className="action-row">
@@ -176,7 +174,7 @@ export function WalletConnectModal(props: WalletConnectModalProps) {
                   onClick={handleImportWebWallet}
                   type="button"
                 >
-                  {props.isPending ? 'Importing...' : 'Import web wallet'}
+                  {props.isPending ? copy.importing : copy.importWebWallet}
                 </button>
               </div>
             </div>

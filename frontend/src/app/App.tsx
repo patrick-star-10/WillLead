@@ -10,37 +10,13 @@ import { useAutomationCredit } from '../hooks/useAutomationCredit'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
 import { useIntentState } from '../hooks/useIntentState'
 import { useWalletState } from '../hooks/useWalletState'
+import { useCopy, useLocaleActions, translateConnectionLabel } from '../lib/i18n'
 import { useWalletStore } from '../store/walletStore'
 import { getBrowserWalletOptions } from '../lib/willlead'
 
-const sections = [
-  {
-    id: 'overview',
-    label: 'Overview',
-    title: 'Wallet Overview',
-    description: 'Balance, identity, execution runway, and automation credit.'
-  },
-  {
-    id: 'plan',
-    label: 'Transfer Plan',
-    title: 'Transfer Plan',
-    description: 'Configure the onchain transfer this wallet should keep executing.'
-  },
-  {
-    id: 'automation',
-    label: 'Automation',
-    title: 'Automation Engine',
-    description: 'Operate the reactive listener and simulate the source trigger.'
-  },
-  {
-    id: 'activity',
-    label: 'Activity',
-    title: 'Activity Ledger',
-    description: 'Review origin, reactive, and destination proof records.'
-  }
-] as const
-
 export function App() {
+  const { copy, locale } = useCopy()
+  const setLocale = useLocaleActions()
   const wallet = useWalletState()
   const intent = useIntentState()
   const automation = useAutomationCredit()
@@ -59,18 +35,53 @@ export function App() {
   const pauseListener = useWalletStore((state) => state.pauseListener)
   const resumeListener = useWalletStore((state) => state.resumeListener)
   const triggerSignal = useWalletStore((state) => state.triggerSignal)
+  const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
   const isActionPending = useWalletStore((state) => state.isPending)
   const statusMessage = useWalletStore((state) => state.statusMessage)
   const errorMessage = useWalletStore((state) => state.errorMessage)
   const [, startUiTransition] = useTransition()
-  const [activeSection, setActiveSection] =
-    useState<(typeof sections)[number]['id']>('overview')
+  const [activeSection, setActiveSection] = useState<'overview' | 'plan' | 'automation' | 'activity'>('overview')
   const [isWalletModalOpen, setWalletModalOpen] = useState(false)
   const browserWalletOptions = getBrowserWalletOptions()
+
+  const sections = [
+    {
+      id: 'overview',
+      label: copy.overviewTab,
+      title: copy.walletOverviewTitle,
+      description: copy.overviewDesc
+    },
+    {
+      id: 'plan',
+      label: copy.planTab,
+      title: copy.transferPlanTitle,
+      description: copy.planDesc
+    },
+    {
+      id: 'automation',
+      label: copy.automationTab,
+      title: copy.automationTitle,
+      description: copy.automationDesc
+    },
+    {
+      id: 'activity',
+      label: copy.activityTab,
+      title: copy.activityTitle,
+      description: copy.activityDesc
+    }
+  ] as const
 
   useEffect(() => {
     void initializeWallet()
   }, [initializeWallet])
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
+
+  useEffect(() => {
+    syncIdleCopy()
+  }, [locale, syncIdleCopy])
 
   const handleRefresh = () => {
     startUiTransition(() => {
@@ -87,14 +98,27 @@ export function App() {
       <section className="hero">
         <div className="hero-header">
           <div className="hero-copy-block">
-            <p className="eyebrow">Reactive-native Wallet MVP</p>
+            <p className="eyebrow">{copy.heroEyebrow}</p>
             <h1>WillLead</h1>
-            <p className="hero-copy">
-              A wallet that treats event-driven execution as a default capability, not an add-on
-              bot.
-            </p>
+            <p className="hero-copy">{copy.heroCopy}</p>
           </div>
           <div className="hero-actions">
+            <div className="language-toggle" aria-label="Language">
+              <button
+                className={`language-button ${locale === 'en' ? 'language-button-active' : ''}`}
+                onClick={() => setLocale('en')}
+                type="button"
+              >
+                {copy.localeEnglish}
+              </button>
+              <button
+                className={`language-button ${locale === 'zh-CN' ? 'language-button-active' : ''}`}
+                onClick={() => setLocale('zh-CN')}
+                type="button"
+              >
+                {copy.localeChinese}
+              </button>
+            </div>
             <button
               className="primary-button"
               onClick={() => {
@@ -106,12 +130,12 @@ export function App() {
               }}
               type="button"
             >
-              {wallet.isConnected ? 'Disconnect Wallet' : 'Connect Wallet'}
+              {wallet.isConnected ? copy.disconnectWallet : copy.connectWallet}
             </button>
             <p className="hero-action-note">
               {wallet.isConnected
-                ? `${wallet.connectionLabel} connected. Click above to disconnect this session.`
-                : 'Connect first, then configure the transfer plan.'}
+                ? `${translateConnectionLabel(wallet.connectionLabel, locale)} ${copy.connectedHint}`
+                : copy.connectHint}
             </p>
           </div>
         </div>
@@ -138,7 +162,7 @@ export function App() {
 
       <section className="view-frame">
         <div className="view-header">
-          <p className="panel-kicker">Wallet View</p>
+          <p className="panel-kicker">{copy.walletView}</p>
           <h2>{activeSectionMeta.title}</h2>
           <p className="section-note">{activeSectionMeta.description}</p>
         </div>

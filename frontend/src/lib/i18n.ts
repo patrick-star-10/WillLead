@@ -1,0 +1,497 @@
+import { create } from 'zustand'
+
+export type Locale = 'en' | 'zh-CN'
+
+const localeStorageKey = 'willlead.locale'
+
+const messages = {
+  en: {
+    localeEnglish: 'EN',
+    localeChinese: '简体中文',
+    heroEyebrow: 'Reactive-native Wallet MVP',
+    heroCopy:
+      'A wallet that treats event-driven execution as a default capability, not an add-on bot.',
+    connectWallet: 'Connect Wallet',
+    disconnectWallet: 'Disconnect Wallet',
+    connectHint: 'Connect first, then configure the transfer plan.',
+    connectedHint: 'connected. Click above to disconnect this session.',
+    walletView: 'Wallet View',
+    overviewTab: 'Overview',
+    overviewDesc: 'Balance, identity, execution runway, and automation credit.',
+    planTab: 'Transfer Plan',
+    planDesc: 'Configure the onchain transfer this wallet should keep executing.',
+    automationTab: 'Automation',
+    automationDesc: 'Operate the reactive listener and simulate the source trigger.',
+    activityTab: 'Activity',
+    activityDesc: 'Review origin, reactive, and destination proof records.',
+    walletOverviewTitle: 'Wallet Overview',
+    transferPlanTitle: 'Transfer Plan',
+    automationTitle: 'Automation Engine',
+    activityTitle: 'Activity Ledger',
+    walletOverviewKicker: 'Wallet Overview',
+    controllerWalletBalance: 'Controller wallet balance',
+    controller: 'Controller',
+    signingSource: 'Signing source',
+    autonomousWalletBalance: 'Autonomous wallet contract balance',
+    autonomousWallet: 'Autonomous wallet',
+    executionMode: 'Execution mode',
+    reactiveCallback: 'Reactive callback',
+    controllerWalletAssets: 'Controller wallet assets',
+    controllerAssetsEmpty: 'Connect a Sepolia wallet to load controller assets.',
+    autonomousWalletAssets: 'Autonomous wallet assets',
+    autonomousAssetsEmpty:
+      'Destination wallet assets are unavailable until a contract address is configured.',
+    connection: 'Connection',
+    walletConnected: 'Wallet connected',
+    connectWalletShort: 'Connect wallet',
+    executionRunway: 'Execution runway',
+    remainingLeft: 'left',
+    usedCount: 'used',
+    runtimeStatus: 'Runtime status',
+    lastSync: 'Last sync',
+    latestChainSnapshot: 'Latest chain snapshot',
+    automationKicker: 'Automation Credit',
+    automationNote:
+      'This wallet keeps a separate execution balance so Reactive callbacks can still land after the frontend goes offline.',
+    listenerPaused: 'Listener Paused',
+    listenerArmed: 'Listener Armed',
+    availableAutomationCredit: 'Available automation credit',
+    health: 'Health',
+    requiredFloor: 'Required floor',
+    listenerStatus: 'Listener status',
+    active: 'Active',
+    paused: 'Paused',
+    inactive: 'Inactive',
+    exhausted: 'Exhausted',
+    readyForCallback: 'Ready to receive Reactive callbacks',
+    callbackGasLimit: 'Callback gas limit',
+    callbackBudget: 'Current execution budget per callback',
+    refreshCredit: 'Refresh Credit',
+    refreshing: 'Refreshing...',
+    topUpAutomation: 'Top Up Automation',
+    transferPlanKicker: 'Transfer Plan',
+    transferPlanNote: 'Define the transfer this wallet should keep executing.',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    token: 'Token',
+    recipient: 'Recipient',
+    amountPerExecution: 'Amount / Execution',
+    maxExecutions: 'Max Executions',
+    remaining: 'Remaining',
+    minAutomationBalance: 'Min Automation Balance',
+    saving: 'Saving...',
+    saveTransferPlan: 'Save Transfer Plan',
+    pausePlan: 'Pause Plan',
+    resumePlan: 'Resume Plan',
+    automationEngineKicker: 'Automation Engine',
+    automationEngineNote: 'Monitor the relay path that turns source signals into transfers.',
+    lastExecutionNonce: 'Last Execution Nonce',
+    lastExecutedAt: 'Last Executed At',
+    lastSignalHash: 'Last Signal Hash',
+    balanceDelta: 'Balance Delta',
+    emitSourceSignal: 'Emit Source Signal',
+    triggering: 'Triggering...',
+    pauseListener: 'Pause Listener',
+    resumeListener: 'Resume Listener',
+    activityKicker: 'Activity Ledger',
+    activityNote:
+      'Three transactions that prove the wallet moved without the frontend staying online.',
+    chainEvidence: 'Chain Evidence',
+    walletAccess: 'Wallet Access',
+    chooseSigningMethod: 'Choose how this app should sign transactions',
+    currentSigner: 'Current signer',
+    close: 'Close',
+    option1: 'Option 1',
+    option2: 'Option 2',
+    connectOtherWallet: 'Connect other wallet',
+    connectOtherWalletNote:
+      'Use the injected browser wallet flow you already had, such as MetaMask or Rabby.',
+    createWallet: 'Create wallet',
+    createWalletNote:
+      'Generate or import a mnemonic and let this app act as an independent web wallet.',
+    back: 'Back',
+    chooseBrowserWallet: 'Choose browser wallet',
+    chooseBrowserWalletNote:
+      'Each click explicitly chooses which injected wallet to connect.',
+    noInjectedWallet: 'No injected wallet detected in this browser.',
+    connect: 'Connect',
+    generateMnemonic: 'Generate mnemonic',
+    generating: 'Generating...',
+    generatedWalletNote: 'A generated wallet is saved locally in this browser for this MVP.',
+    recoveryPhrase: 'Recovery phrase',
+    recoveryPhraseNote: 'Write these 12 words down before closing this dialog.',
+    importMnemonic: 'Import an existing mnemonic',
+    importMnemonicPlaceholder: 'paste your 12 or 24 word recovery phrase',
+    importWebWallet: 'Import web wallet',
+    importing: 'Importing...',
+    noWalletConnected: 'No wallet connected',
+    browserWallet: 'Browser Wallet',
+    webWallet: 'Web Wallet',
+    notConnected: 'Not connected',
+    healthy: 'Healthy',
+    low: 'Low',
+    unavailable: 'Unavailable',
+    origin: 'Origin',
+    reactive: 'Reactive',
+    destination: 'Destination',
+    originSignal: 'Origin Signal',
+    reactiveCallbackLabel: 'Reactive Callback',
+    destinationExecution: 'Destination Execution',
+    originSignalDesc: 'Signal emitted on the source chain.',
+    reactiveCallbackDesc: 'Reactive listener emitted a destination callback.',
+    destinationExecutionDesc: 'Autonomous wallet executed the transfer on the destination chain.'
+    ,
+    readyBindWallet: 'Ready to bind a wallet and configure the first intent.',
+    preparingWalletSession: 'Preparing wallet session...',
+    restoredWebWallet: 'Restored web wallet',
+    readyToConnectWallet: 'Ready to connect a browser wallet or create a web wallet.',
+    initializeWalletFailed: 'Wallet session initialization failed.',
+    failedInitializeWallet: 'Failed to initialize wallet',
+    connectingBrowserWallet: 'Connecting browser wallet...',
+    connectedWalletPrefix: 'Connected',
+    browserWalletLower: 'browser wallet',
+    browserWalletConnectionFailed: 'Browser wallet connection failed.',
+    failedConnectBrowserWallet: 'Failed to connect browser wallet',
+    creatingWebWallet: 'Creating web wallet...',
+    createdWebWallet: 'Created web wallet',
+    webWalletCreationFailed: 'Web wallet creation failed.',
+    failedCreateWebWallet: 'Failed to create web wallet',
+    importingWebWalletStatus: 'Importing web wallet...',
+    importedWebWallet: 'Imported web wallet',
+    webWalletImportFailed: 'Web wallet import failed.',
+    failedImportWebWallet: 'Failed to import web wallet',
+    disconnectingWalletSession: 'Disconnecting wallet session...',
+    walletDisconnected: 'Wallet disconnected.',
+    walletDisconnectFailed: 'Wallet disconnect failed.',
+    failedDisconnectWallet: 'Failed to disconnect wallet',
+    refreshingWalletState: 'Refreshing wallet state...',
+    walletStateRefreshed: 'Wallet state refreshed.',
+    refreshFailed: 'Refresh failed.',
+    failedRefreshChainState: 'Failed to refresh chain state',
+    submittingIntentTransaction: 'Submitting intent transaction...',
+    intentConfigurationFailed: 'Intent configuration failed.',
+    failedConfigureIntent: 'Failed to configure intent',
+    fundingAutomationCredit: 'Funding automation credit...',
+    automationFundingFailed: 'Automation funding failed.',
+    failedFundAutomation: 'Failed to fund automation credit',
+    pausingIntent: 'Pausing intent...',
+    pauseFailed: 'Pause failed.',
+    failedPauseIntent: 'Failed to pause intent',
+    resumingIntent: 'Resuming intent...',
+    resumeFailed: 'Resume failed.',
+    failedResumeIntent: 'Failed to resume intent',
+    pausingReactiveListener: 'Pausing reactive listener...',
+    reactiveListenerPauseFailed: 'Reactive listener pause failed.',
+    failedPauseReactiveListener: 'Failed to pause reactive listener',
+    resumingReactiveListener: 'Resuming reactive listener...',
+    reactiveListenerResumeFailed: 'Reactive listener resume failed.',
+    failedResumeReactiveListener: 'Failed to resume reactive listener',
+    emittingSourceSignal: 'Emitting source signal...',
+    signalEmissionFailed: 'Signal emission failed.',
+    failedEmitSourceSignal: 'Failed to emit source signal',
+    intentConfiguredAction: 'Intent Configured',
+    intentConfiguredDesc: 'Configured the wallet intent on the destination chain.',
+    intentPausedAction: 'Intent Paused',
+    intentPausedDesc: 'Paused reactive execution on the destination wallet.',
+    intentResumedAction: 'Intent Resumed',
+    intentResumedDesc: 'Reactivated reactive execution on the destination wallet.',
+    sourceSignalEmittedAction: 'Source Signal Emitted',
+    sourceSignalEmittedDesc: 'Emitted StrategySignal on the origin chain.',
+    automationCreditToppedUpAction: 'Automation Credit Topped Up',
+    automationCreditToppedUpDesc:
+      'Deposited funds into the callback proxy for wallet automation.',
+    reactiveListenerPausedAction: 'Reactive Listener Paused',
+    reactiveListenerPausedDesc: 'Paused the reactive listener subscription set.',
+    reactiveListenerResumedAction: 'Reactive Listener Resumed',
+    reactiveListenerResumedDesc: 'Resumed the reactive listener subscription set.',
+    walletAddressMissing: 'VITE_WALLET_ADDRESS is not configured',
+    signalEmitterOrWalletMissing: 'VITE_SIGNAL_EMITTER_ADDRESS or VITE_WALLET_ADDRESS is not configured',
+    callbackProxyOrWalletMissing: 'VITE_CALLBACK_PROXY or VITE_WALLET_ADDRESS is not configured',
+    reactiveListenerMissing: 'VITE_REACTIVE_LISTENER_ADDRESS is not configured'
+  },
+  'zh-CN': {
+    localeEnglish: 'EN',
+    localeChinese: '简体中文',
+    heroEyebrow: 'Reactive 原生钱包 MVP',
+    heroCopy: '让事件驱动执行成为默认能力，而不是额外挂脚本的钱包。',
+    connectWallet: '连接钱包',
+    disconnectWallet: '断开钱包',
+    connectHint: '先连接钱包，再配置转账计划。',
+    connectedHint: '已连接。点击上方可断开这次会话。',
+    walletView: '钱包视图',
+    overviewTab: '总览',
+    overviewDesc: '查看资产、身份、执行次数和自动执行额度。',
+    planTab: '转账计划',
+    planDesc: '配置这个钱包要持续执行的链上转账规则。',
+    automationTab: '自动执行',
+    automationDesc: '管理监听器，并模拟源链触发。',
+    activityTab: '链上记录',
+    activityDesc: '查看源链、Reactive 和目标链上的执行证据。',
+    walletOverviewTitle: '钱包总览',
+    transferPlanTitle: '转账计划',
+    automationTitle: '自动执行引擎',
+    activityTitle: '链上记录',
+    walletOverviewKicker: '钱包总览',
+    controllerWalletBalance: '控制钱包余额',
+    controller: '控制钱包',
+    signingSource: '签名来源',
+    autonomousWalletBalance: '自主执行钱包合约余额',
+    autonomousWallet: '自主执行钱包',
+    executionMode: '执行方式',
+    reactiveCallback: 'Reactive 回调',
+    controllerWalletAssets: '控制钱包资产',
+    controllerAssetsEmpty: '连接 Sepolia 钱包后，这里会显示控制钱包资产。',
+    autonomousWalletAssets: '自主执行钱包资产',
+    autonomousAssetsEmpty: '配置自主执行钱包合约地址后，这里才会显示资产。',
+    connection: '连接状态',
+    walletConnected: '钱包已连接',
+    connectWalletShort: '连接钱包',
+    executionRunway: '剩余执行次数',
+    remainingLeft: '次可执行',
+    usedCount: '已执行',
+    runtimeStatus: '运行状态',
+    lastSync: '最近同步',
+    latestChainSnapshot: '最近一次链上快照',
+    automationKicker: '自动执行额度',
+    automationNote:
+      '这个钱包会单独保留一份自动执行额度，这样即使前端离线，Reactive 回调也能继续落地。',
+    listenerPaused: '监听已暂停',
+    listenerArmed: '监听已启用',
+    availableAutomationCredit: '可用自动执行额度',
+    health: '额度状态',
+    requiredFloor: '最低保留额度',
+    listenerStatus: '监听状态',
+    active: '运行中',
+    paused: '已暂停',
+    inactive: '未启用',
+    exhausted: '已耗尽',
+    readyForCallback: '已准备好接收 Reactive 回调',
+    callbackGasLimit: '回调 Gas 上限',
+    callbackBudget: '每次回调可用的执行预算',
+    refreshCredit: '刷新额度',
+    refreshing: '刷新中...',
+    topUpAutomation: '补充自动执行额度',
+    transferPlanKicker: '转账计划',
+    transferPlanNote: '定义这个钱包需要持续执行的转账规则。',
+    enabled: '已启用',
+    disabled: '未启用',
+    token: '代币',
+    recipient: '收款地址',
+    amountPerExecution: '每次执行金额',
+    maxExecutions: '最大执行次数',
+    remaining: '剩余次数',
+    minAutomationBalance: '自动执行最低额度',
+    saving: '保存中...',
+    saveTransferPlan: '保存转账计划',
+    pausePlan: '暂停计划',
+    resumePlan: '恢复计划',
+    automationEngineKicker: '自动执行引擎',
+    automationEngineNote: '查看从源链信号到目标转账的整条执行链路。',
+    lastExecutionNonce: '最近执行序号',
+    lastExecutedAt: '最近执行时间',
+    lastSignalHash: '最近信号哈希',
+    balanceDelta: '余额变化',
+    emitSourceSignal: '发送源链信号',
+    triggering: '触发中...',
+    pauseListener: '暂停监听',
+    resumeListener: '恢复监听',
+    activityKicker: '链上记录',
+    activityNote: '这三笔交易用来证明前端离线后，钱包仍然完成了自动执行。',
+    chainEvidence: '链上证据',
+    walletAccess: '钱包接入',
+    chooseSigningMethod: '选择这个应用如何发起链上签名',
+    currentSigner: '当前签名钱包',
+    close: '关闭',
+    option1: '方式一',
+    option2: '方式二',
+    connectOtherWallet: '连接其他钱包',
+    connectOtherWalletNote: '使用浏览器钱包插件，例如 MetaMask 或 Rabby。',
+    createWallet: '创建钱包',
+    createWalletNote: '生成或导入助记词，让这个应用作为独立网页钱包运行。',
+    back: '返回',
+    chooseBrowserWallet: '选择浏览器钱包',
+    chooseBrowserWalletNote: '每次都需要明确选择要连接的钱包插件。',
+    noInjectedWallet: '当前浏览器没有检测到可用的钱包插件。',
+    connect: '连接',
+    generateMnemonic: '生成助记词',
+    generating: '生成中...',
+    generatedWalletNote: '为了这版 MVP，生成的钱包会保存在当前浏览器本地。',
+    recoveryPhrase: '助记词',
+    recoveryPhraseNote: '关闭前请先妥善保存这 12 个助记词。',
+    importMnemonic: '导入已有助记词',
+    importMnemonicPlaceholder: '粘贴 12 或 24 个单词的助记词',
+    importWebWallet: '导入网页钱包',
+    importing: '导入中...',
+    noWalletConnected: '当前未连接钱包',
+    browserWallet: '浏览器钱包',
+    webWallet: '网页钱包',
+    notConnected: '未连接',
+    healthy: '充足',
+    low: '偏低',
+    unavailable: '不可用',
+    origin: '源链',
+    reactive: 'Reactive',
+    destination: '目标链',
+    originSignal: '源链信号',
+    reactiveCallbackLabel: 'Reactive 回调',
+    destinationExecution: '目标链执行',
+    originSignalDesc: '信号已在源链发出。',
+    reactiveCallbackDesc: 'Reactive 监听器已经发出目标链回调。',
+    destinationExecutionDesc: '自主执行钱包已在目标链完成转账。'
+    ,
+    readyBindWallet: '准备好连接钱包并配置第一条转账计划。',
+    preparingWalletSession: '正在准备钱包会话...',
+    restoredWebWallet: '已恢复网页钱包',
+    readyToConnectWallet: '可以连接浏览器钱包，或直接创建网页钱包。',
+    initializeWalletFailed: '钱包会话初始化失败。',
+    failedInitializeWallet: '初始化钱包失败',
+    connectingBrowserWallet: '正在连接浏览器钱包...',
+    connectedWalletPrefix: '已连接',
+    browserWalletLower: '浏览器钱包',
+    browserWalletConnectionFailed: '浏览器钱包连接失败。',
+    failedConnectBrowserWallet: '连接浏览器钱包失败',
+    creatingWebWallet: '正在创建网页钱包...',
+    createdWebWallet: '已创建网页钱包',
+    webWalletCreationFailed: '网页钱包创建失败。',
+    failedCreateWebWallet: '创建网页钱包失败',
+    importingWebWalletStatus: '正在导入网页钱包...',
+    importedWebWallet: '已导入网页钱包',
+    webWalletImportFailed: '网页钱包导入失败。',
+    failedImportWebWallet: '导入网页钱包失败',
+    disconnectingWalletSession: '正在断开钱包会话...',
+    walletDisconnected: '钱包已断开。',
+    walletDisconnectFailed: '断开钱包失败。',
+    failedDisconnectWallet: '断开钱包失败',
+    refreshingWalletState: '正在刷新钱包状态...',
+    walletStateRefreshed: '钱包状态已刷新。',
+    refreshFailed: '刷新失败。',
+    failedRefreshChainState: '刷新链上状态失败',
+    submittingIntentTransaction: '正在提交转账计划交易...',
+    intentConfigurationFailed: '转账计划配置失败。',
+    failedConfigureIntent: '配置转账计划失败',
+    fundingAutomationCredit: '正在补充自动执行额度...',
+    automationFundingFailed: '自动执行额度补充失败。',
+    failedFundAutomation: '补充自动执行额度失败',
+    pausingIntent: '正在暂停计划...',
+    pauseFailed: '暂停失败。',
+    failedPauseIntent: '暂停计划失败',
+    resumingIntent: '正在恢复计划...',
+    resumeFailed: '恢复失败。',
+    failedResumeIntent: '恢复计划失败',
+    pausingReactiveListener: '正在暂停 Reactive 监听...',
+    reactiveListenerPauseFailed: 'Reactive 监听暂停失败。',
+    failedPauseReactiveListener: '暂停 Reactive 监听失败',
+    resumingReactiveListener: '正在恢复 Reactive 监听...',
+    reactiveListenerResumeFailed: 'Reactive 监听恢复失败。',
+    failedResumeReactiveListener: '恢复 Reactive 监听失败',
+    emittingSourceSignal: '正在发送源链信号...',
+    signalEmissionFailed: '源链信号发送失败。',
+    failedEmitSourceSignal: '发送源链信号失败',
+    intentConfiguredAction: '转账计划已配置',
+    intentConfiguredDesc: '已经在目标链上配置转账计划。',
+    intentPausedAction: '转账计划已暂停',
+    intentPausedDesc: '目标链钱包的自动执行已暂停。',
+    intentResumedAction: '转账计划已恢复',
+    intentResumedDesc: '目标链钱包的自动执行已重新启用。',
+    sourceSignalEmittedAction: '源链信号已发出',
+    sourceSignalEmittedDesc: '已在源链上发出 StrategySignal。',
+    automationCreditToppedUpAction: '自动执行额度已补充',
+    automationCreditToppedUpDesc: '已经向 callback proxy 存入自动执行所需资金。',
+    reactiveListenerPausedAction: 'Reactive 监听已暂停',
+    reactiveListenerPausedDesc: 'Reactive 监听订阅集已暂停。',
+    reactiveListenerResumedAction: 'Reactive 监听已恢复',
+    reactiveListenerResumedDesc: 'Reactive 监听订阅集已恢复。',
+    walletAddressMissing: '还没有配置 VITE_WALLET_ADDRESS',
+    signalEmitterOrWalletMissing: '还没有配置 VITE_SIGNAL_EMITTER_ADDRESS 或 VITE_WALLET_ADDRESS',
+    callbackProxyOrWalletMissing: '还没有配置 VITE_CALLBACK_PROXY 或 VITE_WALLET_ADDRESS',
+    reactiveListenerMissing: '还没有配置 VITE_REACTIVE_LISTENER_ADDRESS'
+  }
+} as const
+
+function canUseStorage() {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+}
+
+function getStoredLocale(): Locale {
+  if (!canUseStorage()) return 'en'
+  const locale = window.localStorage.getItem(localeStorageKey)
+  return locale === 'zh-CN' ? 'zh-CN' : 'en'
+}
+
+type LanguageState = {
+  locale: Locale
+  setLocale: (locale: Locale) => void
+}
+
+export const useLanguageStore = create<LanguageState>((set) => ({
+  locale: getStoredLocale(),
+  setLocale: (locale) => {
+    if (canUseStorage()) {
+      window.localStorage.setItem(localeStorageKey, locale)
+    }
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale
+    }
+    set({ locale })
+  }
+}))
+
+export function useCopy() {
+  const locale = useLanguageStore((state) => state.locale)
+  return { copy: messages[locale], locale }
+}
+
+export function useLocaleActions() {
+  return useLanguageStore((state) => state.setLocale)
+}
+
+export function translateRuntimeStatus(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'active') return copy.active
+  if (value === 'paused') return copy.paused
+  if (value === 'exhausted') return copy.exhausted
+  return copy.inactive
+}
+
+export function translateConnectionLabel(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'Browser Wallet') return copy.browserWallet
+  if (value === 'Web Wallet') return copy.webWallet
+  if (value === 'Not connected') return copy.notConnected
+  return value
+}
+
+export function translateCreditLabel(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'Healthy') return copy.healthy
+  if (value === 'Low') return copy.low
+  if (value === 'Unavailable') return copy.unavailable
+  return value
+}
+
+export function translateChainLabel(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'origin') return copy.origin
+  if (value === 'reactive') return copy.reactive
+  return copy.destination
+}
+
+export function translateProofLabel(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'Origin Signal') return copy.originSignal
+  if (value === 'Reactive Callback') return copy.reactiveCallbackLabel
+  if (value === 'Destination Execution') return copy.destinationExecution
+  return value
+}
+
+export function translateProofDescription(label: string, description: string, locale: Locale) {
+  const copy = messages[locale]
+  if (label === 'Origin Signal') return copy.originSignalDesc
+  if (label === 'Reactive Callback') return copy.reactiveCallbackDesc
+  if (label === 'Destination Execution') return copy.destinationExecutionDesc
+  return description
+}
+
+export function getMessages(locale: Locale) {
+  return messages[locale]
+}

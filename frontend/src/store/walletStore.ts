@@ -16,6 +16,7 @@ import {
   topUpAutomationCredit
 } from '../lib/willlead'
 import { txExplorerLink } from '../lib/explorers'
+import { getMessages, useLanguageStore } from '../lib/i18n'
 import type {
   ActionResult,
   AutomationFundingValues,
@@ -47,6 +48,7 @@ type WillLeadStore = {
   pauseListener: () => Promise<void>
   resumeListener: () => Promise<void>
   triggerSignal: () => Promise<void>
+  syncIdleCopy: () => void
 }
 
 const initialWalletState: WalletState = {
@@ -54,7 +56,7 @@ const initialWalletState: WalletState = {
   ownerAddress: null,
   connectionSource: 'disconnected',
   connectionLabel: 'Not connected',
-  balanceContextLabel: 'Connected Sepolia wallet balance',
+  balanceContextLabel: 'Controller wallet balance',
   balanceLabel: 'Unavailable',
   assetBalances: [],
   connectedBalanceLabel: 'Unavailable',
@@ -113,16 +115,20 @@ const initialProofs: ExecutionProof[] = [
   }
 ]
 
+function copy() {
+  return getMessages(useLanguageStore.getState().locale)
+}
+
 export const useWalletStore = create<WillLeadStore>((set, get) => ({
   wallet: initialWalletState,
   intent: initialIntentState,
   automation: initialAutomationState,
   executionProofs: initialProofs,
   isPending: false,
-  statusMessage: 'Ready to bind a wallet and configure the first intent.',
+  statusMessage: copy().readyBindWallet,
   errorMessage: null,
   initializeWallet: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Preparing wallet session...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().preparingWalletSession })
 
     try {
       const restored = await restoreOwnerWallet()
@@ -135,20 +141,20 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         ...snapshot,
         isPending: false,
         statusMessage: restored
-          ? `Restored web wallet ${restored.address}`
-          : 'Ready to connect a browser wallet or create a web wallet.',
+          ? `${copy().restoredWebWallet} ${restored.address}`
+          : copy().readyToConnectWallet,
         errorMessage: null
       })
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to initialize wallet',
-        statusMessage: 'Wallet session initialization failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedInitializeWallet,
+        statusMessage: copy().initializeWalletFailed
       })
     }
   },
   connectBrowserWallet: async (providerId) => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Connecting browser wallet...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().connectingBrowserWallet })
 
     try {
       const result = await connectOwnerWallet(providerId)
@@ -161,20 +167,20 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
           connectionLabel: result.providerLabel ?? snapshot.wallet.connectionLabel
         },
         isPending: false,
-        statusMessage: `Connected ${result.providerLabel ?? 'browser wallet'} ${result.address}`,
+        statusMessage: `${copy().connectedWalletPrefix} ${result.providerLabel ?? copy().browserWalletLower} ${result.address}`,
         errorMessage: null
       })
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to connect browser wallet',
-        statusMessage: 'Browser wallet connection failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedConnectBrowserWallet,
+        statusMessage: copy().browserWalletConnectionFailed
       })
       throw error
     }
   },
   createWebWallet: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Creating web wallet...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().creatingWebWallet })
 
     try {
       const result = await createOwnerWebWallet()
@@ -183,7 +189,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: `Created web wallet ${result.address}`,
+        statusMessage: `${copy().createdWebWallet} ${result.address}`,
         errorMessage: null
       })
 
@@ -191,14 +197,14 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to create web wallet',
-        statusMessage: 'Web wallet creation failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedCreateWebWallet,
+        statusMessage: copy().webWalletCreationFailed
       })
       throw error
     }
   },
   importWebWallet: async (mnemonic) => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Importing web wallet...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().importingWebWalletStatus })
 
     try {
       const result = await importOwnerWebWallet(mnemonic)
@@ -207,20 +213,20 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: `Imported web wallet ${result.address}`,
+        statusMessage: `${copy().importedWebWallet} ${result.address}`,
         errorMessage: null
       })
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to import web wallet',
-        statusMessage: 'Web wallet import failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedImportWebWallet,
+        statusMessage: copy().webWalletImportFailed
       })
       throw error
     }
   },
   disconnectWallet: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Disconnecting wallet session...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().disconnectingWalletSession })
 
     try {
       await disconnectOwnerWallet()
@@ -229,20 +235,20 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: 'Wallet disconnected.',
+        statusMessage: copy().walletDisconnected,
         errorMessage: null
       })
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to disconnect wallet',
-        statusMessage: 'Wallet disconnect failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedDisconnectWallet,
+        statusMessage: copy().walletDisconnectFailed
       })
       throw error
     }
   },
   refreshChainState: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Refreshing wallet state...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().refreshingWalletState })
 
     try {
       const snapshot = await readWalletState(
@@ -252,19 +258,19 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: 'Wallet state refreshed.',
+        statusMessage: copy().walletStateRefreshed,
         errorMessage: null
       })
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to refresh chain state',
-        statusMessage: 'Refresh failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedRefreshChainState,
+        statusMessage: copy().refreshFailed
       })
     }
   },
   submitIntent: async (values) => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Submitting intent transaction...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().submittingIntentTransaction })
 
     try {
       const action = await configureIntent(values)
@@ -272,13 +278,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to configure intent',
-        statusMessage: 'Intent configuration failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedConfigureIntent,
+        statusMessage: copy().intentConfigurationFailed
       })
     }
   },
   fundAutomation: async (values) => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Funding automation credit...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().fundingAutomationCredit })
 
     try {
       const action = await topUpAutomationCredit(values)
@@ -286,13 +292,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to fund automation credit',
-        statusMessage: 'Automation funding failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedFundAutomation,
+        statusMessage: copy().automationFundingFailed
       })
     }
   },
   pauseWalletIntent: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Pausing intent...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().pausingIntent })
 
     try {
       const action = await pauseIntent()
@@ -300,13 +306,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to pause intent',
-        statusMessage: 'Pause failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedPauseIntent,
+        statusMessage: copy().pauseFailed
       })
     }
   },
   resumeWalletIntent: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Resuming intent...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().resumingIntent })
 
     try {
       const action = await resumeIntent()
@@ -314,13 +320,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to resume intent',
-        statusMessage: 'Resume failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedResumeIntent,
+        statusMessage: copy().resumeFailed
       })
     }
   },
   pauseListener: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Pausing reactive listener...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().pausingReactiveListener })
 
     try {
       const action = await pauseReactiveListener()
@@ -328,13 +334,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to pause reactive listener',
-        statusMessage: 'Reactive listener pause failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedPauseReactiveListener,
+        statusMessage: copy().reactiveListenerPauseFailed
       })
     }
   },
   resumeListener: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Resuming reactive listener...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().resumingReactiveListener })
 
     try {
       const action = await resumeReactiveListener()
@@ -343,13 +349,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         isPending: false,
         errorMessage:
-          error instanceof Error ? error.message : 'Failed to resume reactive listener',
-        statusMessage: 'Reactive listener resume failed.'
+          error instanceof Error ? error.message : copy().failedResumeReactiveListener,
+        statusMessage: copy().reactiveListenerResumeFailed
       })
     }
   },
   triggerSignal: async () => {
-    set({ isPending: true, errorMessage: null, statusMessage: 'Emitting source signal...' })
+    set({ isPending: true, errorMessage: null, statusMessage: copy().emittingSourceSignal })
 
     try {
       const state = get()
@@ -363,10 +369,26 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     } catch (error) {
       set({
         isPending: false,
-        errorMessage: error instanceof Error ? error.message : 'Failed to emit source signal',
-        statusMessage: 'Signal emission failed.'
+        errorMessage: error instanceof Error ? error.message : copy().failedEmitSourceSignal,
+        statusMessage: copy().signalEmissionFailed
       })
     }
+  },
+  syncIdleCopy: () => {
+    set((state) => {
+      if (state.isPending) return {}
+      if (state.errorMessage) return {}
+
+      const nextStatus = state.wallet.isConnected
+        ? state.statusMessage
+        : copy().readyToConnectWallet
+
+      if (nextStatus === state.statusMessage) return {}
+
+      return {
+        statusMessage: nextStatus
+      }
+    })
   }
 }))
 

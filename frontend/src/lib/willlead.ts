@@ -39,6 +39,7 @@ import {
 } from './clients'
 import { destinationChain, originChain, reactiveChain } from './chains'
 import { txExplorerLink } from './explorers'
+import { getMessages, useLanguageStore } from './i18n'
 import {
   createWebWallet,
   disconnectWalletSession,
@@ -120,6 +121,10 @@ export function getBrowserWalletOptions() {
   return getInjectedWalletOptions()
 }
 
+function copy() {
+  return getMessages(useLanguageStore.getState().locale)
+}
+
 export async function connectOwnerWallet(providerId: string) {
   const { address, providerId: connectedProviderId, providerLabel } = await requestWalletAddress(
     providerId
@@ -192,7 +197,7 @@ export async function readWalletState(
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
-        balanceContextLabel: 'Connected Sepolia wallet balance',
+        balanceContextLabel: 'Controller wallet balance',
         balanceLabel: 'Unavailable',
         assetBalances: [],
         connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
@@ -260,7 +265,7 @@ export async function readWalletState(
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
-        balanceContextLabel: 'Connected Sepolia wallet balance',
+        balanceContextLabel: 'Controller wallet balance',
         balanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
         assetBalances:
           ownerAddress !== null
@@ -346,7 +351,7 @@ export async function readWalletState(
       ownerAddress,
       connectionSource,
       connectionLabel: formatConnectionLabel(connectionSource),
-      balanceContextLabel: 'Destination wallet contract balance',
+      balanceContextLabel: 'Autonomous wallet contract balance',
       balanceLabel: formatAmount(balance),
       assetBalances,
       connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
@@ -577,7 +582,7 @@ async function readExecutionProofs(
 export async function configureIntent(values: IntentFormValues): Promise<ActionResult> {
   const walletAddress = getAddress(contractAddresses.wallet)
   if (!isConfiguredAddress(walletAddress)) {
-    throw new Error('VITE_WALLET_ADDRESS is not configured')
+    throw new Error(copy().walletAddressMissing)
   }
 
   const { account, client } = await getDestinationWalletClient()
@@ -602,15 +607,15 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
 
   return {
     hash,
-    label: 'Intent Configured',
-    description: 'Configured the wallet intent on the destination chain.'
+    label: copy().intentConfiguredAction,
+    description: copy().intentConfiguredDesc
   }
 }
 
 export async function pauseIntent(): Promise<ActionResult> {
   const walletAddress = getAddress(contractAddresses.wallet)
   if (!isConfiguredAddress(walletAddress)) {
-    throw new Error('VITE_WALLET_ADDRESS is not configured')
+    throw new Error(copy().walletAddressMissing)
   }
 
   const { account, client } = await getDestinationWalletClient()
@@ -629,15 +634,15 @@ export async function pauseIntent(): Promise<ActionResult> {
 
   return {
     hash,
-    label: 'Intent Paused',
-    description: 'Paused reactive execution on the destination wallet.'
+    label: copy().intentPausedAction,
+    description: copy().intentPausedDesc
   }
 }
 
 export async function resumeIntent(): Promise<ActionResult> {
   const walletAddress = getAddress(contractAddresses.wallet)
   if (!isConfiguredAddress(walletAddress)) {
-    throw new Error('VITE_WALLET_ADDRESS is not configured')
+    throw new Error(copy().walletAddressMissing)
   }
 
   const { account, client } = await getDestinationWalletClient()
@@ -656,8 +661,8 @@ export async function resumeIntent(): Promise<ActionResult> {
 
   return {
     hash,
-    label: 'Intent Resumed',
-    description: 'Reactivated reactive execution on the destination wallet.'
+    label: copy().intentResumedAction,
+    description: copy().intentResumedDesc
   }
 }
 
@@ -670,7 +675,7 @@ export async function emitSignal(values: {
   const signalEmitterAddress = getAddress(contractAddresses.signalEmitter)
   const walletAddress = getAddress(contractAddresses.wallet)
   if (!isConfiguredAddress(signalEmitterAddress) || !isConfiguredAddress(walletAddress)) {
-    throw new Error('VITE_SIGNAL_EMITTER_ADDRESS or VITE_WALLET_ADDRESS is not configured')
+    throw new Error(copy().signalEmitterOrWalletMissing)
   }
 
   const { account, client } = await getOriginWalletClient()
@@ -694,8 +699,8 @@ export async function emitSignal(values: {
 
   return {
     hash,
-    label: 'Source Signal Emitted',
-    description: 'Emitted StrategySignal on the origin chain.'
+    label: copy().sourceSignalEmittedAction,
+    description: copy().sourceSignalEmittedDesc
   }
 }
 
@@ -705,7 +710,7 @@ export async function topUpAutomationCredit(
   const callbackProxyAddress = getAddress(contractAddresses.callbackProxy)
   const walletAddress = getAddress(contractAddresses.wallet)
   if (!isConfiguredAddress(callbackProxyAddress) || !isConfiguredAddress(walletAddress)) {
-    throw new Error('VITE_CALLBACK_PROXY or VITE_WALLET_ADDRESS is not configured')
+    throw new Error(copy().callbackProxyOrWalletMissing)
   }
 
   const { account, client } = await getDestinationWalletClient()
@@ -726,15 +731,15 @@ export async function topUpAutomationCredit(
 
   return {
     hash,
-    label: 'Automation Credit Topped Up',
-    description: 'Deposited funds into the callback proxy for wallet automation.'
+    label: copy().automationCreditToppedUpAction,
+    description: copy().automationCreditToppedUpDesc
   }
 }
 
 export async function pauseReactiveListener(): Promise<ActionResult> {
   const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
   if (!isConfiguredAddress(reactiveListenerAddress)) {
-    throw new Error('VITE_REACTIVE_LISTENER_ADDRESS is not configured')
+    throw new Error(copy().reactiveListenerMissing)
   }
 
   const { account, client } = await getReactiveWalletClient()
@@ -753,15 +758,15 @@ export async function pauseReactiveListener(): Promise<ActionResult> {
 
   return {
     hash,
-    label: 'Reactive Listener Paused',
-    description: 'Paused the reactive listener subscription set.'
+    label: copy().reactiveListenerPausedAction,
+    description: copy().reactiveListenerPausedDesc
   }
 }
 
 export async function resumeReactiveListener(): Promise<ActionResult> {
   const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
   if (!isConfiguredAddress(reactiveListenerAddress)) {
-    throw new Error('VITE_REACTIVE_LISTENER_ADDRESS is not configured')
+    throw new Error(copy().reactiveListenerMissing)
   }
 
   const { account, client } = await getReactiveWalletClient()
@@ -780,7 +785,7 @@ export async function resumeReactiveListener(): Promise<ActionResult> {
 
   return {
     hash,
-    label: 'Reactive Listener Resumed',
-    description: 'Resumed the reactive listener subscription set.'
+    label: copy().reactiveListenerResumedAction,
+    description: copy().reactiveListenerResumedDesc
   }
 }
