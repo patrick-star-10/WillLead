@@ -5,7 +5,7 @@ type AutomationCapabilityPanelProps = {
   creditLabel: string
   availableBalance: string
   minRequiredBalance: string
-  listenerPaused: boolean
+  listenerPaused: boolean | null
   callbackGasLimit: string
   lastSyncedAt: string
   isPending: boolean
@@ -16,6 +16,21 @@ type AutomationCapabilityPanelProps = {
 export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps) {
   const { copy, locale } = useCopy()
   const [topUpAmount, setTopUpAmount] = useState('0.01')
+  const listenerUnavailable = props.listenerPaused === null
+  const listenerClassName = listenerUnavailable
+    ? 'status-pill status-unavailable'
+    : `status-pill ${props.listenerPaused ? 'status-paused' : 'status-active'}`
+  const listenerBadgeLabel = listenerUnavailable
+    ? copy.listenerNotListening
+    : props.listenerPaused
+      ? copy.listenerPaused
+      : copy.listenerArmed
+  const listenerStatusLabel = listenerUnavailable
+    ? copy.listenerNotListening
+    : props.listenerPaused
+      ? copy.paused
+      : copy.active
+  const listenerHelperLabel = listenerUnavailable ? copy.noWalletConnected : copy.readyForCallback
 
   return (
     <article className="panel automation-panel">
@@ -24,9 +39,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           <p className="panel-kicker">{copy.automationKicker}</p>
           <p className="section-note">{copy.automationNote}</p>
         </div>
-        <span className={`status-pill ${props.listenerPaused ? 'status-paused' : 'status-active'}`}>
-          {props.listenerPaused ? copy.listenerPaused : copy.listenerArmed}
-        </span>
+        <span className={listenerClassName}>{listenerBadgeLabel}</span>
       </div>
 
       <div className="automation-hero">
@@ -49,8 +62,8 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
       <div className="metric-strip">
         <div className="metric-tile">
           <span>{copy.listenerStatus}</span>
-          <strong>{props.listenerPaused ? copy.paused : copy.active}</strong>
-          <small>{copy.readyForCallback}</small>
+          <strong>{listenerStatusLabel}</strong>
+          <small>{listenerHelperLabel}</small>
         </div>
         <div className="metric-tile">
           <span>{copy.callbackGasLimit}</span>
@@ -70,6 +83,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
         />
         <button
           className="primary-button"
+          disabled={listenerUnavailable}
           onClick={() => props.onFundAutomation(topUpAmount)}
           type="button"
         >

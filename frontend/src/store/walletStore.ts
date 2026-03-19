@@ -68,7 +68,7 @@ const initialWalletState: WalletState = {
   lastExecutedAt: '2026-03-18 05:58 PST',
   lastSignalHash: '0x4d6f636b5369676e616c48617368000000000000000000000000000000000000',
   destinationBalanceDelta: '-0.01 ETH',
-  listenerPaused: false,
+  listenerPaused: null,
   callbackGasLimit: '1000000'
 }
 

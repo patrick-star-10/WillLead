@@ -209,8 +209,8 @@ export async function readWalletState(
         lastExecutedAt: 'Mock state',
         lastSignalHash: zeroHash,
         destinationBalanceDelta: '-0.01 ETH',
-        listenerPaused: false,
-        callbackGasLimit: '1000000'
+        listenerPaused: null,
+        callbackGasLimit: 'Unavailable'
       },
       intent: {
         token: 'native',
@@ -286,8 +286,8 @@ export async function readWalletState(
         lastExecutedAt: 'Never',
         lastSignalHash: zeroHash,
         destinationBalanceDelta: '0 ETH',
-        listenerPaused: false,
-        callbackGasLimit: '0'
+        listenerPaused: null,
+        callbackGasLimit: 'Unavailable'
       },
       intent: {
         token: 'native',
@@ -363,8 +363,8 @@ export async function readWalletState(
       lastExecutedAt: formatTimestamp(lastExecutedAt),
       lastSignalHash,
       destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
-      listenerPaused: listenerState.listenerPaused,
-      callbackGasLimit: listenerState.callbackGasLimit
+      listenerPaused: ownerAddress !== null ? listenerState.listenerPaused : null,
+      callbackGasLimit: ownerAddress !== null ? listenerState.callbackGasLimit : 'Unavailable'
     },
     intent: {
       token: token === zeroAddress ? 'native' : token,
@@ -430,7 +430,7 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
   const reactiveClient = getReactivePublicClient()
   if (!reactiveClient || !isConfiguredAddress(reactiveListenerAddress)) {
     return {
-      listenerPaused: false,
+      listenerPaused: null,
       callbackGasLimit: '1000000'
     }
   }

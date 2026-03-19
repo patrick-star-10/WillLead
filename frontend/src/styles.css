@@ -60,6 +60,39 @@ code {
   gap: 12px;
 }
 
+.hero-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.hero-brand-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.hero-logo-frame {
+  display: grid;
+  place-items: center;
+  width: clamp(88px, 11vw, 118px);
+  aspect-ratio: 1;
+  padding: 12px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(243, 234, 220, 0.9));
+  border: 1px solid rgba(130, 105, 73, 0.14);
+  box-shadow:
+    0 14px 28px rgba(126, 101, 72, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.hero-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
 .hero h1 {
   margin: 0;
   font-size: clamp(2.8rem, 8vw, 5.4rem);
@@ -317,6 +350,11 @@ button:disabled {
 .status-inactive {
   background: rgba(203, 150, 74, 0.16);
   color: #8b5b16;
+}
+
+.status-unavailable {
+  background: rgba(130, 105, 73, 0.12);
+  color: #6a533d;
 }
 
 .status-exhausted {
@@ -771,6 +809,10 @@ button:disabled {
     flex-direction: column;
   }
 
+  .hero-brand-lockup {
+    align-items: flex-start;
+  }
+
   .hero-actions {
     width: 100%;
     justify-items: center;
@@ -816,5 +858,16 @@ button:disabled {
   .status-banner {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-brand-lockup {
+    gap: 14px;
+  }
+
+  .hero-logo-frame {
+    width: 76px;
+    border-radius: 22px;
   }
 }

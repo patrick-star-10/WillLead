@@ -6,7 +6,7 @@ type RuntimePanelProps = {
   lastExecutedAt: string
   lastSignalHash: string
   destinationBalanceDelta: string
-  listenerPaused: boolean
+  listenerPaused: boolean | null
   callbackGasLimit: string
   isPending: boolean
   onTriggerSignal: () => void
@@ -16,6 +16,13 @@ type RuntimePanelProps = {
 
 export function RuntimePanel(props: RuntimePanelProps) {
   const { copy, locale } = useCopy()
+  const listenerUnavailable = props.listenerPaused === null
+  const listenerStatusLabel = listenerUnavailable
+    ? copy.listenerNotListening
+    : props.listenerPaused
+      ? copy.paused
+      : copy.active
+
   return (
     <article className="panel">
       <div className="panel-header">
@@ -44,7 +51,7 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </div>
         <div>
           <dt>{copy.listenerStatus}</dt>
-          <dd>{props.listenerPaused ? copy.paused : copy.active}</dd>
+          <dd>{listenerStatusLabel}</dd>
         </div>
         <div>
           <dt>{copy.callbackGasLimit}</dt>
@@ -55,10 +62,20 @@ export function RuntimePanel(props: RuntimePanelProps) {
         <button className="primary-button" onClick={props.onTriggerSignal} type="button">
           {props.isPending ? copy.triggering : copy.emitSourceSignal}
         </button>
-        <button className="secondary-button" onClick={props.onPauseListener} type="button">
+        <button
+          className="secondary-button"
+          disabled={listenerUnavailable}
+          onClick={props.onPauseListener}
+          type="button"
+        >
           {copy.pauseListener}
         </button>
-        <button className="secondary-button" onClick={props.onResumeListener} type="button">
+        <button
+          className="secondary-button"
+          disabled={listenerUnavailable}
+          onClick={props.onResumeListener}
+          type="button"
+        >
           {copy.resumeListener}
         </button>
       </div>

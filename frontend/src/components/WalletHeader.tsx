@@ -1,5 +1,6 @@
 import type { AssetBalance } from '../types/willlead'
 import {
+  translateBalanceContextLabel,
   translateConnectionLabel,
   translateRuntimeStatus,
   useCopy
@@ -55,7 +56,7 @@ export function WalletHeader(props: WalletHeaderProps) {
         </div>
         <div className="wallet-balance-row">
           <div>
-            <p className="section-note">{props.balanceContextLabel}</p>
+            <p className="section-note">{translateBalanceContextLabel(props.balanceContextLabel, locale)}</p>
             <p className="wallet-balance">{props.balanceLabel}</p>
           </div>
           <div className="identity-stack">

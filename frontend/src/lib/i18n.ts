@@ -59,6 +59,7 @@ const messages = {
     health: 'Health',
     requiredFloor: 'Required floor',
     listenerStatus: 'Listener status',
+    listenerNotListening: 'Not listening yet',
     active: 'Active',
     paused: 'Paused',
     inactive: 'Inactive',
@@ -261,6 +262,7 @@ const messages = {
     health: '额度状态',
     requiredFloor: '最低保留额度',
     listenerStatus: '监听状态',
+    listenerNotListening: '暂未监听',
     active: '运行中',
     paused: '已暂停',
     inactive: '未启用',
@@ -458,6 +460,13 @@ export function translateConnectionLabel(value: string, locale: Locale) {
   if (value === 'Browser Wallet') return copy.browserWallet
   if (value === 'Web Wallet') return copy.webWallet
   if (value === 'Not connected') return copy.notConnected
+  return value
+}
+
+export function translateBalanceContextLabel(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'Controller wallet balance') return copy.controllerWalletBalance
+  if (value === 'Autonomous wallet contract balance') return copy.autonomousWalletBalance
   return value
 }
 

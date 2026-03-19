@@ -1,5 +1,6 @@
 import { startTransition, useDeferredValue, useEffect, useState, useTransition } from 'react'
 
+import willLeadLogo from '../assets/willlead-logo.jpg'
 import { AutomationCapabilityPanel } from '../components/AutomationCapabilityPanel'
 import { IntentForm } from '../components/IntentForm'
 import { ProofPanel } from '../components/ProofPanel'
@@ -98,8 +99,15 @@ export function App() {
       <section className="hero">
         <div className="hero-header">
           <div className="hero-copy-block">
-            <p className="eyebrow">{copy.heroEyebrow}</p>
-            <h1>WillLead</h1>
+            <div className="hero-brand-lockup">
+              <div className="hero-logo-frame">
+                <img alt="WillLead logo" className="hero-logo" src={willLeadLogo} />
+              </div>
+              <div className="hero-brand-copy">
+                <p className="eyebrow">{copy.heroEyebrow}</p>
+                <h1>WillLead</h1>
+              </div>
+            </div>
             <p className="hero-copy">{copy.heroCopy}</p>
           </div>
           <div className="hero-actions">

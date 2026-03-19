@@ -17,7 +17,7 @@ export type WalletState = {
   lastExecutedAt: string
   lastSignalHash: string
   destinationBalanceDelta: string
-  listenerPaused: boolean
+  listenerPaused: boolean | null
   callbackGasLimit: string
 }
 
