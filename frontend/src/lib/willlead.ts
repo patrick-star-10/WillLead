@@ -22,6 +22,7 @@ import type {
   AutomationFundingValues,
   IntentFormValues,
   IntentState,
+  WalletAccessState,
   WalletConnectResult,
   WalletConnectionSource,
   WalletState
@@ -60,6 +61,10 @@ const erc20Abi = parseAbi([
 
 function isConfiguredAddress(value: string) {
   return value.toLowerCase() !== emptyAddress
+}
+
+function isSameAddress(left: string, right: string) {
+  return left.toLowerCase() === right.toLowerCase()
 }
 
 function formatTimestamp(timestamp: bigint) {
@@ -171,6 +176,67 @@ function formatConnectionLabel(source: WalletConnectionSource) {
   return 'Not connected'
 }
 
+function buildUnboundSnapshot(params: {
+  ownerAddress: string | null
+  connectionSource: WalletConnectionSource
+  connectedBalanceLabel: string
+  connectedAssetBalances: AssetBalance[]
+  walletAccessState: WalletAccessState
+}) {
+  const { ownerAddress, connectionSource, connectedBalanceLabel, connectedAssetBalances, walletAccessState } =
+    params
+
+  return {
+    wallet: {
+      contractAddress: 'Unavailable',
+      listenerAddress: 'Unavailable',
+      signalEmitterAddress: 'Unavailable',
+      ownerAddress,
+      connectionSource,
+      connectionLabel: formatConnectionLabel(connectionSource),
+      balanceContextLabel: 'Autonomous wallet contract balance',
+      balanceLabel: 'Unavailable',
+      assetBalances: [],
+      connectedBalanceLabel,
+      connectedAssetBalances,
+      walletAccessState,
+      runtimeStatus: 'inactive',
+      isConnected: ownerAddress !== null,
+      lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
+      lastExecutionNonce: 0,
+      lastExecutedAt: 'Never',
+      lastSignalHash: zeroHash,
+      destinationBalanceDelta: '0 ETH',
+      listenerPaused: null,
+      callbackGasLimit: 'Unavailable',
+      subscriptionStatus: 'unavailable' as const,
+      subscriptionOriginChainId: 'Unavailable',
+      subscriptionDestinationChainId: 'Unavailable',
+      subscriptionTopic0: 'Unavailable'
+    },
+    intent: {
+      token: 'native',
+      recipient: 'Not configured',
+      amountPerExecution: '0',
+      maxExecutions: 0,
+      executedCount: 0,
+      minAutomationBalance: '0',
+      enabled: false
+    },
+    automation: {
+      creditLabel: 'Unavailable',
+      availableBalance: 'Unavailable',
+      minRequiredBalance: 'Unavailable'
+    },
+    executionProofs: []
+  } satisfies {
+    wallet: WalletState
+    intent: IntentState
+    automation: AutomationCreditState
+    executionProofs: ExecutionProof[]
+  }
+}
+
 export async function readWalletState(
   ownerAddress: string | null,
   connectionSource: WalletConnectionSource = 'disconnected'
@@ -190,144 +256,52 @@ export async function readWalletState(
     destinationClient && ownerAddress !== null
       ? await destinationClient.getBalance({ address: getAddress(ownerAddress) })
       : 0n
+  const connectedBalanceLabel = ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable'
   const connectedAssetBalances =
     ownerAddress !== null
       ? [
           {
             symbol: 'ETH',
-            balanceLabel: formatAmount(connectedBalance),
+            balanceLabel: connectedBalanceLabel,
             kind: 'native' as const
           }
         ]
       : []
 
   if (!destinationClient) {
-    return {
-      wallet: {
-        contractAddress: walletAddress,
-        listenerAddress: reactiveListenerAddress,
-        signalEmitterAddress: contractAddresses.signalEmitter,
-        ownerAddress,
-        connectionSource,
-        connectionLabel: formatConnectionLabel(connectionSource),
-        balanceContextLabel: 'Controller wallet balance',
-        balanceLabel: 'Unavailable',
-        assetBalances: [],
-        connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
-        connectedAssetBalances,
-        runtimeStatus: 'active',
-        isConnected: ownerAddress !== null,
-        lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
-        lastExecutionNonce: 3,
-        lastExecutedAt: 'Mock state',
-        lastSignalHash: zeroHash,
-        destinationBalanceDelta: '-0.01 ETH',
-        listenerPaused: null,
-        callbackGasLimit: 'Unavailable',
-        subscriptionStatus: 'unavailable',
-        subscriptionOriginChainId: 'Unavailable',
-        subscriptionDestinationChainId: 'Unavailable',
-        subscriptionTopic0: 'Unavailable'
-      },
-      intent: {
-        token: 'native',
-        recipient: '0xF00D00000000000000000000000000000000CAFE',
-        amountPerExecution: '0.01',
-        maxExecutions: 5,
-        executedCount: 3,
-        minAutomationBalance: '0.005',
-        enabled: true
-      },
-      automation: {
-        creditLabel: 'Mock',
-        availableBalance: 'Unavailable',
-        minRequiredBalance: 'Unavailable'
-      },
-      executionProofs: [
-        {
-          id: 'origin-log',
-          label: 'Origin Signal',
-          description: 'StrategySignal emitted on Base Sepolia.',
-          reference: 'mock://origin-signal',
-          chain: 'origin',
-          href: null
-        },
-        {
-          id: 'reactive-callback',
-          label: 'Reactive Callback',
-          description: 'Reactive listener emitted a callback request.',
-          reference: 'mock://reactive-callback',
-          chain: 'reactive',
-          href: null
-        },
-        {
-          id: 'destination-exec',
-          label: 'Destination Execution',
-          description: 'WillLeadWallet executed the fixed transfer intent.',
-          reference: 'mock://destination-execution',
-          chain: 'destination',
-          href: null
-        }
-      ]
-    }
+    return buildUnboundSnapshot({
+      ownerAddress,
+      connectionSource,
+      connectedBalanceLabel,
+      connectedAssetBalances,
+      walletAccessState: 'unavailable'
+    })
   }
 
-  if (!isWalletContractConfigured) {
-    const connectedBalance =
-      ownerAddress !== null ? await destinationClient.getBalance({ address: getAddress(ownerAddress) }) : 0n
+  if (!isWalletContractConfigured || ownerAddress === null) {
+    return buildUnboundSnapshot({
+      ownerAddress,
+      connectionSource,
+      connectedBalanceLabel,
+      connectedAssetBalances,
+      walletAccessState: ownerAddress === null ? 'needs_connection' : 'unavailable'
+    })
+  }
 
-    return {
-      wallet: {
-        contractAddress: walletAddress,
-        listenerAddress: reactiveListenerAddress,
-        signalEmitterAddress: contractAddresses.signalEmitter,
-        ownerAddress,
-        connectionSource,
-        connectionLabel: formatConnectionLabel(connectionSource),
-        balanceContextLabel: 'Controller wallet balance',
-        balanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
-        assetBalances:
-          ownerAddress !== null
-            ? [
-                {
-                  symbol: 'ETH',
-                  balanceLabel: formatAmount(connectedBalance),
-                  kind: 'native'
-                }
-              ]
-            : [],
-        connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
-        connectedAssetBalances,
-        runtimeStatus: 'inactive',
-        isConnected: ownerAddress !== null,
-        lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
-        lastExecutionNonce: 0,
-        lastExecutedAt: 'Never',
-        lastSignalHash: zeroHash,
-        destinationBalanceDelta: '0 ETH',
-        listenerPaused: null,
-        callbackGasLimit: 'Unavailable',
-        subscriptionStatus: 'unavailable',
-        subscriptionOriginChainId: 'Unavailable',
-        subscriptionDestinationChainId: 'Unavailable',
-        subscriptionTopic0: 'Unavailable'
-      },
-      intent: {
-        token: 'native',
-        recipient: 'Not configured',
-        amountPerExecution: '0',
-        maxExecutions: 0,
-        executedCount: 0,
-        minAutomationBalance: '0',
-        enabled: false
-      },
-      automation: {
-        creditLabel: 'Unavailable',
-        availableBalance: 'Unavailable',
-        minRequiredBalance: 'Unavailable'
-      },
-      executionProofs: []
-    }
+  const configuredWalletOwner = await destinationClient.readContract({
+    address: walletAddress,
+    abi: willLeadWalletAbi,
+    functionName: 'owner'
+  }) as Address
+
+  if (!isSameAddress(configuredWalletOwner, ownerAddress)) {
+    return buildUnboundSnapshot({
+      ownerAddress,
+      connectionSource,
+      connectedBalanceLabel,
+      connectedAssetBalances,
+      walletAccessState: 'mismatch'
+    })
   }
 
   const [summary, balance, lastExecutionNonce, lastExecutedAt, lastSignalHash] = await Promise.all([
@@ -379,8 +353,9 @@ export async function readWalletState(
       balanceContextLabel: 'Autonomous wallet contract balance',
       balanceLabel: formatAmount(balance),
       assetBalances,
-      connectedBalanceLabel: ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable',
+      connectedBalanceLabel,
       connectedAssetBalances,
+      walletAccessState: 'bound',
       runtimeStatus: formatRuntimeStatus(status),
       isConnected: ownerAddress !== null,
       lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
@@ -608,7 +583,12 @@ async function readExecutionProofs(
   reactiveClient: ReturnType<typeof getReactivePublicClient>,
   destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>
 ): Promise<ExecutionProof[]> {
-  const proofs: ExecutionProof[] = []
+  type HistoryItem = ExecutionProof & {
+    blockNumber: bigint
+    logIndex: number
+  }
+
+  const proofs: HistoryItem[] = []
 
   try {
     const executionLogs = await destinationClient.getLogs({
@@ -620,15 +600,50 @@ async function readExecutionProofs(
       strict: true
     })
 
-    const latestExecution = executionLogs.at(-1)
-    if (latestExecution) {
+    for (const executionLog of executionLogs) {
+      const block = await destinationClient.getBlock({ blockNumber: executionLog.blockNumber! })
       proofs.push({
-        id: `wallet-${latestExecution.transactionHash}`,
+        id: `wallet-${executionLog.transactionHash}`,
         label: 'Destination Execution',
-        description: `Intent executed with nonce ${latestExecution.args.executionNonce?.toString() ?? 'unknown'}.`,
-        reference: latestExecution.transactionHash ?? 'unknown',
+        description: 'Autonomous wallet executed the transfer on the destination chain.',
+        status: 'success',
+        reference: executionLog.transactionHash ?? 'unknown',
         chain: 'destination',
-        href: txExplorerLink('destination', latestExecution.transactionHash)
+        timestampLabel: formatTimestamp(block.timestamp),
+        nonceLabel: executionLog.args.executionNonce?.toString() ?? null,
+        detailLabel: null,
+        href: txExplorerLink('destination', executionLog.transactionHash),
+        blockNumber: executionLog.blockNumber ?? 0n,
+        logIndex: Number(executionLog.logIndex ?? 0)
+      })
+    }
+  } catch {}
+
+  try {
+    const skippedLogs = await destinationClient.getLogs({
+      address: walletAddress,
+      event: parseAbiItem(
+        'event IntentExecutionSkipped(address indexed wallet, uint256 executionNonce, bytes32 signalHash, string reason)'
+      ),
+      fromBlock: 0n,
+      strict: true
+    })
+
+    for (const skippedLog of skippedLogs) {
+      const block = await destinationClient.getBlock({ blockNumber: skippedLog.blockNumber! })
+      proofs.push({
+        id: `skipped-${skippedLog.transactionHash}-${skippedLog.logIndex}`,
+        label: 'Destination Skipped',
+        description: 'Autonomous wallet skipped execution and recorded the reason.',
+        status: 'skipped',
+        reference: skippedLog.transactionHash ?? 'unknown',
+        chain: 'destination',
+        timestampLabel: formatTimestamp(block.timestamp),
+        nonceLabel: skippedLog.args.executionNonce?.toString() ?? null,
+        detailLabel: typeof skippedLog.args.reason === 'string' ? skippedLog.args.reason : null,
+        href: txExplorerLink('destination', skippedLog.transactionHash),
+        blockNumber: skippedLog.blockNumber ?? 0n,
+        logIndex: Number(skippedLog.logIndex ?? 0)
       })
     }
   } catch {}
@@ -644,15 +659,21 @@ async function readExecutionProofs(
         strict: true
       })
 
-      const latestCallback = callbackLogs.at(-1)
-      if (latestCallback) {
+      for (const callbackLog of callbackLogs) {
+        const block = await reactiveClient.getBlock({ blockNumber: callbackLog.blockNumber! })
         proofs.push({
-          id: `callback-${latestCallback.transactionHash}`,
+          id: `callback-${callbackLog.transactionHash}-${callbackLog.logIndex}`,
           label: 'Reactive Callback',
           description: 'Reactive listener emitted a callback toward the destination wallet.',
-          reference: latestCallback.transactionHash ?? 'unknown',
+          status: 'observed',
+          reference: callbackLog.transactionHash ?? 'unknown',
           chain: 'reactive',
-          href: txExplorerLink('reactive', latestCallback.transactionHash)
+          timestampLabel: formatTimestamp(block.timestamp),
+          nonceLabel: null,
+          detailLabel: null,
+          href: txExplorerLink('reactive', callbackLog.transactionHash),
+          blockNumber: callbackLog.blockNumber ?? 0n,
+          logIndex: Number(callbackLog.logIndex ?? 0)
         })
       }
     }
@@ -669,21 +690,35 @@ async function readExecutionProofs(
         strict: true
       })
 
-      const latestSignal = signalLogs.at(-1)
-      if (latestSignal) {
+      for (const signalLog of signalLogs) {
+        const block = await originClient.getBlock({ blockNumber: signalLog.blockNumber! })
         proofs.push({
-          id: `signal-${latestSignal.transactionHash}`,
+          id: `signal-${signalLog.transactionHash}-${signalLog.logIndex}`,
           label: 'Origin Signal',
           description: 'Source chain signal emitted for the wallet intent.',
-          reference: latestSignal.transactionHash ?? 'unknown',
+          status: 'observed',
+          reference: signalLog.transactionHash ?? 'unknown',
           chain: 'origin',
-          href: txExplorerLink('origin', latestSignal.transactionHash)
+          timestampLabel: formatTimestamp(block.timestamp),
+          nonceLabel: signalLog.args.executionNonce?.toString() ?? null,
+          detailLabel: null,
+          href: txExplorerLink('origin', signalLog.transactionHash),
+          blockNumber: signalLog.blockNumber ?? 0n,
+          logIndex: Number(signalLog.logIndex ?? 0)
         })
       }
     }
   } catch {}
 
   return proofs
+    .sort((left, right) => {
+      if (left.blockNumber === right.blockNumber) {
+        return right.logIndex - left.logIndex
+      }
+      return left.blockNumber > right.blockNumber ? -1 : 1
+    })
+    .slice(0, 12)
+    .map(({ blockNumber: _blockNumber, logIndex: _logIndex, ...proof }) => proof)
 }
 
 export async function configureIntent(values: IntentFormValues): Promise<ActionResult> {

@@ -44,6 +44,15 @@ export function App() {
   const [activeSection, setActiveSection] = useState<'overview' | 'plan' | 'automation' | 'activity'>('overview')
   const [isWalletModalOpen, setWalletModalOpen] = useState(false)
   const browserWalletOptions = getBrowserWalletOptions()
+  const hasBoundWallet = wallet.walletAccessState === 'bound'
+  const activityEmptyMessage =
+    wallet.walletAccessState === 'mismatch'
+      ? copy.connectedWalletMismatch
+      : wallet.walletAccessState === 'unavailable'
+        ? copy.walletAccessUnavailable
+        : hasBoundWallet
+          ? copy.activityEmpty
+          : copy.connectWalletToLoadRuntime
 
   const sections = [
     {
@@ -204,6 +213,7 @@ export function App() {
               listenerAddress={wallet.listenerAddress}
               listenerPaused={wallet.listenerPaused}
               minRequiredBalance={automation.minRequiredBalance}
+              walletAccessState={wallet.walletAccessState}
               onFundAutomation={(amount) => void fundAutomation({ amount })}
               onRefresh={handleRefresh}
               signalEmitterAddress={wallet.signalEmitterAddress}
@@ -221,6 +231,7 @@ export function App() {
               executedCount={intent.executedCount}
               minAutomationBalance={intent.minAutomationBalance}
               enabled={intent.enabled}
+              isEditable={hasBoundWallet}
               isPending={isActionPending}
               onSubmit={(values) => void submitIntent(values)}
               onPause={() => void pauseWalletIntent()}
@@ -244,13 +255,16 @@ export function App() {
               subscriptionTopic0={wallet.subscriptionTopic0}
               callbackGasLimit={wallet.callbackGasLimit}
               isPending={isActionPending}
+              walletAccessState={wallet.walletAccessState}
               onTriggerSignal={() => void triggerSignal()}
               onPauseListener={() => void pauseListener()}
               onResumeListener={() => void resumeListener()}
             />
           ) : null}
 
-          {activeSection === 'activity' ? <ProofPanel events={deferredEvents} /> : null}
+          {activeSection === 'activity' ? (
+            <ProofPanel emptyStateMessage={activityEmptyMessage} events={deferredEvents} />
+          ) : null}
         </section>
       </section>
 

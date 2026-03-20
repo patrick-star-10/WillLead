@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { translateCreditLabel, translateSubscriptionStatus, useCopy } from '../lib/i18n'
+import type { WalletAccessState } from '../types/willlead'
 
 type AutomationCapabilityPanelProps = {
   creditLabel: string
@@ -13,6 +14,7 @@ type AutomationCapabilityPanelProps = {
   callbackGasLimit: string
   lastSyncedAt: string
   isPending: boolean
+  walletAccessState: WalletAccessState
   onRefresh: () => void
   onFundAutomation: (amount: string) => void
 }
@@ -28,6 +30,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
   const { copy, locale } = useCopy()
   const [topUpAmount, setTopUpAmount] = useState('0.01')
   const listenerUnavailable = props.listenerPaused === null
+  const hasBoundWallet = props.walletAccessState === 'bound'
   const listenerClassName = listenerUnavailable
     ? 'status-pill status-unavailable'
     : props.subscriptionStatus === 'missing'
@@ -46,7 +49,11 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
       ? copy.paused
       : copy.active
   const listenerHelperLabel = listenerUnavailable
-    ? copy.noWalletConnected
+    ? props.walletAccessState === 'mismatch'
+      ? copy.connectedWalletMismatch
+      : props.walletAccessState === 'unavailable'
+        ? copy.walletAccessUnavailable
+        : copy.connectWalletToLoadRuntime
     : props.subscriptionStatus === 'missing'
       ? copy.subscriptionRepairNeeded
       : copy.subscriptionReady
@@ -123,7 +130,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
         />
         <button
           className="primary-button"
-          disabled={listenerUnavailable}
+          disabled={listenerUnavailable || !hasBoundWallet}
           onClick={() => props.onFundAutomation(topUpAmount)}
           type="button"
         >

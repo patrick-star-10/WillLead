@@ -557,19 +557,120 @@ button:disabled {
   margin: 0;
 }
 
+.proof-empty-state {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(248, 242, 232, 0.92);
+  border: 1px solid rgba(175, 138, 94, 0.12);
+  color: #6f5a43;
+}
+
 .proof-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
   border-radius: 18px;
   background: rgba(248, 242, 232, 0.92);
+  border: 1px solid rgba(175, 138, 94, 0.12);
 }
 
 .proof-item p {
   margin: 6px 0 0;
   color: #7e6852;
+}
+
+.proof-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.proof-headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proof-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.history-status {
+  letter-spacing: 0.08em;
+}
+
+.history-status-observed {
+  background: rgba(123, 151, 197, 0.14);
+  color: #435f8d;
+}
+
+.history-status-success {
+  background: rgba(84, 153, 104, 0.14);
+  color: #2f6a45;
+}
+
+.history-status-skipped {
+  background: rgba(191, 97, 80, 0.14);
+  color: #9f4433;
+}
+
+.proof-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.proof-meta div {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.82);
+}
+
+.proof-meta dt {
+  margin-bottom: 4px;
+  color: #92775c;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.proof-meta dd {
+  margin: 0;
+  color: #4a3927;
+  font-size: 0.92rem;
+}
+
+.proof-detail {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.82);
+}
+
+.proof-detail span {
+  color: #92775c;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.proof-detail strong {
+  color: #4a3927;
+  overflow-wrap: anywhere;
+}
+
+.proof-reference {
+  min-width: 180px;
+  text-align: right;
 }
 
 .proof-link {
@@ -860,6 +961,20 @@ button:disabled {
   .proof-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .proof-headline,
+  .proof-badges {
+    width: 100%;
+  }
+
+  .proof-badges {
+    justify-content: flex-start;
+  }
+
+  .proof-reference {
+    min-width: 0;
+    text-align: left;
   }
 
   .status-banner {

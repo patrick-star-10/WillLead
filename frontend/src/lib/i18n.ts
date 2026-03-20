@@ -15,6 +15,10 @@ const messages = {
     disconnectWallet: 'Disconnect Wallet',
     connectHint: 'Connect first, then configure the transfer plan.',
     connectedHint: 'connected. Click above to disconnect this session.',
+    walletAccessUnavailable: 'Wallet binding is unavailable until chain state can be read.',
+    connectWalletToLoadRuntime: 'Connect the controlling wallet to load listener state and execution history.',
+    connectedWalletMismatch:
+      'Connected wallet does not control the configured autonomous wallet, so no listener state is shown.',
     walletView: 'Wallet View',
     overviewTab: 'Overview',
     overviewDesc: 'Balance, identity, execution runway, and automation credit.',
@@ -23,7 +27,7 @@ const messages = {
     automationTab: 'Automation',
     automationDesc: 'Operate the reactive listener and simulate the source trigger.',
     activityTab: 'Activity',
-    activityDesc: 'Review origin, reactive, and destination proof records.',
+    activityDesc: 'Review recent origin signals, callbacks, executions, and skipped runs.',
     walletOverviewTitle: 'Wallet Overview',
     transferPlanTitle: 'Transfer Plan',
     automationTitle: 'Automation Engine',
@@ -40,7 +44,7 @@ const messages = {
     controllerAssetsEmpty: 'Connect a Sepolia wallet to load controller assets.',
     autonomousWalletAssets: 'Autonomous wallet assets',
     autonomousAssetsEmpty:
-      'Destination wallet assets are unavailable until a contract address is configured.',
+      'Connect the wallet that owns this autonomous wallet to load its balance and assets.',
     connection: 'Connection',
     walletConnected: 'Wallet connected',
     connectWalletShort: 'Connect wallet',
@@ -109,8 +113,15 @@ const messages = {
     resumeListener: 'Resume Listener',
     activityKicker: 'Activity Ledger',
     activityNote:
-      'Three transactions that prove the wallet moved without the frontend staying online.',
+      'A rolling execution history that shows what the wallet observed, executed, or skipped while you were away.',
     chainEvidence: 'Chain Evidence',
+    activityEmpty: 'No execution history yet for this wallet.',
+    observedStatus: 'Observed',
+    successStatus: 'Executed',
+    skippedStatus: 'Skipped',
+    observedAt: 'Observed at',
+    executionNonceLabel: 'Execution nonce',
+    skipReason: 'Skip reason',
     walletAccess: 'Wallet Access',
     chooseSigningMethod: 'Choose how this app should sign transactions',
     currentSigner: 'Current signer',
@@ -151,10 +162,11 @@ const messages = {
     originSignal: 'Origin Signal',
     reactiveCallbackLabel: 'Reactive Callback',
     destinationExecution: 'Destination Execution',
+    destinationSkipped: 'Destination Skipped',
     originSignalDesc: 'Signal emitted on the source chain.',
     reactiveCallbackDesc: 'Reactive listener emitted a destination callback.',
-    destinationExecutionDesc: 'Autonomous wallet executed the transfer on the destination chain.'
-    ,
+    destinationExecutionDesc: 'Autonomous wallet executed the transfer on the destination chain.',
+    destinationSkippedDesc: 'Autonomous wallet skipped execution and recorded the reason.',
     readyBindWallet: 'Ready to bind a wallet and configure the first intent.',
     preparingWalletSession: 'Preparing wallet session...',
     restoredWebWallet: 'Restored web wallet',
@@ -232,6 +244,9 @@ const messages = {
     disconnectWallet: '断开钱包',
     connectHint: '先连接钱包，再配置转账计划。',
     connectedHint: '已连接。点击上方可断开这次会话。',
+    walletAccessUnavailable: '链上状态不可读之前，暂时无法确认钱包归属。',
+    connectWalletToLoadRuntime: '先连接控制这个自主钱包的地址，才能读取监听状态和执行历史。',
+    connectedWalletMismatch: '当前连接的钱包并不控制这只自主钱包，因此不会展示它的监听和执行状态。',
     walletView: '钱包视图',
     overviewTab: '总览',
     overviewDesc: '查看资产、身份、执行次数和自动执行额度。',
@@ -240,7 +255,7 @@ const messages = {
     automationTab: '自动执行',
     automationDesc: '管理监听器，并模拟源链触发。',
     activityTab: '链上记录',
-    activityDesc: '查看源链、Reactive 和目标链上的执行证据。',
+    activityDesc: '查看最近的源链信号、回调、成功执行和跳过记录。',
     walletOverviewTitle: '钱包总览',
     transferPlanTitle: '转账计划',
     automationTitle: '自动执行引擎',
@@ -256,7 +271,7 @@ const messages = {
     controllerWalletAssets: '控制钱包资产',
     controllerAssetsEmpty: '连接 Sepolia 钱包后，这里会显示控制钱包资产。',
     autonomousWalletAssets: '自主执行钱包资产',
-    autonomousAssetsEmpty: '配置自主执行钱包合约地址后，这里才会显示资产。',
+    autonomousAssetsEmpty: '连接拥有这只自主钱包的地址后，这里才会显示它的余额和资产。',
     connection: '连接状态',
     walletConnected: '钱包已连接',
     connectWalletShort: '连接钱包',
@@ -323,8 +338,15 @@ const messages = {
     pauseListener: '暂停监听',
     resumeListener: '恢复监听',
     activityKicker: '链上记录',
-    activityNote: '这三笔交易用来证明前端离线后，钱包仍然完成了自动执行。',
+    activityNote: '这里会持续展示钱包离线期间观察到、完成或跳过的执行历史。',
     chainEvidence: '链上证据',
+    activityEmpty: '这只钱包目前还没有执行历史。',
+    observedStatus: '已观察',
+    successStatus: '已执行',
+    skippedStatus: '已跳过',
+    observedAt: '记录时间',
+    executionNonceLabel: '执行序号',
+    skipReason: '跳过原因',
     walletAccess: '钱包接入',
     chooseSigningMethod: '选择这个应用如何发起链上签名',
     currentSigner: '当前签名钱包',
@@ -362,10 +384,11 @@ const messages = {
     originSignal: '源链信号',
     reactiveCallbackLabel: 'Reactive 回调',
     destinationExecution: '目标链执行',
+    destinationSkipped: '目标链跳过',
     originSignalDesc: '信号已在源链发出。',
     reactiveCallbackDesc: 'Reactive 监听器已经发出目标链回调。',
-    destinationExecutionDesc: '自主执行钱包已在目标链完成转账。'
-    ,
+    destinationExecutionDesc: '自主执行钱包已在目标链完成转账。',
+    destinationSkippedDesc: '自主执行钱包已跳过这次执行，并记录了原因。',
     readyBindWallet: '准备好连接钱包并配置第一条转账计划。',
     preparingWalletSession: '正在准备钱包会话...',
     restoredWebWallet: '已恢复网页钱包',
@@ -522,6 +545,7 @@ export function translateProofLabel(value: string, locale: Locale) {
   if (value === 'Origin Signal') return copy.originSignal
   if (value === 'Reactive Callback') return copy.reactiveCallbackLabel
   if (value === 'Destination Execution') return copy.destinationExecution
+  if (value === 'Destination Skipped') return copy.destinationSkipped
   return value
 }
 
@@ -530,7 +554,15 @@ export function translateProofDescription(label: string, description: string, lo
   if (label === 'Origin Signal') return copy.originSignalDesc
   if (label === 'Reactive Callback') return copy.reactiveCallbackDesc
   if (label === 'Destination Execution') return copy.destinationExecutionDesc
+  if (label === 'Destination Skipped') return copy.destinationSkippedDesc
   return description
+}
+
+export function translateProofStatus(value: 'observed' | 'success' | 'skipped', locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'success') return copy.successStatus
+  if (value === 'skipped') return copy.skippedStatus
+  return copy.observedStatus
 }
 
 export function getMessages(locale: Locale) {

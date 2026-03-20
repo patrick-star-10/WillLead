@@ -1,4 +1,5 @@
 import { translateRuntimeStatus, translateSubscriptionStatus, useCopy } from '../lib/i18n'
+import type { WalletAccessState } from '../types/willlead'
 
 type RuntimePanelProps = {
   runtimeStatus: string
@@ -15,6 +16,7 @@ type RuntimePanelProps = {
   subscriptionTopic0: string
   callbackGasLimit: string
   isPending: boolean
+  walletAccessState: WalletAccessState
   onTriggerSignal: () => void
   onPauseListener: () => void
   onResumeListener: () => void
@@ -30,8 +32,13 @@ function shortenAddress(value: string) {
 export function RuntimePanel(props: RuntimePanelProps) {
   const { copy, locale } = useCopy()
   const listenerUnavailable = props.listenerPaused === null
+  const hasBoundWallet = props.walletAccessState === 'bound'
   const listenerStatusLabel = listenerUnavailable
-    ? copy.listenerNotListening
+    ? props.walletAccessState === 'mismatch'
+      ? copy.connectedWalletMismatch
+      : props.walletAccessState === 'unavailable'
+        ? copy.walletAccessUnavailable
+        : copy.connectWalletToLoadRuntime
     : props.listenerPaused
       ? copy.paused
       : copy.active
@@ -96,12 +103,12 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </div>
       </dl>
       <div className="action-row">
-        <button className="primary-button" onClick={props.onTriggerSignal} type="button">
+        <button className="primary-button" disabled={!hasBoundWallet} onClick={props.onTriggerSignal} type="button">
           {props.isPending ? copy.triggering : copy.emitSourceSignal}
         </button>
         <button
           className="secondary-button"
-          disabled={listenerUnavailable}
+          disabled={listenerUnavailable || !hasBoundWallet}
           onClick={props.onPauseListener}
           type="button"
         >
@@ -109,7 +116,7 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </button>
         <button
           className="secondary-button"
-          disabled={listenerUnavailable}
+          disabled={listenerUnavailable || !hasBoundWallet}
           onClick={props.onResumeListener}
           type="button"
         >

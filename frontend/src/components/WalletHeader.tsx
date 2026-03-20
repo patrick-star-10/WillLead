@@ -24,6 +24,9 @@ type WalletHeaderProps = {
 
 function shortenAddress(value: string | null) {
   if (!value) return 'Not connected'
+  if (value === 'Unavailable' || value === '0x0000000000000000000000000000000000000000') {
+    return 'Unavailable'
+  }
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 

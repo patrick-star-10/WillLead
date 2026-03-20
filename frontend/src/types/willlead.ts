@@ -1,5 +1,6 @@
 export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
 export type ListenerSubscriptionStatus = 'armed' | 'missing' | 'unavailable'
+export type WalletAccessState = 'needs_connection' | 'bound' | 'mismatch' | 'unavailable'
 
 export type WalletState = {
   contractAddress: string
@@ -13,6 +14,7 @@ export type WalletState = {
   assetBalances: AssetBalance[]
   connectedBalanceLabel: string
   connectedAssetBalances: AssetBalance[]
+  walletAccessState: WalletAccessState
   runtimeStatus: string
   isConnected: boolean
   lastSyncedAt: string
@@ -48,8 +50,12 @@ export type ExecutionProof = {
   id: string
   label: string
   description: string
+  status: 'observed' | 'success' | 'skipped'
   reference: string
   chain: 'origin' | 'destination' | 'reactive'
+  timestampLabel: string
+  nonceLabel?: string | null
+  detailLabel?: string | null
   href: string | null
 }
 

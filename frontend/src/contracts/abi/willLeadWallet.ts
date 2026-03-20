@@ -1,6 +1,13 @@
 export const willLeadWalletAbi = [
   {
     type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }]
+  },
+  {
+    type: 'function',
     name: 'getIntentSummary',
     stateMutability: 'view',
     inputs: [],

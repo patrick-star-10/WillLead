@@ -12,6 +12,7 @@ type IntentFormProps = {
   minAutomationBalance: string
   enabled: boolean
   isPending: boolean
+  isEditable: boolean
   onSubmit: (values: IntentFormValues) => void
   onPause: () => void
   onResume: () => void
@@ -62,6 +63,7 @@ export function IntentForm(props: IntentFormProps) {
           <dd>
             <input
               className="field"
+              disabled={!props.isEditable}
               onChange={(event) => setForm((state) => ({ ...state, token: event.target.value }))}
               value={form.token}
             />
@@ -72,6 +74,7 @@ export function IntentForm(props: IntentFormProps) {
           <dd>
             <input
               className="field"
+              disabled={!props.isEditable}
               onChange={(event) =>
                 setForm((state) => ({ ...state, recipient: event.target.value }))
               }
@@ -84,6 +87,7 @@ export function IntentForm(props: IntentFormProps) {
           <dd>
             <input
               className="field"
+              disabled={!props.isEditable}
               onChange={(event) =>
                 setForm((state) => ({ ...state, amountPerExecution: event.target.value }))
               }
@@ -96,6 +100,7 @@ export function IntentForm(props: IntentFormProps) {
           <dd>
             <input
               className="field"
+              disabled={!props.isEditable}
               min={1}
               onChange={(event) =>
                 setForm((state) => ({
@@ -117,6 +122,7 @@ export function IntentForm(props: IntentFormProps) {
           <dd>
             <input
               className="field"
+              disabled={!props.isEditable}
               onChange={(event) =>
                 setForm((state) => ({ ...state, minAutomationBalance: event.target.value }))
               }
@@ -126,13 +132,13 @@ export function IntentForm(props: IntentFormProps) {
         </div>
       </dl>
       <div className="action-row">
-        <button className="primary-button" onClick={() => props.onSubmit(form)} type="button">
+        <button className="primary-button" disabled={!props.isEditable} onClick={() => props.onSubmit(form)} type="button">
           {props.isPending ? copy.saving : copy.saveTransferPlan}
         </button>
-        <button className="secondary-button" onClick={props.onPause} type="button">
+        <button className="secondary-button" disabled={!props.isEditable} onClick={props.onPause} type="button">
           {copy.pausePlan}
         </button>
-        <button className="secondary-button" onClick={props.onResume} type="button">
+        <button className="secondary-button" disabled={!props.isEditable} onClick={props.onResume} type="button">
           {copy.resumePlan}
         </button>
       </div>

@@ -52,9 +52,9 @@ type WillLeadStore = {
 }
 
 const initialWalletState: WalletState = {
-  contractAddress: '0xA11CE0000000000000000000000000000000BEEF',
-  listenerAddress: '0xBEEF00000000000000000000000000000000A11C',
-  signalEmitterAddress: '0xF00D00000000000000000000000000000000CAFE',
+  contractAddress: 'Unavailable',
+  listenerAddress: 'Unavailable',
+  signalEmitterAddress: 'Unavailable',
   ownerAddress: null,
   connectionSource: 'disconnected',
   connectionLabel: 'Not connected',
@@ -63,29 +63,30 @@ const initialWalletState: WalletState = {
   assetBalances: [],
   connectedBalanceLabel: 'Unavailable',
   connectedAssetBalances: [],
-  runtimeStatus: 'active',
+  walletAccessState: 'needs_connection',
+  runtimeStatus: 'inactive',
   isConnected: false,
-  lastSyncedAt: '2026-03-18 06:10 PST',
-  lastExecutionNonce: 3,
-  lastExecutedAt: '2026-03-18 05:58 PST',
-  lastSignalHash: '0x4d6f636b5369676e616c48617368000000000000000000000000000000000000',
-  destinationBalanceDelta: '-0.01 ETH',
+  lastSyncedAt: 'Unavailable',
+  lastExecutionNonce: 0,
+  lastExecutedAt: 'Never',
+  lastSignalHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+  destinationBalanceDelta: '0 ETH',
   listenerPaused: null,
-  callbackGasLimit: '1000000',
+  callbackGasLimit: 'Unavailable',
   subscriptionStatus: 'unavailable',
-  subscriptionOriginChainId: '11155111',
-  subscriptionDestinationChainId: '11155111',
-  subscriptionTopic0: '0xe45289780e7528d2841b99cd319e5c8b096bbcabe47294706cae408a97267f92'
+  subscriptionOriginChainId: 'Unavailable',
+  subscriptionDestinationChainId: 'Unavailable',
+  subscriptionTopic0: 'Unavailable'
 }
 
 const initialIntentState: IntentState = {
   token: 'native',
-  recipient: '0xF00D00000000000000000000000000000000CAFE',
-  amountPerExecution: '0.01',
-  maxExecutions: 5,
-  executedCount: 3,
-  minAutomationBalance: '0.005',
-  enabled: true
+  recipient: 'Not configured',
+  amountPerExecution: '0',
+  maxExecutions: 0,
+  executedCount: 0,
+  minAutomationBalance: '0',
+  enabled: false
 }
 
 const initialAutomationState: AutomationCreditState = {
@@ -94,32 +95,7 @@ const initialAutomationState: AutomationCreditState = {
   minRequiredBalance: 'Unavailable'
 }
 
-const initialProofs: ExecutionProof[] = [
-  {
-    id: 'origin-log',
-    label: 'Origin Signal',
-    description: 'StrategySignal emitted on Base Sepolia.',
-    reference: '0xorigin...1234',
-    chain: 'origin',
-    href: null
-  },
-  {
-    id: 'reactive-callback',
-    label: 'Reactive Callback',
-    description: 'Reactive listener requested a destination callback.',
-    reference: '0xreactive...4567',
-    chain: 'reactive',
-    href: null
-  },
-  {
-    id: 'destination-exec',
-    label: 'Destination Execution',
-    description: 'WillLeadWallet executed the fixed transfer intent.',
-    reference: '0xdestination...89ab',
-    chain: 'destination',
-    href: null
-  }
-]
+const initialProofs: ExecutionProof[] = []
 
 function copy() {
   return getMessages(useLanguageStore.getState().locale)
@@ -147,7 +123,9 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         ...snapshot,
         isPending: false,
         statusMessage: restored
-          ? `${copy().restoredWebWallet} ${restored.address}`
+          ? snapshot.wallet.walletAccessState === 'mismatch'
+            ? copy().connectedWalletMismatch
+            : `${copy().restoredWebWallet} ${restored.address}`
           : copy().readyToConnectWallet,
         errorMessage: null
       })
@@ -173,7 +151,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
           connectionLabel: result.providerLabel ?? snapshot.wallet.connectionLabel
         },
         isPending: false,
-        statusMessage: `${copy().connectedWalletPrefix} ${result.providerLabel ?? copy().browserWalletLower} ${result.address}`,
+        statusMessage:
+          snapshot.wallet.walletAccessState === 'mismatch'
+            ? copy().connectedWalletMismatch
+            : `${copy().connectedWalletPrefix} ${result.providerLabel ?? copy().browserWalletLower} ${result.address}`,
         errorMessage: null
       })
     } catch (error) {
@@ -195,7 +176,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: `${copy().createdWebWallet} ${result.address}`,
+        statusMessage:
+          snapshot.wallet.walletAccessState === 'mismatch'
+            ? copy().connectedWalletMismatch
+            : `${copy().createdWebWallet} ${result.address}`,
         errorMessage: null
       })
 
@@ -219,7 +203,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage: `${copy().importedWebWallet} ${result.address}`,
+        statusMessage:
+          snapshot.wallet.walletAccessState === 'mismatch'
+            ? copy().connectedWalletMismatch
+            : `${copy().importedWebWallet} ${result.address}`,
         errorMessage: null
       })
     } catch (error) {
@@ -418,8 +405,19 @@ async function applyPostAction(
         id: action.hash,
         label: action.label,
         description: action.description,
+        status: inferProofStatus(action.label),
         reference: action.hash,
         chain: inferProofChain(action.label),
+        timestampLabel: new Intl.DateTimeFormat('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZoneName: 'short'
+        }).format(new Date()),
+        nonceLabel: null,
+        detailLabel: null,
         href: txExplorerLink(inferProofChain(action.label), action.hash)
       },
       ...state.executionProofs.filter((proof) => proof.reference !== action.hash)
@@ -431,4 +429,10 @@ function inferProofChain(label: string): 'origin' | 'destination' | 'reactive' {
   if (label.includes('Signal')) return 'origin'
   if (label.includes('Listener')) return 'reactive'
   return 'destination'
+}
+
+function inferProofStatus(label: string): 'observed' | 'success' | 'skipped' {
+  if (label.includes('Signal') || label.includes('Listener')) return 'observed'
+  if (label.includes('Skipped')) return 'skipped'
+  return 'success'
 }
