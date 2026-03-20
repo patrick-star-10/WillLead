@@ -8,6 +8,14 @@ fi
 
 source .env
 
+if [[ -n "${WILLLEAD_WALLET_FACTORY:-}" ]]; then
+  echo "== Wallet factory =="
+  cast call "$WILLLEAD_WALLET_FACTORY" "walletOf(address)(address)" "$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")" --rpc-url "$DESTINATION_RPC_URL"
+  cast call "$WILLLEAD_WALLET_FACTORY" "reactiveListener()(address)" --rpc-url "$DESTINATION_RPC_URL"
+  cast call "$WILLLEAD_WALLET_FACTORY" "signalEmitter()(address)" --rpc-url "$DESTINATION_RPC_URL"
+  echo
+fi
+
 echo "== Wallet summary =="
 cast call "$WILLLEAD_WALLET" "getIntentSummary()(uint8,address,address,uint256,uint256,uint256,uint256)" --rpc-url "$DESTINATION_RPC_URL"
 echo

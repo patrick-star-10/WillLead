@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { useCopy } from '../lib/i18n'
-import type { IntentFormValues } from '../types/willlead'
+import type { IntentFormValues, WalletAccessState } from '../types/willlead'
 
 type IntentFormProps = {
   token: string
@@ -13,6 +13,8 @@ type IntentFormProps = {
   enabled: boolean
   isPending: boolean
   isEditable: boolean
+  walletAccessState: WalletAccessState
+  onInitializeWallet: () => void
   onSubmit: (values: IntentFormValues) => void
   onPause: () => void
   onResume: () => void
@@ -45,6 +47,14 @@ export function IntentForm(props: IntentFormProps) {
   ])
 
   const remainingExecutions = props.maxExecutions - props.executedCount
+  const helperMessage =
+    props.walletAccessState === 'needs_wallet'
+      ? copy.initializeAutonomousWalletNote
+      : props.walletAccessState === 'mismatch'
+        ? copy.connectedWalletMismatch
+        : props.walletAccessState === 'unavailable'
+          ? copy.walletAccessUnavailable
+          : copy.connectWalletToLoadRuntime
 
   return (
     <article className="panel">
@@ -141,7 +151,13 @@ export function IntentForm(props: IntentFormProps) {
         <button className="secondary-button" disabled={!props.isEditable} onClick={props.onResume} type="button">
           {copy.resumePlan}
         </button>
+        {props.walletAccessState === 'needs_wallet' ? (
+          <button className="secondary-button" onClick={props.onInitializeWallet} type="button">
+            {props.isPending ? copy.initializingAutonomousWallet : copy.initializeAutonomousWallet}
+          </button>
+        ) : null}
       </div>
+      {!props.isEditable ? <p className="wallet-footnote">{helperMessage}</p> : null}
     </article>
   )
 }

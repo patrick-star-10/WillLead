@@ -20,6 +20,8 @@ frontend/
 
 - `WillLeadWallet`
   保存单条 intent、接收 callback、执行固定金额转账、记录运行时状态
+- `WillLeadWalletFactory`
+  在目标链上为每个 owner 创建并发现对应的 autonomous wallet
 - `WillLeadSignalEmitter`
   在源链发出 `StrategySignal`
 - `WillLeadReactiveListener`
@@ -42,11 +44,10 @@ frontend/
 现在的前端已经接了 `viem` 的实现入口：
 
 - 可连接浏览器钱包
+- 可通过 `WillLeadWalletFactory` 按 `ownerAddress` 发现或初始化 autonomous wallet
 - 可向目标链钱包调用 `configureIntent / pauseIntent / resumeIntent`
 - 可向源链信号合约调用 `emitSignal`
 - 可读取目标链钱包状态和 callback proxy 的 reserves / debts
-
-如果没有填环境变量或没有浏览器钱包，前端会退回 mock 状态，不会直接崩掉。
 
 ## 本地开发
 
@@ -79,6 +80,7 @@ cp .env.example .env
 其中：
 
 - `AUTHORIZED_RVM_ID` 应该填部署 `WillLeadWallet` 和 `WillLeadReactiveListener` 的同一个 EOA 地址
+- `deploy-local.sh` 现在会部署共享的 `WillLeadWalletFactory`，然后为当前 `OWNER_PRIVATE_KEY` 对应的 owner 自动创建第一只 wallet
 - listener 本身不再把该值写进 callback payload，payload 里使用 `address(0)` 让 Reactive 在真实 callback 时填充 RVM ID
 - `sync-listener-subscription.sh` 会直接检查当前 ReactVM 上是否真的订阅了当前 `signalEmitter + topic0`；如果订阅缺失，它会通过 Reactive system contract 补一次 `subscribeContract(...)`
 

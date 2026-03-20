@@ -28,6 +28,7 @@ export function App() {
   const createWebWallet = useWalletStore((state) => state.createWebWallet)
   const importWebWallet = useWalletStore((state) => state.importWebWallet)
   const disconnectWallet = useWalletStore((state) => state.disconnectWallet)
+  const createAutonomousWallet = useWalletStore((state) => state.createAutonomousWallet)
   const refreshChainState = useWalletStore((state) => state.refreshChainState)
   const submitIntent = useWalletStore((state) => state.submitIntent)
   const fundAutomation = useWalletStore((state) => state.fundAutomation)
@@ -48,6 +49,8 @@ export function App() {
   const activityEmptyMessage =
     wallet.walletAccessState === 'mismatch'
       ? copy.connectedWalletMismatch
+      : wallet.walletAccessState === 'needs_wallet'
+        ? copy.initializeWalletToContinue
       : wallet.walletAccessState === 'unavailable'
         ? copy.walletAccessUnavailable
         : hasBoundWallet
@@ -233,6 +236,8 @@ export function App() {
               enabled={intent.enabled}
               isEditable={hasBoundWallet}
               isPending={isActionPending}
+              walletAccessState={wallet.walletAccessState}
+              onInitializeWallet={() => void createAutonomousWallet()}
               onSubmit={(values) => void submitIntent(values)}
               onPause={() => void pauseWalletIntent()}
               onResume={() => void resumeWalletIntent()}
@@ -254,6 +259,7 @@ export function App() {
               subscriptionDestinationChainId={wallet.subscriptionDestinationChainId}
               subscriptionTopic0={wallet.subscriptionTopic0}
               callbackGasLimit={wallet.callbackGasLimit}
+              canManageListener={wallet.canManageListener}
               isPending={isActionPending}
               walletAccessState={wallet.walletAccessState}
               onTriggerSignal={() => void triggerSignal()}

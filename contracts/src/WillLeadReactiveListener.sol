@@ -76,6 +76,10 @@ contract WillLeadReactiveListener is AbstractPausableReactive {
         return paused;
     }
 
+    function ownerAddress() external view returns (address) {
+        return owner;
+    }
+
     function getPausableSubscriptions() internal view override returns (Subscription[] memory subscriptions) {
         subscriptions = new Subscription[](1);
         subscriptions[0] = Subscription(

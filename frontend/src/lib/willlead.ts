@@ -12,6 +12,7 @@ import {
 import { callbackProxyAbi } from '../contracts/abi/callbackProxy'
 import { willLeadReactiveListenerAbi } from '../contracts/abi/willLeadReactiveListener'
 import { willLeadSignalEmitterAbi } from '../contracts/abi/willLeadSignalEmitter'
+import { willLeadWalletFactoryAbi } from '../contracts/abi/willLeadWalletFactory'
 import { willLeadWalletAbi } from '../contracts/abi/willLeadWallet'
 import { contractAddresses } from '../contracts/addresses'
 import type {
@@ -65,6 +66,11 @@ function isConfiguredAddress(value: string) {
 
 function isSameAddress(left: string, right: string) {
   return left.toLowerCase() === right.toLowerCase()
+}
+
+function configuredAddressOrNull(value: string | undefined) {
+  if (!value) return null
+  return isConfiguredAddress(value) ? getAddress(value) : null
 }
 
 function formatTimestamp(timestamp: bigint) {
@@ -176,6 +182,107 @@ function formatConnectionLabel(source: WalletConnectionSource) {
   return 'Not connected'
 }
 
+type WalletBindingContext = {
+  walletAddress: Address | null
+  listenerAddress: Address | null
+  signalEmitterAddress: Address | null
+  source: 'factory' | 'legacy' | 'none'
+}
+
+type BoundWalletBindingContext = Omit<WalletBindingContext, 'walletAddress'> & {
+  walletAddress: Address
+}
+
+async function resolveWalletBinding(ownerAddress: string | null): Promise<WalletBindingContext> {
+  const destinationClient = getDestinationPublicClient()
+  const factoryAddress = configuredAddressOrNull(contractAddresses.walletFactory)
+
+  if (destinationClient && factoryAddress) {
+    const [listenerAddress, signalEmitterAddress, walletAddress] = await Promise.all([
+      destinationClient.readContract({
+        address: factoryAddress,
+        abi: willLeadWalletFactoryAbi,
+        functionName: 'reactiveListener'
+      }) as Promise<Address>,
+      destinationClient.readContract({
+        address: factoryAddress,
+        abi: willLeadWalletFactoryAbi,
+        functionName: 'signalEmitter'
+      }) as Promise<Address>,
+      ownerAddress !== null
+        ? (destinationClient.readContract({
+            address: factoryAddress,
+            abi: willLeadWalletFactoryAbi,
+            functionName: 'walletOf',
+            args: [getAddress(ownerAddress)]
+          }) as Promise<Address>)
+        : Promise.resolve(emptyAddress as Address)
+    ])
+
+    return {
+      walletAddress: isConfiguredAddress(walletAddress) ? walletAddress : null,
+      listenerAddress,
+      signalEmitterAddress,
+      source: 'factory'
+    }
+  }
+
+  const walletAddress = configuredAddressOrNull(contractAddresses.wallet)
+  const listenerAddress = configuredAddressOrNull(contractAddresses.reactiveListener)
+  const signalEmitterAddress = configuredAddressOrNull(contractAddresses.signalEmitter)
+
+  return {
+    walletAddress,
+    listenerAddress,
+    signalEmitterAddress,
+    source: walletAddress ? 'legacy' : 'none'
+  }
+}
+
+async function resolveWalletAddressForOwner(ownerAddress: Address): Promise<BoundWalletBindingContext> {
+  const binding = await resolveWalletBinding(ownerAddress)
+  if (!binding.walletAddress) {
+    throw new Error(copy().walletNotInitialized)
+  }
+
+  const destinationClient = getDestinationPublicClient()
+  if (!destinationClient) {
+    throw new Error(copy().walletAccessUnavailable)
+  }
+
+  const walletOwner = await destinationClient.readContract({
+    address: binding.walletAddress,
+    abi: willLeadWalletAbi,
+    functionName: 'owner'
+  }) as Address
+
+  if (!isSameAddress(walletOwner, ownerAddress)) {
+    throw new Error(copy().connectedWalletMismatch)
+  }
+
+  return {
+    ...binding,
+    walletAddress: binding.walletAddress
+  }
+}
+
+async function resolveReactiveListenerForManager(ownerAddress: Address) {
+  const binding = await resolveWalletBinding(ownerAddress)
+  const reactiveListenerAddress =
+    binding.listenerAddress ?? configuredAddressOrNull(contractAddresses.reactiveListener)
+
+  if (!reactiveListenerAddress) {
+    throw new Error(copy().reactiveListenerMissing)
+  }
+
+  const listenerState = await readReactiveListenerState(reactiveListenerAddress)
+  if (!listenerState.canManageListener(ownerAddress)) {
+    throw new Error(copy().listenerManagedByOperator)
+  }
+
+  return reactiveListenerAddress
+}
+
 function buildUnboundSnapshot(params: {
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
@@ -207,6 +314,7 @@ function buildUnboundSnapshot(params: {
       lastExecutedAt: 'Never',
       lastSignalHash: zeroHash,
       destinationBalanceDelta: '0 ETH',
+      canManageListener: false,
       listenerPaused: null,
       callbackGasLimit: 'Unavailable',
       subscriptionStatus: 'unavailable' as const,
@@ -249,9 +357,6 @@ export async function readWalletState(
   const destinationClient = getDestinationPublicClient()
   const originClient = getOriginPublicClient()
   const reactiveClient = getReactivePublicClient()
-  const walletAddress = getAddress(contractAddresses.wallet)
-  const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
-  const isWalletContractConfigured = isConfiguredAddress(walletAddress)
   const connectedBalance =
     destinationClient && ownerAddress !== null
       ? await destinationClient.getBalance({ address: getAddress(ownerAddress) })
@@ -278,13 +383,22 @@ export async function readWalletState(
     })
   }
 
-  if (!isWalletContractConfigured || ownerAddress === null) {
+  const binding = await resolveWalletBinding(ownerAddress)
+  const walletAddress = binding.walletAddress
+  const reactiveListenerAddress = binding.listenerAddress
+
+  if (!walletAddress || !reactiveListenerAddress || ownerAddress === null) {
     return buildUnboundSnapshot({
       ownerAddress,
       connectionSource,
       connectedBalanceLabel,
       connectedAssetBalances,
-      walletAccessState: ownerAddress === null ? 'needs_connection' : 'unavailable'
+      walletAccessState:
+        ownerAddress === null
+          ? 'needs_connection'
+          : binding.source === 'factory'
+            ? 'needs_wallet'
+            : 'unavailable'
     })
   }
 
@@ -337,6 +451,7 @@ export async function readWalletState(
   const proofs = await readExecutionProofs(
     walletAddress,
     reactiveListenerAddress,
+    listenerState.signalEmitter,
     originClient,
     reactiveClient,
     destinationClient
@@ -363,6 +478,7 @@ export async function readWalletState(
       lastExecutedAt: formatTimestamp(lastExecutedAt),
       lastSignalHash,
       destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
+      canManageListener: listenerState.canManageListener(ownerAddress),
       listenerPaused: listenerState.listenerPaused,
       callbackGasLimit: listenerState.callbackGasLimit,
       subscriptionStatus: listenerState.subscriptionStatus,
@@ -431,23 +547,38 @@ async function readTrackedAssets(
 }
 
 async function readReactiveListenerState(reactiveListenerAddress: Address) {
+  type ListenerRuntime = {
+    listenerPaused: boolean | null
+    callbackGasLimit: string
+    signalEmitter: Address
+    ownerAddress: Address
+    originChainId: string
+    destinationChainId: string
+    strategySignalTopic0: string
+    subscriptionStatus: 'armed' | 'missing' | 'unavailable'
+    canManageListener: (ownerAddress: string | null) => boolean
+  }
+
   const reactiveClient = getReactivePublicClient()
   if (!reactiveClient || !isConfiguredAddress(reactiveListenerAddress)) {
     return {
       listenerPaused: null,
       callbackGasLimit: '1000000',
-      signalEmitter: emptyAddress,
+      signalEmitter: emptyAddress as Address,
+      ownerAddress: emptyAddress as Address,
       originChainId: 'Unavailable',
       destinationChainId: 'Unavailable',
       strategySignalTopic0: 'Unavailable',
-      subscriptionStatus: 'unavailable' as const
-    }
+      subscriptionStatus: 'unavailable' as const,
+      canManageListener: (_ownerAddress: string | null) => false
+    } satisfies ListenerRuntime
   }
 
   const [
     listenerPaused,
     callbackGasLimit,
     signalEmitter,
+    listenerOwnerAddress,
     originChainId,
     destinationChainId,
     strategySignalTopic0
@@ -466,6 +597,11 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
       address: reactiveListenerAddress,
       abi: willLeadReactiveListenerAbi,
       functionName: 'signalEmitter'
+    }) as Promise<Address>,
+    reactiveClient.readContract({
+      address: reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      functionName: 'ownerAddress'
     }) as Promise<Address>,
     reactiveClient.readContract({
       address: reactiveListenerAddress,
@@ -529,11 +665,14 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
     listenerPaused,
     callbackGasLimit: callbackGasLimit.toString(),
     signalEmitter,
+    ownerAddress: listenerOwnerAddress,
     originChainId: originChainId.toString(),
     destinationChainId: destinationChainId.toString(),
     strategySignalTopic0: `0x${strategySignalTopic0.toString(16)}`,
-    subscriptionStatus
-  }
+    subscriptionStatus,
+    canManageListener: (ownerAddress: string | null) =>
+      ownerAddress !== null && isSameAddress(listenerOwnerAddress, ownerAddress)
+  } satisfies ListenerRuntime
 }
 
 async function readAutomationCredit(
@@ -579,6 +718,7 @@ async function readAutomationCredit(
 async function readExecutionProofs(
   walletAddress: Address,
   reactiveListenerAddress: Address,
+  signalEmitterAddress: Address,
   originClient: ReturnType<typeof getOriginPublicClient>,
   reactiveClient: ReturnType<typeof getReactivePublicClient>,
   destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>
@@ -680,9 +820,9 @@ async function readExecutionProofs(
   } catch {}
 
   try {
-    if (originClient && isConfiguredAddress(contractAddresses.signalEmitter)) {
+    if (originClient && isConfiguredAddress(signalEmitterAddress)) {
       const signalLogs = await originClient.getLogs({
-        address: getAddress(contractAddresses.signalEmitter),
+        address: signalEmitterAddress,
         event: parseAbiItem(
           'event StrategySignal(address indexed wallet, address indexed token, address indexed recipient, uint256 amount, uint256 executionNonce, uint256 emittedAt)'
         ),
@@ -722,12 +862,8 @@ async function readExecutionProofs(
 }
 
 export async function configureIntent(values: IntentFormValues): Promise<ActionResult> {
-  const walletAddress = getAddress(contractAddresses.wallet)
-  if (!isConfiguredAddress(walletAddress)) {
-    throw new Error(copy().walletAddressMissing)
-  }
-
   const { account, client } = await getDestinationWalletClient()
+  const { walletAddress } = await resolveWalletAddressForOwner(account)
   const token = toTokenAddress(values.token)
   const recipient = getAddress(values.recipient)
   const amountPerExecution = parseEther(values.amountPerExecution)
@@ -755,12 +891,8 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
 }
 
 export async function pauseIntent(): Promise<ActionResult> {
-  const walletAddress = getAddress(contractAddresses.wallet)
-  if (!isConfiguredAddress(walletAddress)) {
-    throw new Error(copy().walletAddressMissing)
-  }
-
   const { account, client } = await getDestinationWalletClient()
+  const { walletAddress } = await resolveWalletAddressForOwner(account)
   const hash = await client.writeContract({
     account,
     address: walletAddress,
@@ -782,12 +914,8 @@ export async function pauseIntent(): Promise<ActionResult> {
 }
 
 export async function resumeIntent(): Promise<ActionResult> {
-  const walletAddress = getAddress(contractAddresses.wallet)
-  if (!isConfiguredAddress(walletAddress)) {
-    throw new Error(copy().walletAddressMissing)
-  }
-
   const { account, client } = await getDestinationWalletClient()
+  const { walletAddress } = await resolveWalletAddressForOwner(account)
   const hash = await client.writeContract({
     account,
     address: walletAddress,
@@ -814,13 +942,11 @@ export async function emitSignal(values: {
   amountPerExecution: string
   nextNonce: number
 }): Promise<ActionResult> {
-  const signalEmitterAddress = getAddress(contractAddresses.signalEmitter)
-  const walletAddress = getAddress(contractAddresses.wallet)
-  if (!isConfiguredAddress(signalEmitterAddress) || !isConfiguredAddress(walletAddress)) {
+  const { account, client } = await getOriginWalletClient()
+  const { walletAddress, signalEmitterAddress } = await resolveWalletAddressForOwner(account)
+  if (!signalEmitterAddress || !isConfiguredAddress(signalEmitterAddress)) {
     throw new Error(copy().signalEmitterOrWalletMissing)
   }
-
-  const { account, client } = await getOriginWalletClient()
   const token = toTokenAddress(values.token)
   const recipient = getAddress(values.recipient)
   const amount = parseEther(values.amountPerExecution)
@@ -850,12 +976,12 @@ export async function topUpAutomationCredit(
   values: AutomationFundingValues
 ): Promise<ActionResult> {
   const callbackProxyAddress = getAddress(contractAddresses.callbackProxy)
-  const walletAddress = getAddress(contractAddresses.wallet)
-  if (!isConfiguredAddress(callbackProxyAddress) || !isConfiguredAddress(walletAddress)) {
+  if (!isConfiguredAddress(callbackProxyAddress)) {
     throw new Error(copy().callbackProxyOrWalletMissing)
   }
 
   const { account, client } = await getDestinationWalletClient()
+  const { walletAddress } = await resolveWalletAddressForOwner(account)
   const hash = await client.writeContract({
     account,
     address: callbackProxyAddress,
@@ -878,13 +1004,36 @@ export async function topUpAutomationCredit(
   }
 }
 
-export async function pauseReactiveListener(): Promise<ActionResult> {
-  const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
-  if (!isConfiguredAddress(reactiveListenerAddress)) {
-    throw new Error(copy().reactiveListenerMissing)
+export async function initializeAutonomousWallet(): Promise<ActionResult> {
+  const factoryAddress = configuredAddressOrNull(contractAddresses.walletFactory)
+  if (!factoryAddress) {
+    throw new Error(copy().walletFactoryMissing)
   }
 
+  const { account, client } = await getDestinationWalletClient()
+  const hash = await client.writeContract({
+    account,
+    address: factoryAddress,
+    abi: willLeadWalletFactoryAbi,
+    chain: destinationChain,
+    functionName: 'createWallet'
+  })
+
+  const destinationClient = getDestinationPublicClient()
+  if (destinationClient) {
+    await destinationClient.waitForTransactionReceipt({ hash })
+  }
+
+  return {
+    hash,
+    label: copy().autonomousWalletCreatedAction,
+    description: copy().autonomousWalletCreatedDesc
+  }
+}
+
+export async function pauseReactiveListener(): Promise<ActionResult> {
   const { account, client } = await getReactiveWalletClient()
+  const reactiveListenerAddress = await resolveReactiveListenerForManager(account)
   const hash = await client.writeContract({
     account,
     address: reactiveListenerAddress,
@@ -906,12 +1055,8 @@ export async function pauseReactiveListener(): Promise<ActionResult> {
 }
 
 export async function resumeReactiveListener(): Promise<ActionResult> {
-  const reactiveListenerAddress = getAddress(contractAddresses.reactiveListener)
-  if (!isConfiguredAddress(reactiveListenerAddress)) {
-    throw new Error(copy().reactiveListenerMissing)
-  }
-
   const { account, client } = await getReactiveWalletClient()
+  const reactiveListenerAddress = await resolveReactiveListenerForManager(account)
   const hash = await client.writeContract({
     account,
     address: reactiveListenerAddress,

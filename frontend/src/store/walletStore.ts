@@ -6,6 +6,7 @@ import {
   createOwnerWebWallet,
   disconnectOwnerWallet,
   emitSignal,
+  initializeAutonomousWallet,
   importOwnerWebWallet,
   pauseIntent,
   pauseReactiveListener,
@@ -40,6 +41,7 @@ type WillLeadStore = {
   createWebWallet: () => Promise<string>
   importWebWallet: (mnemonic: string) => Promise<void>
   disconnectWallet: () => Promise<void>
+  createAutonomousWallet: () => Promise<void>
   refreshChainState: () => Promise<void>
   submitIntent: (values: IntentFormValues) => Promise<void>
   fundAutomation: (values: AutomationFundingValues) => Promise<void>
@@ -71,6 +73,7 @@ const initialWalletState: WalletState = {
   lastExecutedAt: 'Never',
   lastSignalHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
   destinationBalanceDelta: '0 ETH',
+  canManageListener: false,
   listenerPaused: null,
   callbackGasLimit: 'Unavailable',
   subscriptionStatus: 'unavailable',
@@ -101,6 +104,24 @@ function copy() {
   return getMessages(useLanguageStore.getState().locale)
 }
 
+function statusMessageForSnapshot(snapshot: {
+  wallet: WalletState
+}, connectedMessage: string) {
+  if (snapshot.wallet.walletAccessState === 'mismatch') {
+    return copy().connectedWalletMismatch
+  }
+
+  if (snapshot.wallet.walletAccessState === 'needs_wallet') {
+    return copy().initializeWalletToContinue
+  }
+
+  if (snapshot.wallet.walletAccessState === 'unavailable') {
+    return copy().walletAccessUnavailable
+  }
+
+  return connectedMessage
+}
+
 export const useWalletStore = create<WillLeadStore>((set, get) => ({
   wallet: initialWalletState,
   intent: initialIntentState,
@@ -123,9 +144,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         ...snapshot,
         isPending: false,
         statusMessage: restored
-          ? snapshot.wallet.walletAccessState === 'mismatch'
-            ? copy().connectedWalletMismatch
-            : `${copy().restoredWebWallet} ${restored.address}`
+          ? statusMessageForSnapshot(snapshot, `${copy().restoredWebWallet} ${restored.address}`)
           : copy().readyToConnectWallet,
         errorMessage: null
       })
@@ -151,10 +170,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
           connectionLabel: result.providerLabel ?? snapshot.wallet.connectionLabel
         },
         isPending: false,
-        statusMessage:
-          snapshot.wallet.walletAccessState === 'mismatch'
-            ? copy().connectedWalletMismatch
-            : `${copy().connectedWalletPrefix} ${result.providerLabel ?? copy().browserWalletLower} ${result.address}`,
+        statusMessage: statusMessageForSnapshot(
+          snapshot,
+          `${copy().connectedWalletPrefix} ${result.providerLabel ?? copy().browserWalletLower} ${result.address}`
+        ),
         errorMessage: null
       })
     } catch (error) {
@@ -176,10 +195,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage:
-          snapshot.wallet.walletAccessState === 'mismatch'
-            ? copy().connectedWalletMismatch
-            : `${copy().createdWebWallet} ${result.address}`,
+        statusMessage: statusMessageForSnapshot(snapshot, `${copy().createdWebWallet} ${result.address}`),
         errorMessage: null
       })
 
@@ -203,10 +219,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       set({
         ...snapshot,
         isPending: false,
-        statusMessage:
-          snapshot.wallet.walletAccessState === 'mismatch'
-            ? copy().connectedWalletMismatch
-            : `${copy().importedWebWallet} ${result.address}`,
+        statusMessage: statusMessageForSnapshot(snapshot, `${copy().importedWebWallet} ${result.address}`),
         errorMessage: null
       })
     } catch (error) {
@@ -238,6 +251,24 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         statusMessage: copy().walletDisconnectFailed
       })
       throw error
+    }
+  },
+  createAutonomousWallet: async () => {
+    set({
+      isPending: true,
+      errorMessage: null,
+      statusMessage: copy().initializingAutonomousWallet
+    })
+
+    try {
+      const action = await initializeAutonomousWallet()
+      await applyPostAction(set, get, action)
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().walletNotInitialized,
+        statusMessage: copy().initializeAutonomousWallet
+      })
     }
   },
   refreshChainState: async () => {

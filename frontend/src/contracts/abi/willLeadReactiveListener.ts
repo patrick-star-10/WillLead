@@ -43,6 +43,13 @@ export const willLeadReactiveListenerAbi = [
   },
   {
     type: 'function',
+    name: 'ownerAddress',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }]
+  },
+  {
+    type: 'function',
     name: 'pause',
     stateMutability: 'nonpayable',
     inputs: [],

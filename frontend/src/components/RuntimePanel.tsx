@@ -15,6 +15,7 @@ type RuntimePanelProps = {
   subscriptionDestinationChainId: string
   subscriptionTopic0: string
   callbackGasLimit: string
+  canManageListener: boolean
   isPending: boolean
   walletAccessState: WalletAccessState
   onTriggerSignal: () => void
@@ -36,6 +37,8 @@ export function RuntimePanel(props: RuntimePanelProps) {
   const listenerStatusLabel = listenerUnavailable
     ? props.walletAccessState === 'mismatch'
       ? copy.connectedWalletMismatch
+      : props.walletAccessState === 'needs_wallet'
+        ? copy.initializeWalletToContinue
       : props.walletAccessState === 'unavailable'
         ? copy.walletAccessUnavailable
         : copy.connectWalletToLoadRuntime
@@ -108,7 +111,7 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </button>
         <button
           className="secondary-button"
-          disabled={listenerUnavailable || !hasBoundWallet}
+          disabled={listenerUnavailable || !props.canManageListener}
           onClick={props.onPauseListener}
           type="button"
         >
@@ -116,13 +119,16 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </button>
         <button
           className="secondary-button"
-          disabled={listenerUnavailable || !hasBoundWallet}
+          disabled={listenerUnavailable || !props.canManageListener}
           onClick={props.onResumeListener}
           type="button"
         >
           {copy.resumeListener}
         </button>
       </div>
+      {hasBoundWallet && !props.canManageListener ? (
+        <p className="wallet-footnote">{copy.listenerManagedByOperator}</p>
+      ) : null}
     </article>
   )
 }

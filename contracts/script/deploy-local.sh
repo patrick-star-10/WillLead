@@ -66,11 +66,32 @@ LISTENER_OUTPUT="$(
 LISTENER_ADDRESS="$(extract_address "$LISTENER_OUTPUT")"
 echo "ReactiveListener: $LISTENER_ADDRESS"
 
+echo "Deploying WillLeadWalletFactory on destination chain..."
+FACTORY_OUTPUT="$(
+  deploy_contract \
+    "$DESTINATION_RPC_URL" \
+    contracts/src/WillLeadWalletFactory.sol:WillLeadWalletFactory \
+    --constructor-args "$CALLBACK_PROXY" "$AUTHORIZED_RVM_ID" "$LISTENER_ADDRESS" "$SIGNAL_ADDRESS"
+)"
+FACTORY_ADDRESS="$(extract_address "$FACTORY_OUTPUT")"
+echo "WalletFactory: $FACTORY_ADDRESS"
+
+echo "Creating owner wallet via factory..."
+cast send \
+  --rpc-url "$DESTINATION_RPC_URL" \
+  --private-key "$OWNER_PRIVATE_KEY" \
+  "$FACTORY_ADDRESS" \
+  "createWallet()"
+WALLET_ADDRESS="$(cast call "$FACTORY_ADDRESS" "walletOf(address)(address)" "$OWNER_ADDRESS" --rpc-url "$DESTINATION_RPC_URL")"
+echo "Wallet: $WALLET_ADDRESS"
+
 upsert_env_var .env WILLLEAD_SIGNAL_EMITTER "$SIGNAL_ADDRESS"
 upsert_env_var .env WILLLEAD_WALLET "$WALLET_ADDRESS"
+upsert_env_var .env WILLLEAD_WALLET_FACTORY "$FACTORY_ADDRESS"
 upsert_env_var .env WILLLEAD_REACTIVE_LISTENER "$LISTENER_ADDRESS"
 upsert_env_var .env VITE_SIGNAL_EMITTER_ADDRESS "$SIGNAL_ADDRESS"
 upsert_env_var .env VITE_WALLET_ADDRESS "$WALLET_ADDRESS"
+upsert_env_var .env VITE_WALLET_FACTORY_ADDRESS "$FACTORY_ADDRESS"
 upsert_env_var .env VITE_REACTIVE_LISTENER_ADDRESS "$LISTENER_ADDRESS"
 upsert_env_var .env VITE_CALLBACK_PROXY "$CALLBACK_PROXY"
 upsert_env_var .env VITE_AUTHORIZED_RVM_ID "$AUTHORIZED_RVM_ID"
@@ -85,8 +106,9 @@ echo
 echo "Deployment complete."
 echo "Owner: $OWNER_ADDRESS"
 echo "SignalEmitter: $SIGNAL_ADDRESS"
-echo "Wallet: $WALLET_ADDRESS"
 echo "ReactiveListener: $LISTENER_ADDRESS"
+echo "WalletFactory: $FACTORY_ADDRESS"
+echo "Wallet: $WALLET_ADDRESS"
 echo
 echo "Next:"
 echo "1. Run ./contracts/script/fund-callback.sh"

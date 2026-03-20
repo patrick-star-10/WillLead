@@ -1,6 +1,6 @@
 export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
 export type ListenerSubscriptionStatus = 'armed' | 'missing' | 'unavailable'
-export type WalletAccessState = 'needs_connection' | 'bound' | 'mismatch' | 'unavailable'
+export type WalletAccessState = 'needs_connection' | 'needs_wallet' | 'bound' | 'mismatch' | 'unavailable'
 
 export type WalletState = {
   contractAddress: string
@@ -22,6 +22,7 @@ export type WalletState = {
   lastExecutedAt: string
   lastSignalHash: string
   destinationBalanceDelta: string
+  canManageListener: boolean
   listenerPaused: boolean | null
   callbackGasLimit: string
   subscriptionStatus: ListenerSubscriptionStatus

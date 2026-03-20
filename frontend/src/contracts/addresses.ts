@@ -1,5 +1,7 @@
 export const contractAddresses = {
   wallet: import.meta.env.VITE_WALLET_ADDRESS ?? '0x0000000000000000000000000000000000000000',
+  walletFactory:
+    import.meta.env.VITE_WALLET_FACTORY_ADDRESS ?? '0x0000000000000000000000000000000000000000',
   signalEmitter:
     import.meta.env.VITE_SIGNAL_EMITTER_ADDRESS ?? '0x0000000000000000000000000000000000000000',
   reactiveListener:
@@ -9,4 +11,3 @@ export const contractAddresses = {
   authorizedRvmId:
     import.meta.env.VITE_AUTHORIZED_RVM_ID ?? '0x0000000000000000000000000000000000000000'
 } as const
-

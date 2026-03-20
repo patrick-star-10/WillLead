@@ -19,6 +19,7 @@ require_env CALLBACK_PROXY
 require_env AUTHORIZED_RVM_ID
 require_env WILLLEAD_SIGNAL_EMITTER
 require_env WILLLEAD_WALLET
+require_env WILLLEAD_WALLET_FACTORY
 require_env WILLLEAD_REACTIVE_LISTENER
 
 OWNER_ADDRESS="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
@@ -40,7 +41,11 @@ assert_eq() {
   local actual="$1"
   local expected="$2"
   local label="$3"
-  if [[ "${actual,,}" != "${expected,,}" ]]; then
+  local actual_lower
+  local expected_lower
+  actual_lower="$(printf '%s' "$actual" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+  expected_lower="$(printf '%s' "$expected" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+  if [[ "$actual_lower" != "$expected_lower" ]]; then
     echo "$label mismatch"
     echo "expected: $expected"
     echo "actual:   $actual"
@@ -51,8 +56,23 @@ assert_eq() {
 
 echo "== Code presence =="
 assert_code_exists "$ORIGIN_RPC_URL" "$WILLLEAD_SIGNAL_EMITTER" "SignalEmitter"
+assert_code_exists "$DESTINATION_RPC_URL" "$WILLLEAD_WALLET_FACTORY" "WalletFactory"
 assert_code_exists "$DESTINATION_RPC_URL" "$WILLLEAD_WALLET" "Wallet"
 assert_code_exists "$REACTIVE_RPC_URL" "$WILLLEAD_REACTIVE_LISTENER" "ReactiveListener"
+echo
+
+echo "== Wallet factory wiring =="
+factory_callback_proxy="$(cast call "$WILLLEAD_WALLET_FACTORY" "callbackProxy()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+factory_authorized_rvm_id="$(cast call "$WILLLEAD_WALLET_FACTORY" "authorizedRvmId()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+factory_listener="$(cast call "$WILLLEAD_WALLET_FACTORY" "reactiveListener()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+factory_signal_emitter="$(cast call "$WILLLEAD_WALLET_FACTORY" "signalEmitter()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+factory_wallet_for_owner="$(cast call "$WILLLEAD_WALLET_FACTORY" "walletOf(address)(address)" "$OWNER_ADDRESS" --rpc-url "$DESTINATION_RPC_URL")"
+
+assert_eq "$factory_callback_proxy" "$CALLBACK_PROXY" "Factory callback proxy"
+assert_eq "$factory_authorized_rvm_id" "$AUTHORIZED_RVM_ID" "Factory authorized RVM ID"
+assert_eq "$factory_listener" "$WILLLEAD_REACTIVE_LISTENER" "Factory reactive listener"
+assert_eq "$factory_signal_emitter" "$WILLLEAD_SIGNAL_EMITTER" "Factory signal emitter"
+assert_eq "$factory_wallet_for_owner" "$WILLLEAD_WALLET" "Factory wallet for owner"
 echo
 
 echo "== Wallet wiring =="
@@ -80,4 +100,3 @@ echo "Listener paused:             $listener_paused"
 echo
 
 echo "== Deployment verification complete =="
-

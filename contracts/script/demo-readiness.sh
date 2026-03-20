@@ -91,6 +91,9 @@ else
   if ! rg -q "^VITE_WALLET_ADDRESS=${WILLLEAD_WALLET}$" frontend/.env.local; then
     warn "frontend wallet address is not synced"
   fi
+  if [[ -n "${WILLLEAD_WALLET_FACTORY:-}" ]] && ! rg -q "^VITE_WALLET_FACTORY_ADDRESS=${WILLLEAD_WALLET_FACTORY}$" frontend/.env.local; then
+    warn "frontend wallet factory address is not synced"
+  fi
   if ! rg -q "^VITE_SIGNAL_EMITTER_ADDRESS=${WILLLEAD_SIGNAL_EMITTER}$" frontend/.env.local; then
     warn "frontend signal emitter address is not synced"
   fi

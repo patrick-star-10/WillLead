@@ -51,6 +51,8 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
   const listenerHelperLabel = listenerUnavailable
     ? props.walletAccessState === 'mismatch'
       ? copy.connectedWalletMismatch
+      : props.walletAccessState === 'needs_wallet'
+        ? copy.initializeWalletToContinue
       : props.walletAccessState === 'unavailable'
         ? copy.walletAccessUnavailable
         : copy.connectWalletToLoadRuntime
