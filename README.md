@@ -63,6 +63,7 @@ forge build
 cp .env.example .env
 ./contracts/script/verify-env.sh
 ./contracts/script/deploy-local.sh
+./contracts/script/create-wallet.sh
 ./contracts/script/verify-deployments.sh
 ./contracts/script/sync-listener-subscription.sh
 ./contracts/script/fund-callback.sh
@@ -81,6 +82,7 @@ cp .env.example .env
 
 - `AUTHORIZED_RVM_ID` 应该填部署 `WillLeadWallet` 和 `WillLeadReactiveListener` 的同一个 EOA 地址
 - `deploy-local.sh` 现在会部署共享的 `WillLeadWalletFactory`，然后为当前 `OWNER_PRIVATE_KEY` 对应的 owner 自动创建第一只 wallet
+- `create-wallet.sh` 可以在任意时刻为当前 `OWNER_PRIVATE_KEY` 对应的 owner 创建或恢复 autonomous wallet，并把 `.env` / 前端地址同步到这只 wallet
 - listener 本身不再把该值写进 callback payload，payload 里使用 `address(0)` 让 Reactive 在真实 callback 时填充 RVM ID
 - `sync-listener-subscription.sh` 会直接检查当前 ReactVM 上是否真的订阅了当前 `signalEmitter + topic0`；如果订阅缺失，它会通过 Reactive system contract 补一次 `subscribeContract(...)`
 
@@ -97,6 +99,7 @@ cp .env.example .env
 - [verify-env.sh](/Users/wx/Desktop/WillLead/contracts/script/verify-env.sh)
 - [bootstrap-demo.sh](/Users/wx/Desktop/WillLead/contracts/script/bootstrap-demo.sh)
 - [verify-deployments.sh](/Users/wx/Desktop/WillLead/contracts/script/verify-deployments.sh)
+- [create-wallet.sh](/Users/wx/Desktop/WillLead/contracts/script/create-wallet.sh)
 - [configure-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/configure-intent.sh)
 - [pause-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/pause-intent.sh)
 - [resume-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/resume-intent.sh)

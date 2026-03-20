@@ -45,16 +45,6 @@ SIGNAL_OUTPUT="$(deploy_contract "$ORIGIN_RPC_URL" contracts/src/WillLeadSignalE
 SIGNAL_ADDRESS="$(extract_address "$SIGNAL_OUTPUT")"
 echo "SignalEmitter: $SIGNAL_ADDRESS"
 
-echo "Deploying WillLeadWallet on destination chain..."
-WALLET_OUTPUT="$(
-  deploy_contract \
-    "$DESTINATION_RPC_URL" \
-    contracts/src/WillLeadWallet.sol:WillLeadWallet \
-    --constructor-args "$OWNER_ADDRESS" "$CALLBACK_PROXY" "$AUTHORIZED_RVM_ID"
-)"
-WALLET_ADDRESS="$(extract_address "$WALLET_OUTPUT")"
-echo "Wallet: $WALLET_ADDRESS"
-
 echo "Deploying WillLeadReactiveListener on Reactive Network..."
 LISTENER_OUTPUT="$(
   deploy_contract \
@@ -76,21 +66,10 @@ FACTORY_OUTPUT="$(
 FACTORY_ADDRESS="$(extract_address "$FACTORY_OUTPUT")"
 echo "WalletFactory: $FACTORY_ADDRESS"
 
-echo "Creating owner wallet via factory..."
-cast send \
-  --rpc-url "$DESTINATION_RPC_URL" \
-  --private-key "$OWNER_PRIVATE_KEY" \
-  "$FACTORY_ADDRESS" \
-  "createWallet()"
-WALLET_ADDRESS="$(cast call "$FACTORY_ADDRESS" "walletOf(address)(address)" "$OWNER_ADDRESS" --rpc-url "$DESTINATION_RPC_URL")"
-echo "Wallet: $WALLET_ADDRESS"
-
 upsert_env_var .env WILLLEAD_SIGNAL_EMITTER "$SIGNAL_ADDRESS"
-upsert_env_var .env WILLLEAD_WALLET "$WALLET_ADDRESS"
 upsert_env_var .env WILLLEAD_WALLET_FACTORY "$FACTORY_ADDRESS"
 upsert_env_var .env WILLLEAD_REACTIVE_LISTENER "$LISTENER_ADDRESS"
 upsert_env_var .env VITE_SIGNAL_EMITTER_ADDRESS "$SIGNAL_ADDRESS"
-upsert_env_var .env VITE_WALLET_ADDRESS "$WALLET_ADDRESS"
 upsert_env_var .env VITE_WALLET_FACTORY_ADDRESS "$FACTORY_ADDRESS"
 upsert_env_var .env VITE_REACTIVE_LISTENER_ADDRESS "$LISTENER_ADDRESS"
 upsert_env_var .env VITE_CALLBACK_PROXY "$CALLBACK_PROXY"
@@ -100,6 +79,8 @@ upsert_env_var .env VITE_DESTINATION_RPC_URL "$DESTINATION_RPC_URL"
 upsert_env_var .env VITE_REACTIVE_RPC_URL "$REACTIVE_RPC_URL"
 upsert_env_var .env VITE_REACTIVE_CHAIN_ID "${REACTIVE_CHAIN_ID:-}"
 
+./contracts/script/create-wallet.sh >/dev/null
+WALLET_ADDRESS="$(cast call "$FACTORY_ADDRESS" "walletOf(address)(address)" "$OWNER_ADDRESS" --rpc-url "$DESTINATION_RPC_URL")"
 ./contracts/script/sync-listener-subscription.sh
 
 echo

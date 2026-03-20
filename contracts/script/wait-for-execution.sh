@@ -8,6 +8,12 @@ fi
 
 source .env
 
+REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
+
+numeric_value() {
+  printf '%s' "$1" | awk '{print $1}'
+}
+
 TARGET_NONCE="${1:-}"
 TIMEOUT_SECONDS="${2:-90}"
 POLL_INTERVAL="${3:-5}"
@@ -20,8 +26,8 @@ fi
 reactive_latest="$(cast block-number --rpc-url "$REACTIVE_RPC_URL")"
 destination_latest="$(cast block-number --rpc-url "$DESTINATION_RPC_URL")"
 
-reactive_from=$(( reactive_latest > 2 ? reactive_latest - 2 : 0 ))
-destination_from=$(( destination_latest > 2 ? destination_latest - 2 : 0 ))
+reactive_from=$(( reactive_latest > 20 ? reactive_latest - 20 : 0 ))
+destination_from=$(( destination_latest > 20 ? destination_latest - 20 : 0 ))
 
 deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
 
@@ -36,15 +42,14 @@ latest_reactive_tx=""
 latest_destination_tx=""
 
 while (( $(date +%s) <= deadline )); do
-  current_nonce="$(cast call "$WILLLEAD_WALLET" "lastExecutionNonce()(uint256)" --rpc-url "$DESTINATION_RPC_URL")"
+  current_nonce="$(numeric_value "$(cast call "$WILLLEAD_WALLET" "lastExecutionNonce()(uint256)" --rpc-url "$DESTINATION_RPC_URL")")"
   listener_paused="$(cast call "$WILLLEAD_REACTIVE_LISTENER" "isPaused()(bool)" --rpc-url "$REACTIVE_RPC_URL")"
 
   reactive_logs="$(
     cast logs \
-      "Callback(uint256,address,uint64,bytes)" \
-      "$DESTINATION_CHAIN_ID" \
-      "$WILLLEAD_WALLET" \
-      --address "$WILLLEAD_REACTIVE_LISTENER" \
+      "WhitelistContract(address)" \
+      "$WILLLEAD_REACTIVE_LISTENER" \
+      --address "$REACTIVE_SYSTEM_CONTRACT" \
       --from-block "$reactive_from" \
       --to-block latest \
       --rpc-url "$REACTIVE_RPC_URL" \

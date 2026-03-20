@@ -20,6 +20,7 @@ fi
 
 ./contracts/script/verify-env.sh
 ./contracts/script/deploy-local.sh
+./contracts/script/create-wallet.sh
 ./contracts/script/verify-deployments.sh
 ./contracts/script/fund-callback.sh "$CALLBACK_TOP_UP"
 ./contracts/script/configure-intent.sh \
@@ -36,6 +37,7 @@ echo
 echo "Bootstrap complete."
 echo "Next:"
 echo "1. Start frontend: cd frontend && npm run dev"
-echo "2. Re-check readiness any time: ./contracts/script/demo-readiness.sh"
-echo "3. Trigger source signal: ./contracts/script/emit-signal.sh $TOKEN_ADDRESS $RECIPIENT_ADDRESS $AMOUNT_PER_EXECUTION 1"
-echo "4. Collect proof: ./contracts/script/collect-proof.sh"
+echo "2. Connect the same owner in the frontend; the autonomous wallet will be discovered automatically"
+echo "3. Re-check readiness any time: ./contracts/script/demo-readiness.sh"
+echo "4. Trigger source signal: ./contracts/script/emit-signal.sh $TOKEN_ADDRESS $RECIPIENT_ADDRESS $AMOUNT_PER_EXECUTION 1"
+echo "5. Collect proof: ./contracts/script/collect-proof.sh"

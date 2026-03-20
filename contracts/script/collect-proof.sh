@@ -8,7 +8,9 @@ fi
 
 source .env
 
-WINDOW="${1:-50000}"
+REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
+WINDOW="${1:-10000}"
+OWNER_ADDRESS="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
 
 origin_explorer="${VITE_ORIGIN_EXPLORER_BASE_URL:-}"
 reactive_explorer="${VITE_REACTIVE_EXPLORER_BASE_URL:-}"
@@ -21,6 +23,20 @@ destination_latest="$(cast block-number --rpc-url "$DESTINATION_RPC_URL")"
 origin_from=$(( origin_latest > WINDOW ? origin_latest - WINDOW : 0 ))
 reactive_from=$(( reactive_latest > WINDOW ? reactive_latest - WINDOW : 0 ))
 destination_from=$(( destination_latest > WINDOW ? destination_latest - WINDOW : 0 ))
+
+wallet_created_logs="[]"
+if [[ -n "${WILLLEAD_WALLET_FACTORY:-}" ]]; then
+  wallet_created_logs="$(
+    cast logs \
+      "WalletCreated(address,address,address)" \
+      "$OWNER_ADDRESS" \
+      --address "$WILLLEAD_WALLET_FACTORY" \
+      --from-block "$destination_from" \
+      --to-block latest \
+      --rpc-url "$DESTINATION_RPC_URL" \
+      --json
+  )"
+fi
 
 origin_logs="$(
   cast logs \
@@ -35,10 +51,9 @@ origin_logs="$(
 
 reactive_logs="$(
   cast logs \
-    "Callback(uint256,address,uint64,bytes)" \
-    "$DESTINATION_CHAIN_ID" \
-    "$WILLLEAD_WALLET" \
-    --address "$WILLLEAD_REACTIVE_LISTENER" \
+    "WhitelistContract(address)" \
+    "$WILLLEAD_REACTIVE_LISTENER" \
+    --address "$REACTIVE_SYSTEM_CONTRACT" \
     --from-block "$reactive_from" \
     --to-block latest \
     --rpc-url "$REACTIVE_RPC_URL" \
@@ -88,6 +103,7 @@ print_latest() {
   echo
 }
 
+print_latest "Wallet Created" "destination" "$wallet_created_logs" "$destination_explorer"
 print_latest "Origin Signal" "origin" "$origin_logs" "$origin_explorer"
-print_latest "Reactive Callback" "reactive" "$reactive_logs" "$reactive_explorer"
+print_latest "Reactive Dispatch" "reactive" "$reactive_logs" "$reactive_explorer"
 print_latest "Destination Execution" "destination" "$destination_logs" "$destination_explorer"

@@ -791,10 +791,11 @@ async function readExecutionProofs(
   try {
     if (reactiveClient && isConfiguredAddress(reactiveListenerAddress)) {
       const callbackLogs = await reactiveClient.getLogs({
-        address: reactiveListenerAddress,
-        event: parseAbiItem(
-          'event Callback(uint256 indexed chain_id, address indexed _contract, uint64 indexed gas_limit, bytes payload)'
-        ),
+        address: reactiveSystemContract as Address,
+        event: parseAbiItem('event WhitelistContract(address indexed contractAddress)'),
+        args: {
+          contractAddress: reactiveListenerAddress
+        },
         fromBlock: 0n,
         strict: true
       })
@@ -803,8 +804,8 @@ async function readExecutionProofs(
         const block = await reactiveClient.getBlock({ blockNumber: callbackLog.blockNumber! })
         proofs.push({
           id: `callback-${callbackLog.transactionHash}-${callbackLog.logIndex}`,
-          label: 'Reactive Callback',
-          description: 'Reactive listener emitted a callback toward the destination wallet.',
+          label: 'Reactive Dispatch',
+          description: 'Reactive system accepted the listener job and dispatched the destination callback.',
           status: 'observed',
           reference: callbackLog.transactionHash ?? 'unknown',
           chain: 'reactive',

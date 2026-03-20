@@ -169,11 +169,11 @@ const messages = {
     reactive: 'Reactive',
     destination: 'Destination',
     originSignal: 'Origin Signal',
-    reactiveCallbackLabel: 'Reactive Callback',
+    reactiveCallbackLabel: 'Reactive Dispatch',
     destinationExecution: 'Destination Execution',
     destinationSkipped: 'Destination Skipped',
     originSignalDesc: 'Signal emitted on the source chain.',
-    reactiveCallbackDesc: 'Reactive listener emitted a destination callback.',
+    reactiveCallbackDesc: 'Reactive system accepted the listener job and dispatched the destination callback.',
     destinationExecutionDesc: 'Autonomous wallet executed the transfer on the destination chain.',
     destinationSkippedDesc: 'Autonomous wallet skipped execution and recorded the reason.',
     readyBindWallet: 'Ready to bind a wallet and configure the first intent.',
@@ -403,11 +403,11 @@ const messages = {
     reactive: 'Reactive',
     destination: '目标链',
     originSignal: '源链信号',
-    reactiveCallbackLabel: 'Reactive 回调',
+    reactiveCallbackLabel: 'Reactive 派发',
     destinationExecution: '目标链执行',
     destinationSkipped: '目标链跳过',
     originSignalDesc: '信号已在源链发出。',
-    reactiveCallbackDesc: 'Reactive 监听器已经发出目标链回调。',
+    reactiveCallbackDesc: 'Reactive system 已接收这次监听任务，并向目标链发起回调派发。',
     destinationExecutionDesc: '自主执行钱包已在目标链完成转账。',
     destinationSkippedDesc: '自主执行钱包已跳过这次执行，并记录了原因。',
     readyBindWallet: '准备好连接钱包并配置第一条转账计划。',
@@ -675,7 +675,7 @@ export function translateChainLabel(value: string, locale: Locale) {
 export function translateProofLabel(value: string, locale: Locale) {
   const copy = messages[locale]
   if (value === 'Origin Signal') return copy.originSignal
-  if (value === 'Reactive Callback') return copy.reactiveCallbackLabel
+  if (value === 'Reactive Callback' || value === 'Reactive Dispatch') return copy.reactiveCallbackLabel
   if (value === 'Destination Execution') return copy.destinationExecution
   if (value === 'Destination Skipped') return copy.destinationSkipped
   return value
@@ -684,7 +684,7 @@ export function translateProofLabel(value: string, locale: Locale) {
 export function translateProofDescription(label: string, description: string, locale: Locale) {
   const copy = messages[locale]
   if (label === 'Origin Signal') return copy.originSignalDesc
-  if (label === 'Reactive Callback') return copy.reactiveCallbackDesc
+  if (label === 'Reactive Callback' || label === 'Reactive Dispatch') return copy.reactiveCallbackDesc
   if (label === 'Destination Execution') return copy.destinationExecutionDesc
   if (label === 'Destination Skipped') return copy.destinationSkippedDesc
   return description

@@ -12,7 +12,8 @@
 
 - `.env` 已配置
 - `./contracts/script/verify-env.sh` 通过
-- `./contracts/script/deploy-local.sh` 已部署三份合约
+- `./contracts/script/deploy-local.sh` 已部署 signal emitter / shared listener / wallet factory
+- `./contracts/script/create-wallet.sh` 已为当前 owner 创建或恢复 autonomous wallet
 - `./contracts/script/verify-deployments.sh` 通过
 - `./contracts/script/sync-listener-subscription.sh` 已确认当前 ReactVM 订阅的是本次部署出来的 signalEmitter
 - `./contracts/script/fund-callback.sh` 已给 callback proxy 充值
@@ -23,30 +24,45 @@
 
 ## Demo Path
 
-### 1. 打开前端并展示初始状态
+### 1. 打开前端并连接 owner 钱包
+
+这里先讲清楚口径：
+
+- 用户连接的是 controller wallet
+- 前端会通过 wallet factory 发现这位 owner 对应的 autonomous wallet
+- 自动执行真正发生在 autonomous wallet 上，不发生在当前连接的 EOA 上
+
+如果当前 owner 还没有 autonomous wallet，可以在前端点击 `Initialize Autonomous Wallet`，或者先执行：
+
+```bash
+./contracts/script/create-wallet.sh
+```
+
+### 2. 展示初始状态
 
 展示这几个字段：
 
-- wallet address
+- connected wallet
+- autonomous wallet address
 - runtime status
 - executed count
 - automation credit
 - proof panel 当前为空或只有旧记录
 
-### 2. 说明用户 intent
+### 3. 说明用户 intent
 
 一句话说明：
 
-“这个钱包已经在链上保存了一条 fixed transfer intent，当源链 signal 到来时，它会自动执行，不依赖前端常驻。”
+“这只 autonomous wallet 已经在链上保存了一条 fixed transfer intent，当源链 signal 到来时，它会自动执行，不依赖前端常驻。”
 
-### 3. 关闭前端或断网
+### 4. 关闭前端或断网
 
 这里要明确口径：
 
 - 离线的是用户前端
 - 不是后端 bot 继续替你点按钮
 
-### 4. 在终端触发源链事件
+### 5. 在终端触发源链事件
 
 ```bash
 ./contracts/script/emit-signal.sh <token> <recipient> <amountPerExecution> <executionNonce>
@@ -64,7 +80,7 @@
 ./contracts/script/wait-for-execution.sh <executionNonce>
 ```
 
-### 5. 展示三段证据
+### 6. 展示三段证据
 
 运行：
 
@@ -80,14 +96,15 @@
 
 如果前端里已经配置了 explorer base url，也可以直接展示 Proof Panel 里的三个链接。
 
-### 6. 重新打开前端
+### 7. 重新打开前端
 
 展示：
 
 - executed count 已增加
 - last executed at 已更新
 - wallet balance 已变化
-- proof panel 出现新的 origin / reactive / destination 证据
+- activity 里出现新的 origin / reactive / destination 证据
+- autonomous wallet 仍然归属于刚才连接的 owner
 
 ## Fast Recovery
 
@@ -115,4 +132,4 @@
 
 推荐一句话叙事：
 
-“This is not a wallet with optional automation. It is a wallet designed to react by default, and it keeps executing user intent after the frontend goes offline.”
+“This is not a wallet with optional automation. Each user gets their own autonomous wallet, and a shared reactive runtime keeps executing that wallet's intent after the frontend goes offline.”
