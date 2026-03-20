@@ -148,6 +148,14 @@ function copy() {
   return getMessages(useLanguageStore.getState().locale)
 }
 
+function formatRpcChainMismatch(label: string, expectedName: string, expectedId: number, actualId: number) {
+  return copy().rpcChainMismatch
+    .replace('{label}', label)
+    .replace('{expectedName}', expectedName)
+    .replace('{expectedId}', String(expectedId))
+    .replace('{actualId}', String(actualId))
+}
+
 export async function connectOwnerWallet(providerId: string) {
   const { address, providerId: connectedProviderId, providerLabel } = await requestWalletAddress(
     providerId
@@ -972,6 +980,12 @@ export async function emitSignal(values: {
 
   const originClient = getOriginPublicClient()
   if (originClient) {
+    const actualChainId = await originClient.getChainId()
+    if (actualChainId !== originChain.id) {
+      throw new Error(
+        formatRpcChainMismatch('Origin RPC', originChain.name, originChain.id, actualChainId)
+      )
+    }
     await originClient.waitForTransactionReceipt({ hash })
   }
 

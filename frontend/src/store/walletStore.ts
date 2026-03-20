@@ -102,9 +102,22 @@ const initialAutomationState: AutomationCreditState = {
 }
 
 const initialProofs: ExecutionProof[] = []
+const signalOutcomePollIntervalMs = 3000
+const signalOutcomeMaxAttempts = 20
 
 function copy() {
   return getMessages(useLanguageStore.getState().locale)
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function hasDestinationOutcome(proofs: ExecutionProof[], expectedNonce: number) {
+  return proofs.some((proof) => {
+    if (!proof.nonceLabel || Number(proof.nonceLabel) !== expectedNonce) return false
+    return proof.label === 'Destination Execution' || proof.label === 'Destination Skipped'
+  })
 }
 
 function statusMessageForSnapshot(snapshot: {
@@ -401,13 +414,16 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
     try {
       const state = get()
+      const expectedNonce = state.wallet.lastExecutionNonce + 1
       const action = await emitSignal({
         token: state.intent.token,
         recipient: state.intent.recipient,
         amountPerExecution: state.intent.amountPerExecution,
-        nextNonce: state.wallet.lastExecutionNonce + 1
+        nextNonce: expectedNonce
       })
       await applyPostAction(set, get, action)
+      set({ statusMessage: copy().awaitingAutomationResult })
+      void pollForSignalOutcome(set, get, expectedNonce)
     } catch (error) {
       set({
         isPending: false,
@@ -472,6 +488,58 @@ async function applyPostAction(
       ...state.executionProofs.filter((proof) => proof.reference !== action.hash)
     ]
   }))
+}
+
+async function pollForSignalOutcome(
+  set: (partial:
+    | Partial<WillLeadStore>
+    | ((state: WillLeadStore) => Partial<WillLeadStore>)
+  ) => void,
+  get: () => WillLeadStore,
+  expectedNonce: number
+) {
+  const initialOwnerAddress = get().wallet.ownerAddress
+  const initialConnectionSource = get().wallet.connectionSource
+
+  if (!initialOwnerAddress) return
+
+  for (let attempt = 0; attempt < signalOutcomeMaxAttempts; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(signalOutcomePollIntervalMs)
+    }
+
+    const state = get()
+    if (
+      state.wallet.ownerAddress !== initialOwnerAddress ||
+      state.wallet.connectionSource !== initialConnectionSource ||
+      state.isPending
+    ) {
+      return
+    }
+
+    try {
+      const snapshot = await readWalletState(initialOwnerAddress, initialConnectionSource)
+      const settled =
+        snapshot.wallet.lastExecutionNonce >= expectedNonce ||
+        hasDestinationOutcome(snapshot.executionProofs, expectedNonce)
+
+      set({
+        ...snapshot,
+        isPending: false,
+        statusMessage: settled ? copy().automationResultDetected : copy().awaitingAutomationResult,
+        errorMessage: null
+      })
+
+      if (settled) {
+        return
+      }
+    } catch {}
+  }
+
+  set({
+    isPending: false,
+    statusMessage: copy().automationStillPending
+  })
 }
 
 function inferProofChain(label: string): 'origin' | 'destination' | 'reactive' {

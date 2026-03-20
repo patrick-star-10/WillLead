@@ -1,19 +1,42 @@
 import type { Chain } from 'viem'
 
-export const originChain: Chain = {
-  id: 84532,
-  name: 'Base Sepolia',
-  nativeCurrency: {
-    decimals: 18,
-    name: 'Ether',
-    symbol: 'ETH'
-  },
-  rpcUrls: {
-    default: {
-      http: [import.meta.env.VITE_ORIGIN_RPC_URL || '']
+function resolveOriginChain(): Chain {
+  const id = Number(import.meta.env.VITE_ORIGIN_CHAIN_ID || 84532)
+
+  if (id === 11155111) {
+    return {
+      id,
+      name: 'Ethereum Sepolia',
+      nativeCurrency: {
+        decimals: 18,
+        name: 'Sepolia Ether',
+        symbol: 'ETH'
+      },
+      rpcUrls: {
+        default: {
+          http: [import.meta.env.VITE_ORIGIN_RPC_URL || '']
+        }
+      }
+    }
+  }
+
+  return {
+    id,
+    name: 'Base Sepolia',
+    nativeCurrency: {
+      decimals: 18,
+      name: 'Ether',
+      symbol: 'ETH'
+    },
+    rpcUrls: {
+      default: {
+        http: [import.meta.env.VITE_ORIGIN_RPC_URL || '']
+      }
     }
   }
 }
+
+export const originChain: Chain = resolveOriginChain()
 
 export const destinationChain: Chain = {
   id: 11155111,
