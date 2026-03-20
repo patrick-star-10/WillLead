@@ -2,6 +2,7 @@ import type { AssetBalance } from '../types/willlead'
 import {
   translateBalanceContextLabel,
   translateConnectionLabel,
+  translateDisplayValue,
   translateRuntimeStatus,
   useCopy
 } from '../lib/i18n'
@@ -44,12 +45,12 @@ export function WalletHeader(props: WalletHeaderProps) {
         <div className="wallet-balance-row">
           <div>
             <p className="section-note">{copy.controllerWalletBalance}</p>
-            <p className="wallet-balance">{props.connectedBalanceLabel}</p>
+            <p className="wallet-balance">{translateDisplayValue(props.connectedBalanceLabel, locale)}</p>
           </div>
           <div className="identity-stack">
             <div className="identity-chip">
               <span>{copy.controller}</span>
-              <strong>{shortenAddress(props.ownerAddress)}</strong>
+              <strong>{translateDisplayValue(shortenAddress(props.ownerAddress), locale)}</strong>
             </div>
             <div className="identity-chip">
               <span>{copy.signingSource}</span>
@@ -60,12 +61,12 @@ export function WalletHeader(props: WalletHeaderProps) {
         <div className="wallet-balance-row">
           <div>
             <p className="section-note">{translateBalanceContextLabel(props.balanceContextLabel, locale)}</p>
-            <p className="wallet-balance">{props.balanceLabel}</p>
+            <p className="wallet-balance">{translateDisplayValue(props.balanceLabel, locale)}</p>
           </div>
           <div className="identity-stack">
             <div className="identity-chip">
               <span>{copy.autonomousWallet}</span>
-              <strong>{shortenAddress(props.contractAddress)}</strong>
+              <strong>{translateDisplayValue(shortenAddress(props.contractAddress), locale)}</strong>
             </div>
             <div className="identity-chip">
               <span>{copy.executionMode}</span>
@@ -132,7 +133,7 @@ export function WalletHeader(props: WalletHeaderProps) {
         </div>
         <div className="metric-tile">
           <span>{copy.lastSync}</span>
-          <strong>{props.lastSyncedAt}</strong>
+          <strong>{translateDisplayValue(props.lastSyncedAt, locale)}</strong>
           <small>{copy.latestChainSnapshot}</small>
         </div>
       </div>

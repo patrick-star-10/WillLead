@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { translateCreditLabel, translateSubscriptionStatus, useCopy } from '../lib/i18n'
+import { translateCreditLabel, translateDisplayValue, translateSubscriptionStatus, useCopy } from '../lib/i18n'
 import type { WalletAccessState } from '../types/willlead'
 
 type AutomationCapabilityPanelProps = {
@@ -73,7 +73,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
       <div className="automation-hero">
         <div>
           <p className="section-note">{copy.availableAutomationCredit}</p>
-          <p className="wallet-balance">{props.availableBalance}</p>
+          <p className="wallet-balance">{translateDisplayValue(props.availableBalance, locale)}</p>
         </div>
         <div className="identity-stack">
           <div className="identity-chip">
@@ -82,7 +82,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           </div>
           <div className="identity-chip">
             <span>{copy.requiredFloor}</span>
-            <strong>{props.minRequiredBalance}</strong>
+            <strong>{translateDisplayValue(props.minRequiredBalance, locale)}</strong>
           </div>
         </div>
       </div>
@@ -100,7 +100,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
         </div>
         <div className="metric-tile">
           <span>{copy.callbackGasLimit}</span>
-          <strong>{props.callbackGasLimit}</strong>
+          <strong>{translateDisplayValue(props.callbackGasLimit, locale)}</strong>
           <small>{copy.callbackBudget}</small>
         </div>
       </div>
@@ -113,11 +113,11 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
       <div className="listener-route-grid">
         <div className="identity-chip">
           <span>{copy.listenerContract}</span>
-          <strong>{shortenAddress(props.listenerAddress)}</strong>
+          <strong>{translateDisplayValue(shortenAddress(props.listenerAddress), locale)}</strong>
         </div>
         <div className="identity-chip">
           <span>{copy.signalSource}</span>
-          <strong>{shortenAddress(props.signalEmitterAddress)}</strong>
+          <strong>{translateDisplayValue(shortenAddress(props.signalEmitterAddress), locale)}</strong>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
       </div>
 
       <p className="wallet-footnote">
-        {copy.lastSync} {props.lastSyncedAt}
+        {copy.lastSync} {translateDisplayValue(props.lastSyncedAt, locale)}
       </p>
     </article>
   )

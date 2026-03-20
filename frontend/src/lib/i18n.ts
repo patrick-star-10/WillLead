@@ -161,7 +161,10 @@ const messages = {
     notConnected: 'Not connected',
     healthy: 'Healthy',
     low: 'Low',
+    unknown: 'Unknown',
     unavailable: 'Unavailable',
+    never: 'Never',
+    notConfigured: 'Not configured',
     origin: 'Origin',
     reactive: 'Reactive',
     destination: 'Destination',
@@ -392,7 +395,10 @@ const messages = {
     notConnected: '未连接',
     healthy: '充足',
     low: '偏低',
+    unknown: '待确认',
     unavailable: '不可用',
+    never: '暂无',
+    notConfigured: '未配置',
     origin: '源链',
     reactive: 'Reactive',
     destination: '目标链',
@@ -541,7 +547,114 @@ export function translateCreditLabel(value: string, locale: Locale) {
   const copy = messages[locale]
   if (value === 'Healthy') return copy.healthy
   if (value === 'Low') return copy.low
+  if (value === 'Unknown') return copy.unknown
   if (value === 'Unavailable') return copy.unavailable
+  return value
+}
+
+export function translateDisplayValue(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'Not connected') return copy.notConnected
+  if (value === 'Unknown') return copy.unknown
+  if (value === 'Unavailable') return copy.unavailable
+  if (value === 'Never') return copy.never
+  if (value === 'Not configured') return copy.notConfigured
+  return value
+}
+
+function startsWithAny(value: string, prefixes: string[]) {
+  return prefixes.find((prefix) => value.startsWith(prefix)) ?? null
+}
+
+export function translateStatusBanner(value: string, locale: Locale) {
+  const copy = messages[locale]
+  const allMessages = Object.values(messages)
+
+  const exactMap = [
+    ['readyBindWallet', copy.readyBindWallet],
+    ['preparingWalletSession', copy.preparingWalletSession],
+    ['readyToConnectWallet', copy.readyToConnectWallet],
+    ['initializeWalletFailed', copy.initializeWalletFailed],
+    ['failedInitializeWallet', copy.failedInitializeWallet],
+    ['connectingBrowserWallet', copy.connectingBrowserWallet],
+    ['browserWalletConnectionFailed', copy.browserWalletConnectionFailed],
+    ['failedConnectBrowserWallet', copy.failedConnectBrowserWallet],
+    ['creatingWebWallet', copy.creatingWebWallet],
+    ['webWalletCreationFailed', copy.webWalletCreationFailed],
+    ['failedCreateWebWallet', copy.failedCreateWebWallet],
+    ['importingWebWalletStatus', copy.importingWebWalletStatus],
+    ['webWalletImportFailed', copy.webWalletImportFailed],
+    ['failedImportWebWallet', copy.failedImportWebWallet],
+    ['disconnectingWalletSession', copy.disconnectingWalletSession],
+    ['walletDisconnected', copy.walletDisconnected],
+    ['walletDisconnectFailed', copy.walletDisconnectFailed],
+    ['failedDisconnectWallet', copy.failedDisconnectWallet],
+    ['initializingAutonomousWallet', copy.initializingAutonomousWallet],
+    ['initializeAutonomousWallet', copy.initializeAutonomousWallet],
+    ['refreshingWalletState', copy.refreshingWalletState],
+    ['walletStateRefreshed', copy.walletStateRefreshed],
+    ['refreshFailed', copy.refreshFailed],
+    ['failedRefreshChainState', copy.failedRefreshChainState],
+    ['submittingIntentTransaction', copy.submittingIntentTransaction],
+    ['intentConfigurationFailed', copy.intentConfigurationFailed],
+    ['failedConfigureIntent', copy.failedConfigureIntent],
+    ['fundingAutomationCredit', copy.fundingAutomationCredit],
+    ['automationFundingFailed', copy.automationFundingFailed],
+    ['failedFundAutomation', copy.failedFundAutomation],
+    ['pausingIntent', copy.pausingIntent],
+    ['pauseFailed', copy.pauseFailed],
+    ['failedPauseIntent', copy.failedPauseIntent],
+    ['resumingIntent', copy.resumingIntent],
+    ['resumeFailed', copy.resumeFailed],
+    ['failedResumeIntent', copy.failedResumeIntent],
+    ['pausingReactiveListener', copy.pausingReactiveListener],
+    ['reactiveListenerPauseFailed', copy.reactiveListenerPauseFailed],
+    ['failedPauseReactiveListener', copy.failedPauseReactiveListener],
+    ['resumingReactiveListener', copy.resumingReactiveListener],
+    ['reactiveListenerResumeFailed', copy.reactiveListenerResumeFailed],
+    ['failedResumeReactiveListener', copy.failedResumeReactiveListener],
+    ['emittingSourceSignal', copy.emittingSourceSignal],
+    ['signalEmissionFailed', copy.signalEmissionFailed],
+    ['failedEmitSourceSignal', copy.failedEmitSourceSignal],
+    ['connectedWalletMismatch', copy.connectedWalletMismatch],
+    ['initializeWalletToContinue', copy.initializeWalletToContinue],
+    ['walletAccessUnavailable', copy.walletAccessUnavailable],
+    ['walletFactoryMissing', copy.walletFactoryMissing],
+    ['walletNotInitialized', copy.walletNotInitialized],
+    ['reactiveListenerMissing', copy.reactiveListenerMissing]
+  ] as const
+
+  for (const [key, translated] of exactMap) {
+    if (allMessages.some((messageSet) => messageSet[key] === value)) {
+      return translated
+    }
+  }
+
+  const prefixedMap = [
+    ['restoredWebWallet', copy.restoredWebWallet],
+    ['connectedWalletPrefix', copy.connectedWalletPrefix],
+    ['createdWebWallet', copy.createdWebWallet],
+    ['importedWebWallet', copy.importedWebWallet],
+    ['intentConfiguredAction', copy.intentConfiguredAction],
+    ['intentPausedAction', copy.intentPausedAction],
+    ['intentResumedAction', copy.intentResumedAction],
+    ['sourceSignalEmittedAction', copy.sourceSignalEmittedAction],
+    ['automationCreditToppedUpAction', copy.automationCreditToppedUpAction],
+    ['reactiveListenerPausedAction', copy.reactiveListenerPausedAction],
+    ['reactiveListenerResumedAction', copy.reactiveListenerResumedAction],
+    ['autonomousWalletCreatedAction', copy.autonomousWalletCreatedAction]
+  ] as const
+
+  for (const [key, translatedPrefix] of prefixedMap) {
+    const matchedPrefix = startsWithAny(
+      value,
+      allMessages.map((messageSet) => messageSet[key])
+    )
+    if (matchedPrefix) {
+      return `${translatedPrefix}${value.slice(matchedPrefix.length)}`
+    }
+  }
+
   return value
 }
 

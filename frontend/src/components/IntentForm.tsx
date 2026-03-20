@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { useCopy } from '../lib/i18n'
+import { translateDisplayValue, useCopy } from '../lib/i18n'
 import type { IntentFormValues, WalletAccessState } from '../types/willlead'
 
 type IntentFormProps = {
@@ -21,7 +21,7 @@ type IntentFormProps = {
 }
 
 export function IntentForm(props: IntentFormProps) {
-  const { copy } = useCopy()
+  const { copy, locale } = useCopy()
   const [form, setForm] = useState<IntentFormValues>({
     token: props.token,
     recipient: props.recipient,
@@ -88,7 +88,7 @@ export function IntentForm(props: IntentFormProps) {
               onChange={(event) =>
                 setForm((state) => ({ ...state, recipient: event.target.value }))
               }
-              value={form.recipient}
+              value={props.isEditable ? form.recipient : translateDisplayValue(form.recipient, locale)}
             />
           </dd>
         </div>

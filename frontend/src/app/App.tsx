@@ -11,7 +11,7 @@ import { useAutomationCredit } from '../hooks/useAutomationCredit'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
 import { useIntentState } from '../hooks/useIntentState'
 import { useWalletState } from '../hooks/useWalletState'
-import { useCopy, useLocaleActions, translateConnectionLabel } from '../lib/i18n'
+import { useCopy, useLocaleActions, translateConnectionLabel, translateStatusBanner } from '../lib/i18n'
 import { useWalletStore } from '../store/walletStore'
 import { getBrowserWalletOptions } from '../lib/willlead'
 
@@ -176,8 +176,8 @@ export function App() {
       </section>
 
       <section className="status-banner">
-        <span>{statusMessage}</span>
-        {errorMessage ? <strong>{errorMessage}</strong> : null}
+        <span>{translateStatusBanner(statusMessage, locale)}</span>
+        {errorMessage ? <strong>{translateStatusBanner(errorMessage, locale)}</strong> : null}
       </section>
 
       <section className="view-frame">

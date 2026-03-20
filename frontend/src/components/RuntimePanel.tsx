@@ -1,4 +1,4 @@
-import { translateRuntimeStatus, translateSubscriptionStatus, useCopy } from '../lib/i18n'
+import { translateDisplayValue, translateRuntimeStatus, translateSubscriptionStatus, useCopy } from '../lib/i18n'
 import type { WalletAccessState } from '../types/willlead'
 
 type RuntimePanelProps = {
@@ -62,7 +62,7 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </div>
         <div>
           <dt>{copy.lastExecutedAt}</dt>
-          <dd>{props.lastExecutedAt}</dd>
+          <dd>{translateDisplayValue(props.lastExecutedAt, locale)}</dd>
         </div>
         <div>
           <dt>{copy.lastSignalHash}</dt>
@@ -82,27 +82,27 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </div>
         <div>
           <dt>{copy.callbackGasLimit}</dt>
-          <dd>{props.callbackGasLimit}</dd>
+          <dd>{translateDisplayValue(props.callbackGasLimit, locale)}</dd>
         </div>
         <div>
           <dt>{copy.listenerContract}</dt>
-          <dd>{shortenAddress(props.listenerAddress)}</dd>
+          <dd>{translateDisplayValue(shortenAddress(props.listenerAddress), locale)}</dd>
         </div>
         <div>
           <dt>{copy.signalSource}</dt>
-          <dd>{shortenAddress(props.signalEmitterAddress)}</dd>
+          <dd>{translateDisplayValue(shortenAddress(props.signalEmitterAddress), locale)}</dd>
         </div>
         <div>
           <dt>{copy.originChainRoute}</dt>
-          <dd>{props.subscriptionOriginChainId}</dd>
+          <dd>{translateDisplayValue(props.subscriptionOriginChainId, locale)}</dd>
         </div>
         <div>
           <dt>{copy.destinationChainRoute}</dt>
-          <dd>{props.subscriptionDestinationChainId}</dd>
+          <dd>{translateDisplayValue(props.subscriptionDestinationChainId, locale)}</dd>
         </div>
         <div>
           <dt>{copy.signalTopic}</dt>
-          <dd>{props.subscriptionTopic0}</dd>
+          <dd>{translateDisplayValue(props.subscriptionTopic0, locale)}</dd>
         </div>
       </dl>
       <div className="action-row">
