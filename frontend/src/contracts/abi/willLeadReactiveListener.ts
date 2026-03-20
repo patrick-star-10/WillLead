@@ -15,6 +15,34 @@ export const willLeadReactiveListenerAbi = [
   },
   {
     type: 'function',
+    name: 'signalEmitter',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }]
+  },
+  {
+    type: 'function',
+    name: 'originChainId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'destinationChainId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'strategySignalTopic0',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    type: 'function',
     name: 'pause',
     stateMutability: 'nonpayable',
     inputs: [],

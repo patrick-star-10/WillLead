@@ -59,14 +59,27 @@ const messages = {
     health: 'Health',
     requiredFloor: 'Required floor',
     listenerStatus: 'Listener status',
+    subscriptionStatus: 'Subscription',
     listenerNotListening: 'Not listening yet',
     active: 'Active',
     paused: 'Paused',
     inactive: 'Inactive',
     exhausted: 'Exhausted',
+    subscriptionArmed: 'Armed',
+    subscriptionMissing: 'Missing',
     readyForCallback: 'Ready to receive Reactive callbacks',
+    subscriptionReady: 'Reactive system is subscribed to the current source emitter.',
+    subscriptionRepairNeeded: 'Reactive system is not subscribed to the current source emitter yet.',
     callbackGasLimit: 'Callback gas limit',
     callbackBudget: 'Current execution budget per callback',
+    signalSource: 'Signal source',
+    listenerContract: 'Listener contract',
+    originChainRoute: 'Origin chain',
+    destinationChainRoute: 'Destination chain',
+    signalTopic: 'Signal topic',
+    listenerRoutingKicker: 'Listener Routing',
+    listenerRoutingNote:
+      'This wallet runtime listens to one source emitter and only reacts when the matching subscription is armed.',
     refreshCredit: 'Refresh Credit',
     refreshing: 'Refreshing...',
     topUpAutomation: 'Top Up Automation',
@@ -262,14 +275,26 @@ const messages = {
     health: '额度状态',
     requiredFloor: '最低保留额度',
     listenerStatus: '监听状态',
+    subscriptionStatus: '订阅状态',
     listenerNotListening: '暂未监听',
     active: '运行中',
     paused: '已暂停',
     inactive: '未启用',
     exhausted: '已耗尽',
+    subscriptionArmed: '已就绪',
+    subscriptionMissing: '缺失',
     readyForCallback: '已准备好接收 Reactive 回调',
+    subscriptionReady: 'Reactive system 已订阅当前的源事件合约。',
+    subscriptionRepairNeeded: 'Reactive system 还没有订阅当前的源事件合约。',
     callbackGasLimit: '回调 Gas 上限',
     callbackBudget: '每次回调可用的执行预算',
+    signalSource: '事件来源',
+    listenerContract: '监听合约',
+    originChainRoute: '源链',
+    destinationChainRoute: '目标链',
+    signalTopic: '监听 Topic',
+    listenerRoutingKicker: '监听路由',
+    listenerRoutingNote: '这个钱包运行时只监听一类源事件，只有订阅真正 armed 后才会继续驱动目标链执行。',
     refreshCredit: '刷新额度',
     refreshing: '刷新中...',
     topUpAutomation: '补充自动执行额度',
@@ -476,6 +501,13 @@ export function translateCreditLabel(value: string, locale: Locale) {
   if (value === 'Low') return copy.low
   if (value === 'Unavailable') return copy.unavailable
   return value
+}
+
+export function translateSubscriptionStatus(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'armed') return copy.subscriptionArmed
+  if (value === 'missing') return copy.subscriptionMissing
+  return copy.unavailable
 }
 
 export function translateChainLabel(value: string, locale: Locale) {

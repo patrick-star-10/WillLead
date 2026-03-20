@@ -49,6 +49,9 @@ import {
 
 const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const emptyAddress = '0x0000000000000000000000000000000000000000'
+const reactiveSystemContract = '0x0000000000000000000000000000000000fffFfF'
+const subscribeContractTopic0 =
+  '0xf2856a60f496a79f2738ebb36013248bb2f4a85116d90c2a595a96ef780137d2'
 const erc20Abi = parseAbi([
   'function balanceOf(address account) view returns (uint256)',
   'function decimals() view returns (uint8)',
@@ -88,6 +91,14 @@ function formatRuntimeStatus(status: number) {
 
 function formatAmount(amount: bigint) {
   return `${formatDecimalString(formatEther(amount), 3)} ETH`
+}
+
+function formatUint256Topic(value: bigint) {
+  return `0x${value.toString(16).padStart(64, '0')}`
+}
+
+function formatAddressTopic(value: Address) {
+  return `0x${value.toLowerCase().replace('0x', '').padStart(64, '0')}`
 }
 
 function formatTokenAmount(amount: bigint, decimals: number) {
@@ -194,6 +205,8 @@ export async function readWalletState(
     return {
       wallet: {
         contractAddress: walletAddress,
+        listenerAddress: reactiveListenerAddress,
+        signalEmitterAddress: contractAddresses.signalEmitter,
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
@@ -210,7 +223,11 @@ export async function readWalletState(
         lastSignalHash: zeroHash,
         destinationBalanceDelta: '-0.01 ETH',
         listenerPaused: null,
-        callbackGasLimit: 'Unavailable'
+        callbackGasLimit: 'Unavailable',
+        subscriptionStatus: 'unavailable',
+        subscriptionOriginChainId: 'Unavailable',
+        subscriptionDestinationChainId: 'Unavailable',
+        subscriptionTopic0: 'Unavailable'
       },
       intent: {
         token: 'native',
@@ -262,6 +279,8 @@ export async function readWalletState(
     return {
       wallet: {
         contractAddress: walletAddress,
+        listenerAddress: reactiveListenerAddress,
+        signalEmitterAddress: contractAddresses.signalEmitter,
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
@@ -287,7 +306,11 @@ export async function readWalletState(
         lastSignalHash: zeroHash,
         destinationBalanceDelta: '0 ETH',
         listenerPaused: null,
-        callbackGasLimit: 'Unavailable'
+        callbackGasLimit: 'Unavailable',
+        subscriptionStatus: 'unavailable',
+        subscriptionOriginChainId: 'Unavailable',
+        subscriptionDestinationChainId: 'Unavailable',
+        subscriptionTopic0: 'Unavailable'
       },
       intent: {
         token: 'native',
@@ -348,6 +371,8 @@ export async function readWalletState(
   return {
     wallet: {
       contractAddress: walletAddress,
+      listenerAddress: reactiveListenerAddress,
+      signalEmitterAddress: listenerState.signalEmitter,
       ownerAddress,
       connectionSource,
       connectionLabel: formatConnectionLabel(connectionSource),
@@ -363,8 +388,12 @@ export async function readWalletState(
       lastExecutedAt: formatTimestamp(lastExecutedAt),
       lastSignalHash,
       destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
-      listenerPaused: ownerAddress !== null ? listenerState.listenerPaused : null,
-      callbackGasLimit: ownerAddress !== null ? listenerState.callbackGasLimit : 'Unavailable'
+      listenerPaused: listenerState.listenerPaused,
+      callbackGasLimit: listenerState.callbackGasLimit,
+      subscriptionStatus: listenerState.subscriptionStatus,
+      subscriptionOriginChainId: listenerState.originChainId,
+      subscriptionDestinationChainId: listenerState.destinationChainId,
+      subscriptionTopic0: listenerState.strategySignalTopic0
     },
     intent: {
       token: token === zeroAddress ? 'native' : token,
@@ -431,11 +460,23 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
   if (!reactiveClient || !isConfiguredAddress(reactiveListenerAddress)) {
     return {
       listenerPaused: null,
-      callbackGasLimit: '1000000'
+      callbackGasLimit: '1000000',
+      signalEmitter: emptyAddress,
+      originChainId: 'Unavailable',
+      destinationChainId: 'Unavailable',
+      strategySignalTopic0: 'Unavailable',
+      subscriptionStatus: 'unavailable' as const
     }
   }
 
-  const [listenerPaused, callbackGasLimit] = await Promise.all([
+  const [
+    listenerPaused,
+    callbackGasLimit,
+    signalEmitter,
+    originChainId,
+    destinationChainId,
+    strategySignalTopic0
+  ] = await Promise.all([
     reactiveClient.readContract({
       address: reactiveListenerAddress,
       abi: willLeadReactiveListenerAbi,
@@ -445,12 +486,78 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
       address: reactiveListenerAddress,
       abi: willLeadReactiveListenerAbi,
       functionName: 'callbackGasLimit'
+    }) as Promise<bigint>,
+    reactiveClient.readContract({
+      address: reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      functionName: 'signalEmitter'
+    }) as Promise<Address>,
+    reactiveClient.readContract({
+      address: reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      functionName: 'originChainId'
+    }) as Promise<bigint>,
+    reactiveClient.readContract({
+      address: reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      functionName: 'destinationChainId'
+    }) as Promise<bigint>,
+    reactiveClient.readContract({
+      address: reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      functionName: 'strategySignalTopic0'
     }) as Promise<bigint>
   ])
 
+  let subscriptionStatus: 'armed' | 'missing' | 'unavailable' = 'missing'
+
+  try {
+    const logs = await reactiveClient.request({
+      method: 'eth_getLogs',
+      params: [
+        {
+          address: reactiveSystemContract as Hex,
+          fromBlock: '0x0',
+          topics: [
+            subscribeContractTopic0,
+            formatAddressTopic(reactiveListenerAddress),
+            formatUint256Topic(originChainId),
+            formatAddressTopic(signalEmitter)
+          ] as [Hex, Hex, Hex, Hex]
+        }
+      ]
+    })
+
+    const expectedStrategySignalTopic0 = strategySignalTopic0
+      .toString(16)
+      .padStart(64, '0')
+      .toLowerCase()
+    const expectedAuthorizedRvmId = contractAddresses.authorizedRvmId
+      .toLowerCase()
+      .replace('0x', '')
+      .padStart(40, '0')
+
+    const matchingLogs = (logs as Array<{ data?: string }>).filter((entry) => {
+      const data = entry.data?.toLowerCase() ?? ''
+      return (
+        data.slice(2, 66) === expectedStrategySignalTopic0 &&
+        data.slice(282, 322) === expectedAuthorizedRvmId
+      )
+    })
+
+    subscriptionStatus = matchingLogs.length > 0 ? 'armed' : 'missing'
+  } catch {
+    subscriptionStatus = 'unavailable'
+  }
+
   return {
     listenerPaused,
-    callbackGasLimit: callbackGasLimit.toString()
+    callbackGasLimit: callbackGasLimit.toString(),
+    signalEmitter,
+    originChainId: originChainId.toString(),
+    destinationChainId: destinationChainId.toString(),
+    strategySignalTopic0: `0x${strategySignalTopic0.toString(16)}`,
+    subscriptionStatus
   }
 }
 

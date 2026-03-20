@@ -53,6 +53,8 @@ type WillLeadStore = {
 
 const initialWalletState: WalletState = {
   contractAddress: '0xA11CE0000000000000000000000000000000BEEF',
+  listenerAddress: '0xBEEF00000000000000000000000000000000A11C',
+  signalEmitterAddress: '0xF00D00000000000000000000000000000000CAFE',
   ownerAddress: null,
   connectionSource: 'disconnected',
   connectionLabel: 'Not connected',
@@ -69,7 +71,11 @@ const initialWalletState: WalletState = {
   lastSignalHash: '0x4d6f636b5369676e616c48617368000000000000000000000000000000000000',
   destinationBalanceDelta: '-0.01 ETH',
   listenerPaused: null,
-  callbackGasLimit: '1000000'
+  callbackGasLimit: '1000000',
+  subscriptionStatus: 'unavailable',
+  subscriptionOriginChainId: '11155111',
+  subscriptionDestinationChainId: '11155111',
+  subscriptionTopic0: '0xe45289780e7528d2841b99cd319e5c8b096bbcabe47294706cae408a97267f92'
 }
 
 const initialIntentState: IntentState = {

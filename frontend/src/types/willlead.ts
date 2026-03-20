@@ -1,7 +1,10 @@
 export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
+export type ListenerSubscriptionStatus = 'armed' | 'missing' | 'unavailable'
 
 export type WalletState = {
   contractAddress: string
+  listenerAddress: string
+  signalEmitterAddress: string
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
   connectionLabel: string
@@ -19,6 +22,10 @@ export type WalletState = {
   destinationBalanceDelta: string
   listenerPaused: boolean | null
   callbackGasLimit: string
+  subscriptionStatus: ListenerSubscriptionStatus
+  subscriptionOriginChainId: string
+  subscriptionDestinationChainId: string
+  subscriptionTopic0: string
 }
 
 export type IntentState = {

@@ -440,6 +440,12 @@ button:disabled {
   min-width: 180px;
 }
 
+.listener-route-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .identity-chip {
   display: grid;
   gap: 4px;
@@ -831,6 +837,7 @@ button:disabled {
   .wallet-balance-grid,
   .dual-asset-grid,
   .identity-stack,
+  .listener-route-grid,
   .metric-strip {
     grid-template-columns: 1fr;
     min-width: 0;

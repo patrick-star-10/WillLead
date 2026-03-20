@@ -201,10 +201,14 @@ export function App() {
               creditLabel={automation.creditLabel}
               isPending={isActionPending}
               lastSyncedAt={wallet.lastSyncedAt}
+              listenerAddress={wallet.listenerAddress}
               listenerPaused={wallet.listenerPaused}
               minRequiredBalance={automation.minRequiredBalance}
               onFundAutomation={(amount) => void fundAutomation({ amount })}
               onRefresh={handleRefresh}
+              signalEmitterAddress={wallet.signalEmitterAddress}
+              subscriptionOriginChainId={wallet.subscriptionOriginChainId}
+              subscriptionStatus={wallet.subscriptionStatus}
             />
           ) : null}
 
@@ -231,7 +235,13 @@ export function App() {
               lastExecutedAt={wallet.lastExecutedAt}
               lastSignalHash={wallet.lastSignalHash}
               destinationBalanceDelta={wallet.destinationBalanceDelta}
+              listenerAddress={wallet.listenerAddress}
               listenerPaused={wallet.listenerPaused}
+              signalEmitterAddress={wallet.signalEmitterAddress}
+              subscriptionStatus={wallet.subscriptionStatus}
+              subscriptionOriginChainId={wallet.subscriptionOriginChainId}
+              subscriptionDestinationChainId={wallet.subscriptionDestinationChainId}
+              subscriptionTopic0={wallet.subscriptionTopic0}
               callbackGasLimit={wallet.callbackGasLimit}
               isPending={isActionPending}
               onTriggerSignal={() => void triggerSignal()}
