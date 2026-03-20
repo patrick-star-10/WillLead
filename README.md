@@ -63,6 +63,7 @@ cp .env.example .env
 ./contracts/script/verify-env.sh
 ./contracts/script/deploy-local.sh
 ./contracts/script/verify-deployments.sh
+./contracts/script/sync-listener-subscription.sh
 ./contracts/script/fund-callback.sh
 ./contracts/script/configure-intent.sh <token> <recipient>
 ./contracts/script/sync-frontend-env.sh
@@ -79,6 +80,7 @@ cp .env.example .env
 
 - `AUTHORIZED_RVM_ID` 应该填部署 `WillLeadWallet` 和 `WillLeadReactiveListener` 的同一个 EOA 地址
 - listener 本身不再把该值写进 callback payload，payload 里使用 `address(0)` 让 Reactive 在真实 callback 时填充 RVM ID
+- `sync-listener-subscription.sh` 会直接检查当前 ReactVM 上是否真的订阅了当前 `signalEmitter + topic0`；如果订阅缺失，它会通过 Reactive system contract 补一次 `subscribeContract(...)`
 
 如果要继续往下做：
 
@@ -102,6 +104,7 @@ cp .env.example .env
 - [demo-readiness.sh](/Users/wx/Desktop/WillLead/contracts/script/demo-readiness.sh)
 - [wait-for-execution.sh](/Users/wx/Desktop/WillLead/contracts/script/wait-for-execution.sh)
 - [fund-callback.sh](/Users/wx/Desktop/WillLead/contracts/script/fund-callback.sh)
+- [sync-listener-subscription.sh](/Users/wx/Desktop/WillLead/contracts/script/sync-listener-subscription.sh)
 - [pause-listener.sh](/Users/wx/Desktop/WillLead/contracts/script/pause-listener.sh)
 - [resume-listener.sh](/Users/wx/Desktop/WillLead/contracts/script/resume-listener.sh)
 - [set-callback-gas.sh](/Users/wx/Desktop/WillLead/contracts/script/set-callback-gas.sh)
@@ -138,6 +141,7 @@ npm run build
 - wallet intent 是否已启用且仍处于 `Active`
 - callback reserve 是否高于 wallet 的 `minAutomationBalance`
 - reactive listener 是否处于未暂停状态
+- 当前 ReactVM 是否已订阅到这次部署出来的 `signalEmitter`
 - `frontend/.env.local` 是否已经同步到最新地址
 
 如果你已经触发了 signal，想等到 destination 执行真正落地，而不是固定 `sleep`，可以跑：

@@ -21,10 +21,16 @@ warn() {
   echo "warning=$1"
 }
 
+numeric_value() {
+  printf '%s' "$1" | awk '{print $1}'
+}
+
+./contracts/script/sync-listener-subscription.sh --check >/dev/null || fail "reactive listener subscription is missing or stale"
+
 expect_nonzero_address() {
   local value="$1"
   local label="$2"
-  if [[ "${value,,}" == "0x0000000000000000000000000000000000000000" ]]; then
+  if [[ "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" == "0x0000000000000000000000000000000000000000" ]]; then
     fail "$label is zero"
   fi
   echo "$label=$value"
@@ -36,12 +42,12 @@ intent_recipient="$(cast call "$WILLLEAD_WALLET" "intent()(bool,address,address,
 intent_amount="$(cast call "$WILLLEAD_WALLET" "intent()(bool,address,address,uint256,uint256,uint256)" --rpc-url "$DESTINATION_RPC_URL" | sed -n '4p')"
 intent_max="$(cast call "$WILLLEAD_WALLET" "intent()(bool,address,address,uint256,uint256,uint256)" --rpc-url "$DESTINATION_RPC_URL" | sed -n '5p')"
 intent_executed="$(cast call "$WILLLEAD_WALLET" "intent()(bool,address,address,uint256,uint256,uint256)" --rpc-url "$DESTINATION_RPC_URL" | sed -n '6p')"
-runtime_status="$(cast call "$WILLLEAD_WALLET" "runtimeStatus()(uint8)" --rpc-url "$DESTINATION_RPC_URL")"
-min_automation_balance="$(cast call "$WILLLEAD_WALLET" "minAutomationBalance()(uint256)" --rpc-url "$DESTINATION_RPC_URL")"
-callback_reserve="$(cast call "$CALLBACK_PROXY" "reserves(address)(uint256)" "$WILLLEAD_WALLET" --rpc-url "$DESTINATION_RPC_URL")"
-callback_debt="$(cast call "$CALLBACK_PROXY" "debts(address)(uint256)" "$WILLLEAD_WALLET" --rpc-url "$DESTINATION_RPC_URL")"
+runtime_status="$(numeric_value "$(cast call "$WILLLEAD_WALLET" "runtimeStatus()(uint8)" --rpc-url "$DESTINATION_RPC_URL")")"
+min_automation_balance="$(numeric_value "$(cast call "$WILLLEAD_WALLET" "minAutomationBalance()(uint256)" --rpc-url "$DESTINATION_RPC_URL")")"
+callback_reserve="$(numeric_value "$(cast call "$CALLBACK_PROXY" "reserves(address)(uint256)" "$WILLLEAD_WALLET" --rpc-url "$DESTINATION_RPC_URL")")"
+callback_debt="$(numeric_value "$(cast call "$CALLBACK_PROXY" "debts(address)(uint256)" "$WILLLEAD_WALLET" --rpc-url "$DESTINATION_RPC_URL")")"
 listener_paused="$(cast call "$WILLLEAD_REACTIVE_LISTENER" "isPaused()(bool)" --rpc-url "$REACTIVE_RPC_URL")"
-listener_gas_limit="$(cast call "$WILLLEAD_REACTIVE_LISTENER" "callbackGasLimit()(uint64)" --rpc-url "$REACTIVE_RPC_URL")"
+listener_gas_limit="$(numeric_value "$(cast call "$WILLLEAD_REACTIVE_LISTENER" "callbackGasLimit()(uint64)" --rpc-url "$REACTIVE_RPC_URL")")"
 
 echo "readiness=checking"
 
@@ -51,15 +57,15 @@ fi
 
 expect_nonzero_address "$intent_recipient" "intent_recipient"
 
-if [[ "$intent_amount" == "0" ]]; then
+if [[ "$(numeric_value "$intent_amount")" == "0" ]]; then
   fail "intent amount is zero"
 fi
 
-if [[ "$intent_max" == "0" ]]; then
+if [[ "$(numeric_value "$intent_max")" == "0" ]]; then
   fail "intent max executions is zero"
 fi
 
-if (( intent_executed >= intent_max )); then
+if (( $(numeric_value "$intent_executed") >= $(numeric_value "$intent_max") )); then
   fail "intent already exhausted"
 fi
 
@@ -99,9 +105,9 @@ fi
 
 echo "readiness=ok"
 echo "intent_token=$intent_token"
-echo "intent_amount=$intent_amount"
-echo "intent_executed=$intent_executed"
-echo "intent_max=$intent_max"
+echo "intent_amount=$(numeric_value "$intent_amount")"
+echo "intent_executed=$(numeric_value "$intent_executed")"
+echo "intent_max=$(numeric_value "$intent_max")"
 echo "callback_reserve=$callback_reserve"
 echo "callback_debt=$callback_debt"
 echo "min_automation_balance=$min_automation_balance"

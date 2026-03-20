@@ -19,6 +19,7 @@ require_env CALLBACK_PROXY
 require_env AUTHORIZED_RVM_ID
 
 CALLBACK_GAS_LIMIT="${CALLBACK_GAS_LIMIT:-1000000}"
+REACTIVE_DEPLOY_VALUE="${REACTIVE_DEPLOY_VALUE:-0.01ether}"
 OWNER_ADDRESS="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
 
 deploy_contract() {
@@ -29,6 +30,7 @@ deploy_contract() {
   forge create "$contract_ref" \
     --rpc-url "$rpc_url" \
     --private-key "$OWNER_PRIVATE_KEY" \
+    --broadcast \
     --json \
     "$@"
 }
@@ -58,6 +60,7 @@ LISTENER_OUTPUT="$(
   deploy_contract \
     "$REACTIVE_RPC_URL" \
     contracts/src/WillLeadReactiveListener.sol:WillLeadReactiveListener \
+    --value "$REACTIVE_DEPLOY_VALUE" \
     --constructor-args "$SIGNAL_ADDRESS" "$ORIGIN_CHAIN_ID" "$DESTINATION_CHAIN_ID" "$CALLBACK_GAS_LIMIT"
 )"
 LISTENER_ADDRESS="$(extract_address "$LISTENER_OUTPUT")"
@@ -75,6 +78,8 @@ upsert_env_var .env VITE_ORIGIN_RPC_URL "$ORIGIN_RPC_URL"
 upsert_env_var .env VITE_DESTINATION_RPC_URL "$DESTINATION_RPC_URL"
 upsert_env_var .env VITE_REACTIVE_RPC_URL "$REACTIVE_RPC_URL"
 upsert_env_var .env VITE_REACTIVE_CHAIN_ID "${REACTIVE_CHAIN_ID:-}"
+
+./contracts/script/sync-listener-subscription.sh
 
 echo
 echo "Deployment complete."

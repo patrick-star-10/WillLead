@@ -23,3 +23,6 @@ echo
 echo "== Reactive listener =="
 cast call "$WILLLEAD_REACTIVE_LISTENER" "isPaused()(bool)" --rpc-url "$REACTIVE_RPC_URL"
 cast call "$WILLLEAD_REACTIVE_LISTENER" "callbackGasLimit()(uint64)" --rpc-url "$REACTIVE_RPC_URL"
+echo
+echo "== Reactive subscription =="
+./contracts/script/sync-listener-subscription.sh --check

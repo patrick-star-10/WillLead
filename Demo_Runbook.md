@@ -14,6 +14,7 @@
 - `./contracts/script/verify-env.sh` 通过
 - `./contracts/script/deploy-local.sh` 已部署三份合约
 - `./contracts/script/verify-deployments.sh` 通过
+- `./contracts/script/sync-listener-subscription.sh` 已确认当前 ReactVM 订阅的是本次部署出来的 signalEmitter
 - `./contracts/script/fund-callback.sh` 已给 callback proxy 充值
 - `./contracts/script/configure-intent.sh <token> <recipient>` 已配置 intent
 - `./contracts/script/sync-frontend-env.sh` 已同步前端环境
@@ -100,6 +101,7 @@
 
 - callback proxy 的 `reserves` / `debts`
 - listener 是否 `paused`
+- 当前 ReactVM 订阅是否命中了现在这套 `signalEmitter`
 - wallet 的 `lastExecutionNonce`
 - wallet 的 `lastSignalHash`
 
