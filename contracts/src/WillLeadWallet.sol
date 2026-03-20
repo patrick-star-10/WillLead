@@ -106,6 +106,9 @@ contract WillLeadWallet {
             executedCount: 0
         });
         minAutomationBalance = automationBalanceFloor;
+        lastExecutionNonce = 0;
+        lastExecutedAt = 0;
+        lastSignalHash = bytes32(0);
         runtimeStatus = RuntimeStatus.Active;
 
         emit IntentConfigured(address(this), token, recipient, amountPerExecution, maxExecutions, automationBalanceFloor);

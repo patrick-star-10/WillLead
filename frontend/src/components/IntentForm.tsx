@@ -47,6 +47,11 @@ export function IntentForm(props: IntentFormProps) {
   ])
 
   const remainingExecutions = props.maxExecutions - props.executedCount
+  const formIsValid =
+    form.recipient.trim().length > 0 &&
+    form.amountPerExecution.trim().length > 0 &&
+    Number(form.amountPerExecution) > 0 &&
+    form.maxExecutions > 0
   const helperMessage =
     props.walletAccessState === 'needs_wallet'
       ? copy.initializeAutonomousWalletNote
@@ -142,7 +147,12 @@ export function IntentForm(props: IntentFormProps) {
         </div>
       </dl>
       <div className="action-row">
-        <button className="primary-button" disabled={!props.isEditable} onClick={() => props.onSubmit(form)} type="button">
+        <button
+          className="primary-button"
+          disabled={!props.isEditable || !formIsValid}
+          onClick={() => props.onSubmit(form)}
+          type="button"
+        >
           {props.isPending ? copy.saving : copy.saveTransferPlan}
         </button>
         <button className="secondary-button" disabled={!props.isEditable} onClick={props.onPause} type="button">

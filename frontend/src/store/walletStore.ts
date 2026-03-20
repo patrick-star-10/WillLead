@@ -6,6 +6,7 @@ import {
   createOwnerWebWallet,
   disconnectOwnerWallet,
   emitSignal,
+  fundAutonomousWallet,
   initializeAutonomousWallet,
   importOwnerWebWallet,
   pauseIntent,
@@ -20,11 +21,12 @@ import { txExplorerLink } from '../lib/explorers'
 import { getMessages, useLanguageStore } from '../lib/i18n'
 import type {
   ActionResult,
-  AutomationFundingValues,
   AutomationCreditState,
+  AutomationFundingValues,
   ExecutionProof,
   IntentFormValues,
   IntentState,
+  WalletFundingValues,
   WalletState
 } from '../types/willlead'
 
@@ -45,6 +47,7 @@ type WillLeadStore = {
   refreshChainState: () => Promise<void>
   submitIntent: (values: IntentFormValues) => Promise<void>
   fundAutomation: (values: AutomationFundingValues) => Promise<void>
+  fundWallet: (values: WalletFundingValues) => Promise<void>
   pauseWalletIntent: () => Promise<void>
   resumeWalletIntent: () => Promise<void>
   pauseListener: () => Promise<void>
@@ -318,6 +321,21 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         isPending: false,
         errorMessage: error instanceof Error ? error.message : copy().failedFundAutomation,
         statusMessage: copy().automationFundingFailed
+      })
+    }
+  },
+  fundWallet: async (values) => {
+    set({ isPending: true, errorMessage: null, statusMessage: copy().fundingAutonomousWallet })
+
+    try {
+      const action = await fundAutonomousWallet(values)
+      await applyPostAction(set, get, action)
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage:
+          error instanceof Error ? error.message : copy().failedFundAutonomousWallet,
+        statusMessage: copy().autonomousWalletFundingFailed
       })
     }
   },

@@ -78,6 +78,10 @@ export type AutomationFundingValues = {
   amount: string
 }
 
+export type WalletFundingValues = {
+  amount: string
+}
+
 export type WalletConnectResult = {
   address: string
   source: Exclude<WalletConnectionSource, 'disconnected'>

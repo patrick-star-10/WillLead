@@ -6,6 +6,8 @@ import {
   translateRuntimeStatus,
   useCopy
 } from '../lib/i18n'
+import type { WalletAccessState } from '../types/willlead'
+import { useState } from 'react'
 
 type WalletHeaderProps = {
   contractAddress: string
@@ -18,9 +20,12 @@ type WalletHeaderProps = {
   assetBalances: AssetBalance[]
   runtimeStatus: string
   isConnected: boolean
+  isPending: boolean
   executedCount: number
   maxExecutions: number
   lastSyncedAt: string
+  walletAccessState: WalletAccessState
+  onFundWallet: (amount: string) => void
 }
 
 function shortenAddress(value: string | null) {
@@ -33,7 +38,19 @@ function shortenAddress(value: string | null) {
 
 export function WalletHeader(props: WalletHeaderProps) {
   const { copy, locale } = useCopy()
+  const [fundAmount, setFundAmount] = useState('0.05')
   const remainingExecutions = Math.max(props.maxExecutions - props.executedCount, 0)
+  const hasBoundWallet = props.walletAccessState === 'bound'
+  const fundingHelper =
+    props.walletAccessState === 'bound'
+      ? copy.autonomousWalletFundingNote
+      : props.walletAccessState === 'needs_wallet'
+        ? copy.initializeWalletToContinue
+        : props.walletAccessState === 'mismatch'
+          ? copy.connectedWalletMismatch
+          : props.walletAccessState === 'unavailable'
+            ? copy.walletAccessUnavailable
+            : copy.connectWalletToLoadRuntime
 
   return (
     <article className="panel wallet-panel">
@@ -75,6 +92,23 @@ export function WalletHeader(props: WalletHeaderProps) {
           </div>
         </div>
       </div>
+      <div className="action-row">
+        <input
+          className="field compact-field"
+          disabled={!hasBoundWallet || props.isPending}
+          onChange={(event) => setFundAmount(event.target.value)}
+          value={fundAmount}
+        />
+        <button
+          className="primary-button"
+          disabled={!hasBoundWallet || props.isPending}
+          onClick={() => props.onFundWallet(fundAmount)}
+          type="button"
+        >
+          {props.isPending ? copy.fundingAutonomousWalletShort : copy.fundAutonomousWallet}
+        </button>
+      </div>
+      <p className="wallet-footnote">{fundingHelper}</p>
       <div className="dual-asset-grid">
         <div>
           <p className="section-note">{copy.controllerWalletAssets}</p>

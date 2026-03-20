@@ -23,6 +23,7 @@ import type {
   AutomationFundingValues,
   IntentFormValues,
   IntentState,
+  WalletFundingValues,
   WalletAccessState,
   WalletConnectResult,
   WalletConnectionSource,
@@ -870,13 +871,21 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
   const amountPerExecution = parseEther(values.amountPerExecution)
   const automationFloor = parseEther(values.minAutomationBalance)
 
+  if (amountPerExecution <= 0n) {
+    throw new Error('Amount per execution must be greater than 0.')
+  }
+  if (values.maxExecutions <= 0) {
+    throw new Error('Max executions must be greater than 0.')
+  }
+
   const hash = await client.writeContract({
     account,
     address: walletAddress,
     abi: willLeadWalletAbi,
     chain: destinationChain,
     functionName: 'configureIntent',
-    args: [token, recipient, amountPerExecution, BigInt(values.maxExecutions), automationFloor]
+    args: [token, recipient, amountPerExecution, BigInt(values.maxExecutions), automationFloor],
+    gas: 300_000n
   })
 
   const destinationClient = getDestinationPublicClient()
@@ -1002,6 +1011,30 @@ export async function topUpAutomationCredit(
     hash,
     label: copy().automationCreditToppedUpAction,
     description: copy().automationCreditToppedUpDesc
+  }
+}
+
+export async function fundAutonomousWallet(
+  values: WalletFundingValues
+): Promise<ActionResult> {
+  const { account, client } = await getDestinationWalletClient()
+  const { walletAddress } = await resolveWalletAddressForOwner(account)
+  const hash = await client.sendTransaction({
+    account,
+    chain: destinationChain,
+    to: walletAddress,
+    value: parseEther(values.amount)
+  })
+
+  const destinationClient = getDestinationPublicClient()
+  if (destinationClient) {
+    await destinationClient.waitForTransactionReceipt({ hash })
+  }
+
+  return {
+    hash,
+    label: copy().autonomousWalletFundedAction,
+    description: copy().autonomousWalletFundedDesc
   }
 }
 

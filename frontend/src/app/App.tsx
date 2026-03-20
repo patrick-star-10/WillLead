@@ -32,6 +32,7 @@ export function App() {
   const refreshChainState = useWalletStore((state) => state.refreshChainState)
   const submitIntent = useWalletStore((state) => state.submitIntent)
   const fundAutomation = useWalletStore((state) => state.fundAutomation)
+  const fundWallet = useWalletStore((state) => state.fundWallet)
   const pauseWalletIntent = useWalletStore((state) => state.pauseWalletIntent)
   const resumeWalletIntent = useWalletStore((state) => state.resumeWalletIntent)
   const pauseListener = useWalletStore((state) => state.pauseListener)
@@ -200,9 +201,12 @@ export function App() {
               assetBalances={wallet.assetBalances}
               runtimeStatus={wallet.runtimeStatus}
               isConnected={wallet.isConnected}
+              isPending={isActionPending}
               executedCount={intent.executedCount}
               maxExecutions={intent.maxExecutions}
               lastSyncedAt={wallet.lastSyncedAt}
+              walletAccessState={wallet.walletAccessState}
+              onFundWallet={(amount) => void fundWallet({ amount })}
             />
           ) : null}
 
