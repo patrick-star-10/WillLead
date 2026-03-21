@@ -46,6 +46,8 @@ export function App() {
   const [, startUiTransition] = useTransition()
   const [activeSection, setActiveSection] = useState<'overview' | 'plan' | 'automation' | 'activity'>('overview')
   const [isWalletModalOpen, setWalletModalOpen] = useState(false)
+  const activeRuntimePolling =
+    wallet.walletAccessState === 'bound' && wallet.runtimeStatus === 'active'
   const browserWalletOptions = getBrowserWalletOptions()
   const hasBoundWallet = wallet.walletAccessState === 'bound'
   const activityEmptyMessage =
@@ -99,20 +101,28 @@ export function App() {
   }, [locale, syncIdleCopy])
 
   useEffect(() => {
-    if (wallet.walletAccessState !== 'bound' || wallet.runtimeStatus !== 'active') return
+    if (!activeRuntimePolling) return
 
     const poll = () => {
       if (document.visibilityState !== 'visible') return
       void backgroundRefreshChainState()
     }
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      void backgroundRefreshChainState()
+    }
+
     poll()
-    const timer = window.setInterval(poll, 6000)
-    return () => window.clearInterval(timer)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    const timer = window.setInterval(poll, 2500)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [
+    activeRuntimePolling,
     backgroundRefreshChainState,
-    wallet.walletAccessState,
-    wallet.runtimeStatus,
     wallet.ownerAddress,
     wallet.lastExecutionNonce
   ])

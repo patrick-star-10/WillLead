@@ -113,6 +113,7 @@ const initialAutomationState: AutomationCreditState = {
 const initialProofs: ExecutionProof[] = []
 const signalOutcomePollIntervalMs = 3000
 const signalOutcomeMaxAttempts = 20
+let detailedSnapshotInFlightKey: string | null = null
 
 function copy() {
   return getMessages(useLanguageStore.getState().locale)
@@ -145,6 +146,83 @@ function statusMessageForSnapshot(snapshot: {
   }
 
   return connectedMessage
+}
+
+function mergeCoreSnapshotIntoState(
+  state: WillLeadStore,
+  snapshot: {
+    wallet: WalletState
+    intent: IntentState
+    automation: AutomationCreditState
+    executionProofs: ExecutionProof[]
+  }
+) {
+  return {
+    ...snapshot,
+    wallet: {
+      ...snapshot.wallet,
+      signalEmitterAddress:
+        snapshot.wallet.signalEmitterAddress === '0x0000000000000000000000000000000000000000'
+          ? state.wallet.signalEmitterAddress
+          : snapshot.wallet.signalEmitterAddress,
+      canManageListener:
+        snapshot.wallet.canManageListener || state.wallet.canManageListener,
+      listenerPaused:
+        snapshot.wallet.listenerPaused === null ? state.wallet.listenerPaused : snapshot.wallet.listenerPaused,
+      callbackGasLimit:
+        snapshot.wallet.callbackGasLimit === 'Unavailable'
+          ? state.wallet.callbackGasLimit
+          : snapshot.wallet.callbackGasLimit,
+      subscriptionStatus:
+        snapshot.wallet.subscriptionStatus === 'unavailable'
+          ? state.wallet.subscriptionStatus
+          : snapshot.wallet.subscriptionStatus,
+      subscriptionOriginChainId:
+        snapshot.wallet.subscriptionOriginChainId === 'Unavailable'
+          ? state.wallet.subscriptionOriginChainId
+          : snapshot.wallet.subscriptionOriginChainId,
+      subscriptionDestinationChainId:
+        snapshot.wallet.subscriptionDestinationChainId === 'Unavailable'
+          ? state.wallet.subscriptionDestinationChainId
+          : snapshot.wallet.subscriptionDestinationChainId,
+      subscriptionTopic0:
+        snapshot.wallet.subscriptionTopic0 === 'Unavailable'
+          ? state.wallet.subscriptionTopic0
+          : snapshot.wallet.subscriptionTopic0,
+      operatorServiceStatus:
+        snapshot.wallet.operatorServiceStatus === 'unknown'
+          ? state.wallet.operatorServiceStatus
+          : snapshot.wallet.operatorServiceStatus,
+      operatorLastHeartbeat:
+        snapshot.wallet.operatorLastHeartbeat === 'Never'
+          ? state.wallet.operatorLastHeartbeat
+          : snapshot.wallet.operatorLastHeartbeat,
+      operatorListenerBalance:
+        snapshot.wallet.operatorListenerBalance === 'Unavailable'
+          ? state.wallet.operatorListenerBalance
+          : snapshot.wallet.operatorListenerBalance,
+      operatorListenerDebt:
+        snapshot.wallet.operatorListenerDebt === 'Unavailable'
+          ? state.wallet.operatorListenerDebt
+          : snapshot.wallet.operatorListenerDebt,
+      operatorLastFundingResult:
+        snapshot.wallet.operatorLastFundingResult === 'Unknown'
+          ? state.wallet.operatorLastFundingResult
+          : snapshot.wallet.operatorLastFundingResult,
+      automationReadiness:
+        snapshot.wallet.automationReadiness === 'unavailable'
+          ? state.wallet.automationReadiness
+          : snapshot.wallet.automationReadiness,
+      singleSignatureReadiness:
+        snapshot.wallet.singleSignatureReadiness === 'unavailable'
+          ? state.wallet.singleSignatureReadiness
+          : snapshot.wallet.singleSignatureReadiness
+    },
+    automation:
+      snapshot.automation.creditLabel === 'Unknown' ? state.automation : snapshot.automation,
+    executionProofs:
+      snapshot.executionProofs.length > 0 ? snapshot.executionProofs : state.executionProofs
+  }
 }
 
 export const useWalletStore = create<WillLeadStore>((set, get) => ({
@@ -336,7 +414,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const snapshot = await readWalletState(
         initialState.wallet.ownerAddress,
-        initialState.wallet.connectionSource
+        initialState.wallet.connectionSource,
+        'core'
       )
 
       set((state) => {
@@ -350,12 +429,14 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
           snapshot.wallet.balanceLabel !== state.wallet.balanceLabel
 
         return {
-          ...snapshot,
+          ...mergeCoreSnapshotIntoState(state, snapshot),
           isPending: false,
           errorMessage: null,
           statusMessage: settled ? copy().automationResultDetected : state.statusMessage
         }
       })
+
+      void hydrateDetailedSnapshot(set, initialState.wallet.ownerAddress, initialState.wallet.connectionSource)
     } catch {}
   },
   submitIntent: async (values) => {
@@ -521,38 +602,7 @@ async function applyPostAction(
   const snapshot = await readWalletState(ownerAddress, connectionSource, 'core')
 
   set((state) => ({
-    ...snapshot,
-    wallet: {
-      ...snapshot.wallet,
-      signalEmitterAddress:
-        snapshot.wallet.signalEmitterAddress === '0x0000000000000000000000000000000000000000'
-          ? state.wallet.signalEmitterAddress
-          : snapshot.wallet.signalEmitterAddress,
-      canManageListener: state.wallet.canManageListener,
-      listenerPaused: state.wallet.listenerPaused,
-      callbackGasLimit: state.wallet.callbackGasLimit,
-      subscriptionStatus: state.wallet.subscriptionStatus,
-      subscriptionOriginChainId: state.wallet.subscriptionOriginChainId,
-      subscriptionDestinationChainId: state.wallet.subscriptionDestinationChainId,
-      subscriptionTopic0: state.wallet.subscriptionTopic0,
-      operatorServiceStatus: state.wallet.operatorServiceStatus,
-      operatorLastHeartbeat: state.wallet.operatorLastHeartbeat,
-      operatorListenerBalance: state.wallet.operatorListenerBalance,
-      operatorListenerDebt: state.wallet.operatorListenerDebt,
-      operatorLastFundingResult: state.wallet.operatorLastFundingResult,
-      automationReadiness:
-        snapshot.wallet.runtimeStatus === 'active'
-          ? state.wallet.operatorServiceStatus === 'online'
-            ? 'waiting_signal'
-            : state.wallet.automationReadiness
-          : snapshot.wallet.automationReadiness,
-      singleSignatureReadiness:
-        snapshot.wallet.runtimeStatus === 'active'
-          ? state.wallet.operatorServiceStatus === 'online'
-            ? 'ready'
-            : state.wallet.singleSignatureReadiness
-          : snapshot.wallet.singleSignatureReadiness
-    },
+    ...mergeCoreSnapshotIntoState(state, snapshot),
     isPending: false,
     statusMessage: `${action.label}: ${action.hash}`,
     errorMessage: null,
@@ -593,6 +643,13 @@ async function hydrateDetailedSnapshot(
   ownerAddress: string,
   connectionSource: WalletState['connectionSource']
 ) {
+  const requestKey = `${ownerAddress}:${connectionSource}`
+  if (detailedSnapshotInFlightKey === requestKey) {
+    return
+  }
+
+  detailedSnapshotInFlightKey = requestKey
+
   try {
     const snapshot = await readWalletState(ownerAddress, connectionSource, 'full')
 
@@ -613,6 +670,11 @@ async function hydrateDetailedSnapshot(
       }
     })
   } catch {}
+  finally {
+    if (detailedSnapshotInFlightKey === requestKey) {
+      detailedSnapshotInFlightKey = null
+    }
+  }
 }
 
 async function pollForSignalOutcome(
