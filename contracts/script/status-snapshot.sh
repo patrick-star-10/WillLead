@@ -8,6 +8,8 @@ fi
 
 source .env
 
+REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
+
 if [[ -n "${WILLLEAD_WALLET_FACTORY:-}" ]]; then
   echo "== Wallet factory =="
   cast call "$WILLLEAD_WALLET_FACTORY" "walletOf(address)(address)" "$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")" --rpc-url "$DESTINATION_RPC_URL"
@@ -31,6 +33,8 @@ echo
 echo "== Reactive listener =="
 cast call "$WILLLEAD_REACTIVE_LISTENER" "isPaused()(bool)" --rpc-url "$REACTIVE_RPC_URL"
 cast call "$WILLLEAD_REACTIVE_LISTENER" "callbackGasLimit()(uint64)" --rpc-url "$REACTIVE_RPC_URL"
+cast balance "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL"
+cast call "$REACTIVE_SYSTEM_CONTRACT" "debt(address)(uint256)" "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL"
 echo
 echo "== Reactive subscription =="
 ./contracts/script/sync-listener-subscription.sh --check

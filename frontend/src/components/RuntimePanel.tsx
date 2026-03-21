@@ -18,7 +18,6 @@ type RuntimePanelProps = {
   canManageListener: boolean
   isPending: boolean
   walletAccessState: WalletAccessState
-  onTriggerSignal: () => void
   onPauseListener: () => void
   onResumeListener: () => void
 }
@@ -106,12 +105,9 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </div>
       </dl>
       <div className="action-row">
-        <button className="primary-button" disabled={!hasBoundWallet} onClick={props.onTriggerSignal} type="button">
-          {props.isPending ? copy.triggering : copy.emitSourceSignal}
-        </button>
         <button
           className="secondary-button"
-          disabled={listenerUnavailable || !props.canManageListener}
+          disabled={props.isPending || listenerUnavailable || !props.canManageListener}
           onClick={props.onPauseListener}
           type="button"
         >
@@ -119,13 +115,14 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </button>
         <button
           className="secondary-button"
-          disabled={listenerUnavailable || !props.canManageListener}
+          disabled={props.isPending || listenerUnavailable || !props.canManageListener}
           onClick={props.onResumeListener}
           type="button"
         >
           {copy.resumeListener}
         </button>
       </div>
+      <p className="wallet-footnote">{copy.externalSignalNote}</p>
       {hasBoundWallet && !props.canManageListener ? (
         <p className="wallet-footnote">{copy.listenerManagedByOperator}</p>
       ) : null}

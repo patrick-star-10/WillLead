@@ -5,6 +5,7 @@ import {
   connectOwnerWallet,
   createOwnerWebWallet,
   disconnectOwnerWallet,
+  ensureReactiveListenerArmed,
   emitSignal,
   fundAutonomousWallet,
   initializeAutonomousWallet,
@@ -82,7 +83,10 @@ const initialWalletState: WalletState = {
   subscriptionStatus: 'unavailable',
   subscriptionOriginChainId: 'Unavailable',
   subscriptionDestinationChainId: 'Unavailable',
-  subscriptionTopic0: 'Unavailable'
+  subscriptionTopic0: 'Unavailable',
+  operatorServiceStatus: 'unknown',
+  operatorLastHeartbeat: 'Never',
+  automationReadiness: 'unavailable'
 }
 
 const initialIntentState: IntentState = {
@@ -315,6 +319,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const action = await configureIntent(values)
       await applyPostAction(set, get, action)
+      try {
+        const listenerAction = await ensureReactiveListenerArmed()
+        if (listenerAction) {
+          await applyPostAction(set, get, listenerAction)
+        }
+      } catch {}
+      void pollForListenerActivation(set, get)
     } catch (error) {
       set({
         isPending: false,
@@ -540,6 +551,58 @@ async function pollForSignalOutcome(
     isPending: false,
     statusMessage: copy().automationStillPending
   })
+}
+
+async function pollForListenerActivation(
+  set: (partial:
+    | Partial<WillLeadStore>
+    | ((state: WillLeadStore) => Partial<WillLeadStore>)
+  ) => void,
+  get: () => WillLeadStore
+) {
+  const initialOwnerAddress = get().wallet.ownerAddress
+  const initialConnectionSource = get().wallet.connectionSource
+
+  if (!initialOwnerAddress) return
+
+  set({
+    statusMessage: copy().awaitingListenerArming,
+    errorMessage: null
+  })
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(signalOutcomePollIntervalMs)
+    }
+
+    const state = get()
+    if (
+      state.wallet.ownerAddress !== initialOwnerAddress ||
+      state.wallet.connectionSource !== initialConnectionSource ||
+      state.isPending
+    ) {
+      return
+    }
+
+    try {
+      const snapshot = await readWalletState(initialOwnerAddress, initialConnectionSource)
+      const listenerArmed =
+        snapshot.wallet.runtimeStatus === 'active' &&
+        snapshot.wallet.listenerPaused === false &&
+        snapshot.wallet.subscriptionStatus === 'armed'
+
+      set({
+        ...snapshot,
+        isPending: false,
+        statusMessage: listenerArmed ? copy().listenerArmedForIntent : copy().awaitingListenerArming,
+        errorMessage: null
+      })
+
+      if (listenerArmed) {
+        return
+      }
+    } catch {}
+  }
 }
 
 function inferProofChain(label: string): 'origin' | 'destination' | 'reactive' {

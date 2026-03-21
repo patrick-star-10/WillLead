@@ -1,6 +1,6 @@
 # WillLead Reactive-Native Wallet MVP
 
-文档时间：2026-03-18
+文档时间：2026-03-21
 
 ## 1. 目标重定义
 
@@ -30,15 +30,14 @@
 
 ### 必补缺口
 
-1. 真实测试网闭环验证  
-   现在代码和脚本已经齐了，但还需要真正确认  
-   `Base Sepolia -> Reactive Lasna -> Sepolia`  
-   这条链已经稳定跑通。
+1. 真实测试网闭环的产品化证据留存  
+   真实链路本身已经在当前仓库地址上跑通，主链路是：  
+   `Sepolia signal -> Reactive Lasna runtime -> Sepolia execution`  
+   当前还缺的是更适合提交黑客松或对外展示的稳定 proof 产物、截图和 runbook 固化。
 
 2. 钱包资产视图还不完整  
-   目前前端只展示原生币和当前 `intent.token` 对应资产，离“钱包”还差：
+   目前前端已经区分 `EOA balance` 与 `autonomous wallet balance`，但离“钱包”还差：
    - 多资产展示
-   - 更明确地区分 `EOA balance` 和 `wallet contract balance`
    - 更清楚的 token metadata 展示
 
 3. 自动执行 credit 还不是完整钱包能力  
@@ -98,8 +97,7 @@
 
 ### Layer B: 必须补齐后才更适合讲成 reactive-native wallet
 
-- 真实测试网闭环跑通并留存证据
-- 区分 `connected wallet` 与 `destination wallet contract` 资产语义
+- 把真实测试网闭环整理成稳定证据和提交材料
 - 让 automation credit 成为更完整的钱包能力展示
 - 明确 listener / subscription 与 wallet 的关系
 - 明确失败、暂停、耗尽、跳过的状态说明
@@ -132,7 +130,20 @@
 
 说明：如果后面还有时间，DCA 可以作为固定金额转账的包装层追加，但第一版不要先做。
 
-## 3.1 修订后的方案主线
+## 3.1 当前进度更新
+
+当前仓库已经完成的关键点：
+
+1. `connected wallet` 与 `autonomous wallet` 资产语义已经在前端分开显示  
+   这部分不再是方案缺口，而是已实现能力。
+
+2. 真实测试网闭环已经在当前地址上跑通过  
+   需要保留的不是“能不能跑通”，而是“如何把 proof 和 demo 口径写清楚”。
+
+3. Reactive listener runtime funding 已经成为系统级前置条件  
+   这次联调暴露出的核心问题不是 subscription，而是 listener 自身欠费。现在脚本和 operator service 已经会自动补这层运行资金并清理 debt。
+
+## 3.2 修订后的方案主线
 
 为了让方案更贴近“Reactive 原生钱包”，后续实现建议不再只围绕“把 callback 跑通”，而是按下面顺序推进：
 

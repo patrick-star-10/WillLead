@@ -31,3 +31,5 @@ cast send \
   "$MAX_EXECUTIONS" \
   "$MIN_AUTOMATION_BALANCE"
 
+echo "intent_status=configured"
+./contracts/script/ensure-listener-armed.sh

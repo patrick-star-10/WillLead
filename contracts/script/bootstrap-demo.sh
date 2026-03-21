@@ -22,6 +22,7 @@ fi
 ./contracts/script/deploy-local.sh
 ./contracts/script/create-wallet.sh
 ./contracts/script/verify-deployments.sh
+./contracts/script/fund-reactive-listener.sh
 ./contracts/script/fund-callback.sh "$CALLBACK_TOP_UP"
 ./contracts/script/configure-intent.sh \
   "$TOKEN_ADDRESS" \

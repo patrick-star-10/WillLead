@@ -1,6 +1,16 @@
 export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
 export type ListenerSubscriptionStatus = 'armed' | 'missing' | 'unavailable'
 export type WalletAccessState = 'needs_connection' | 'needs_wallet' | 'bound' | 'mismatch' | 'unavailable'
+export type OperatorServiceStatus = 'online' | 'offline' | 'unknown'
+export type AutomationReadiness =
+  | 'waiting_signal'
+  | 'arming_listener'
+  | 'listener_paused'
+  | 'listener_unarmed'
+  | 'intent_paused'
+  | 'intent_inactive'
+  | 'intent_exhausted'
+  | 'unavailable'
 
 export type WalletState = {
   contractAddress: string
@@ -29,6 +39,9 @@ export type WalletState = {
   subscriptionOriginChainId: string
   subscriptionDestinationChainId: string
   subscriptionTopic0: string
+  operatorServiceStatus: OperatorServiceStatus
+  operatorLastHeartbeat: string
+  automationReadiness: AutomationReadiness
 }
 
 export type IntentState = {

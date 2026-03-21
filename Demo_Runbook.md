@@ -1,5 +1,17 @@
 # WillLead Demo Runbook
 
+## Latest Verified Run
+
+截至 2026-03-21，当前仓库和这组测试网地址已经验证过一条真实闭环：
+
+- origin signal：`0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
+- destination execution：`0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
+
+这次验证里还额外确认了一个关键运行条件：
+
+- Reactive listener 自身必须有足够的 runtime balance，并且 vendor debt 需要被 `coverDebt()`
+- 现在这一步已经进入 `fund-reactive-listener.sh`、`deploy-local.sh`、`bootstrap-demo.sh` 和 operator service 的默认流程
+
 ## Goal
 
 用最短路径证明这句话：
@@ -16,10 +28,13 @@
 - `./contracts/script/create-wallet.sh` 已为当前 owner 创建或恢复 autonomous wallet
 - `./contracts/script/verify-deployments.sh` 通过
 - `./contracts/script/sync-listener-subscription.sh` 已确认当前 ReactVM 订阅的是本次部署出来的 signalEmitter
+- `./contracts/script/fund-reactive-listener.sh` 已给 Reactive listener 补运行资金并覆盖当前 debt
 - `./contracts/script/fund-callback.sh` 已给 callback proxy 充值
 - `./contracts/script/configure-intent.sh <token> <recipient>` 已配置 intent
 - `./contracts/script/sync-frontend-env.sh` 已同步前端环境
 - `./contracts/script/demo-readiness.sh` 返回 `readiness=ok`
+- 如需让前端签完 intent 后自动恢复 listener，可在 operator 终端额外启动 `./contracts/script/start-operator-service.sh`
+- 这条 operator service 现在也会自动补 Reactive listener 的 runtime 资金并清理 debt
 - 前端已启动：`cd frontend && npm run dev`
 
 ## Demo Path
@@ -63,6 +78,12 @@
 - 不是后端 bot 继续替你点按钮
 
 ### 5. 在终端触发源链事件
+
+这里要明确口径：
+
+- 这一步是 external signal operator 在触发，不是用户自己又签了一次钱包操作
+- 演示时不要使用 owner/controller wallet 再去点前端按钮发 signal
+- 最好使用独立 operator key 或终端脚本来触发 source event
 
 ```bash
 ./contracts/script/emit-signal.sh <token> <recipient> <amountPerExecution> <executionNonce>
@@ -117,6 +138,7 @@
 重点看：
 
 - callback proxy 的 `reserves` / `debts`
+- reactive listener 的 balance / debt
 - listener 是否 `paused`
 - 当前 ReactVM 订阅是否命中了现在这套 `signalEmitter`
 - wallet 的 `lastExecutionNonce`

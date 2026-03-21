@@ -17,6 +17,7 @@ import { willLeadWalletAbi } from '../contracts/abi/willLeadWallet'
 import { contractAddresses } from '../contracts/addresses'
 import type {
   ActionResult,
+  AutomationReadiness,
   AssetBalance,
   AutomationCreditState,
   ExecutionProof,
@@ -24,6 +25,7 @@ import type {
   IntentFormValues,
   IntentState,
   WalletFundingValues,
+  OperatorServiceStatus,
   WalletAccessState,
   WalletConnectResult,
   WalletConnectionSource,
@@ -60,6 +62,11 @@ const erc20Abi = parseAbi([
   'function decimals() view returns (uint8)',
   'function symbol() view returns (string)'
 ])
+const reactiveSystemAbi = parseAbi([
+  'function subscribeContract(address contractAddress,uint256 chainId,address sourceContract,uint256 topic0,uint256 topic1,uint256 topic2,uint256 topic3)'
+])
+const reactiveIgnore =
+  '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad' as Hex
 
 function isConfiguredAddress(value: string) {
   return value.toLowerCase() !== emptyAddress
@@ -202,6 +209,11 @@ type BoundWalletBindingContext = Omit<WalletBindingContext, 'walletAddress'> & {
   walletAddress: Address
 }
 
+type OperatorRuntime = {
+  serviceStatus: OperatorServiceStatus
+  lastHeartbeat: string
+}
+
 async function resolveWalletBinding(ownerAddress: string | null): Promise<WalletBindingContext> {
   const destinationClient = getDestinationPublicClient()
   const factoryAddress = configuredAddressOrNull(contractAddresses.walletFactory)
@@ -329,7 +341,10 @@ function buildUnboundSnapshot(params: {
       subscriptionStatus: 'unavailable' as const,
       subscriptionOriginChainId: 'Unavailable',
       subscriptionDestinationChainId: 'Unavailable',
-      subscriptionTopic0: 'Unavailable'
+      subscriptionTopic0: 'Unavailable',
+      operatorServiceStatus: 'unknown' as const,
+      operatorLastHeartbeat: 'Never',
+      automationReadiness: 'unavailable' as const
     },
     intent: {
       token: 'native',
@@ -354,6 +369,72 @@ function buildUnboundSnapshot(params: {
   }
 }
 
+async function readOperatorRuntime(): Promise<OperatorRuntime> {
+  if (typeof window === 'undefined') {
+    return {
+      serviceStatus: 'unknown',
+      lastHeartbeat: 'Never'
+    }
+  }
+
+  try {
+    const response = await fetch(`/runtime/operator-status.json?ts=${Date.now()}`, {
+      cache: 'no-store'
+    })
+
+    if (!response.ok) {
+      return {
+        serviceStatus: 'offline',
+        lastHeartbeat: 'Never'
+      }
+    }
+
+    const payload = await response.json() as { heartbeatAt?: string; serviceStatus?: string }
+    if (!payload.heartbeatAt) {
+      return {
+        serviceStatus: 'unknown',
+        lastHeartbeat: 'Never'
+      }
+    }
+
+    const heartbeatDate = new Date(payload.heartbeatAt)
+    const fresh = Date.now() - heartbeatDate.getTime() <= 15_000
+
+    return {
+      serviceStatus: payload.serviceStatus === 'online' && fresh ? 'online' : 'offline',
+      lastHeartbeat: heartbeatDate.toLocaleString('en-US', {
+        hour12: false,
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+      })
+    }
+  } catch {
+    return {
+      serviceStatus: 'offline',
+      lastHeartbeat: 'Never'
+    }
+  }
+}
+
+function computeAutomationReadiness(params: {
+  runtimeStatus: WalletState['runtimeStatus']
+  listenerPaused: boolean | null
+  subscriptionStatus: WalletState['subscriptionStatus']
+}): AutomationReadiness {
+  if (params.runtimeStatus === 'paused') return 'intent_paused'
+  if (params.runtimeStatus === 'exhausted') return 'intent_exhausted'
+  if (params.runtimeStatus !== 'active') return 'intent_inactive'
+  if (params.listenerPaused === null) return 'unavailable'
+  if (params.listenerPaused) return 'listener_paused'
+  if (params.subscriptionStatus !== 'armed') return 'arming_listener'
+  return 'waiting_signal'
+}
+
 export async function readWalletState(
   ownerAddress: string | null,
   connectionSource: WalletConnectionSource = 'disconnected'
@@ -366,6 +447,7 @@ export async function readWalletState(
   const destinationClient = getDestinationPublicClient()
   const originClient = getOriginPublicClient()
   const reactiveClient = getReactivePublicClient()
+  const operatorRuntime = await readOperatorRuntime()
   const connectedBalance =
     destinationClient && ownerAddress !== null
       ? await destinationClient.getBalance({ address: getAddress(ownerAddress) })
@@ -493,7 +575,14 @@ export async function readWalletState(
       subscriptionStatus: listenerState.subscriptionStatus,
       subscriptionOriginChainId: listenerState.originChainId,
       subscriptionDestinationChainId: listenerState.destinationChainId,
-      subscriptionTopic0: listenerState.strategySignalTopic0
+      subscriptionTopic0: listenerState.strategySignalTopic0,
+      operatorServiceStatus: operatorRuntime.serviceStatus,
+      operatorLastHeartbeat: operatorRuntime.lastHeartbeat,
+      automationReadiness: computeAutomationReadiness({
+        runtimeStatus: formatRuntimeStatus(status),
+        listenerPaused: listenerState.listenerPaused,
+        subscriptionStatus: listenerState.subscriptionStatus
+      })
     },
     intent: {
       token: token === zeroAddress ? 'native' : token,
@@ -905,6 +994,56 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
     hash,
     label: copy().intentConfiguredAction,
     description: copy().intentConfiguredDesc
+  }
+}
+
+export async function ensureReactiveListenerArmed(): Promise<ActionResult | null> {
+  const { account, client } = await getReactiveWalletClient()
+  const reactiveListenerAddress = await resolveReactiveListenerForManager(account)
+  const listenerState = await readReactiveListenerState(reactiveListenerAddress)
+
+  if (listenerState.listenerPaused === false && listenerState.subscriptionStatus === 'armed') {
+    return null
+  }
+
+  let hash: Hex
+
+  if (listenerState.listenerPaused) {
+    hash = await client.writeContract({
+      account,
+      address: reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      chain: reactiveChain,
+      functionName: 'resume'
+    })
+  } else {
+    hash = await client.writeContract({
+      account,
+      address: reactiveSystemContract as Address,
+      abi: reactiveSystemAbi,
+      chain: reactiveChain,
+      functionName: 'subscribeContract',
+      args: [
+        reactiveListenerAddress,
+        BigInt(listenerState.originChainId),
+        listenerState.signalEmitter,
+        BigInt(listenerState.strategySignalTopic0),
+        BigInt(reactiveIgnore),
+        BigInt(reactiveIgnore),
+        BigInt(reactiveIgnore)
+      ]
+    })
+  }
+
+  const reactiveClient = getReactivePublicClient()
+  if (reactiveClient) {
+    await reactiveClient.waitForTransactionReceipt({ hash })
+  }
+
+  return {
+    hash,
+    label: copy().reactiveListenerArmedAction,
+    description: copy().reactiveListenerArmedDesc
   }
 }
 

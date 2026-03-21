@@ -83,6 +83,7 @@ upsert_env_var .env VITE_REACTIVE_CHAIN_ID "${REACTIVE_CHAIN_ID:-}"
 ./contracts/script/create-wallet.sh >/dev/null
 WALLET_ADDRESS="$(cast call "$FACTORY_ADDRESS" "walletOf(address)(address)" "$OWNER_ADDRESS" --rpc-url "$DESTINATION_RPC_URL")"
 ./contracts/script/sync-listener-subscription.sh
+./contracts/script/fund-reactive-listener.sh >/dev/null
 
 echo
 echo "Deployment complete."
@@ -96,4 +97,5 @@ echo "Next:"
 echo "1. Run ./contracts/script/fund-callback.sh"
 echo "2. Run ./contracts/script/configure-intent.sh <token> <recipient>"
 echo "3. Run ./contracts/script/sync-frontend-env.sh"
-echo "4. Start frontend with npm run dev"
+echo "4. Run ./contracts/script/demo-readiness.sh"
+echo "5. Start frontend with npm run dev"

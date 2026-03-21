@@ -37,7 +37,6 @@ export function App() {
   const resumeWalletIntent = useWalletStore((state) => state.resumeWalletIntent)
   const pauseListener = useWalletStore((state) => state.pauseListener)
   const resumeListener = useWalletStore((state) => state.resumeListener)
-  const triggerSignal = useWalletStore((state) => state.triggerSignal)
   const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
   const isActionPending = useWalletStore((state) => state.isPending)
   const statusMessage = useWalletStore((state) => state.statusMessage)
@@ -226,6 +225,9 @@ export function App() {
               signalEmitterAddress={wallet.signalEmitterAddress}
               subscriptionOriginChainId={wallet.subscriptionOriginChainId}
               subscriptionStatus={wallet.subscriptionStatus}
+              operatorServiceStatus={wallet.operatorServiceStatus}
+              operatorLastHeartbeat={wallet.operatorLastHeartbeat}
+              automationReadiness={wallet.automationReadiness}
             />
           ) : null}
 
@@ -266,7 +268,6 @@ export function App() {
               canManageListener={wallet.canManageListener}
               isPending={isActionPending}
               walletAccessState={wallet.walletAccessState}
-              onTriggerSignal={() => void triggerSignal()}
               onPauseListener={() => void pauseListener()}
               onResumeListener={() => void resumeListener()}
             />

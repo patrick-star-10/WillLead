@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { translateCreditLabel, translateDisplayValue, translateSubscriptionStatus, useCopy } from '../lib/i18n'
+import {
+  translateAutomationReadiness,
+  translateCreditLabel,
+  translateDisplayValue,
+  translateOperatorServiceStatus,
+  translateSubscriptionStatus,
+  useCopy
+} from '../lib/i18n'
 import type { WalletAccessState } from '../types/willlead'
 
 type AutomationCapabilityPanelProps = {
@@ -13,6 +20,9 @@ type AutomationCapabilityPanelProps = {
   subscriptionOriginChainId: string
   callbackGasLimit: string
   lastSyncedAt: string
+  operatorServiceStatus: string
+  operatorLastHeartbeat: string
+  automationReadiness: string
   isPending: boolean
   walletAccessState: WalletAccessState
   onRefresh: () => void
@@ -102,6 +112,18 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           <span>{copy.callbackGasLimit}</span>
           <strong>{translateDisplayValue(props.callbackGasLimit, locale)}</strong>
           <small>{copy.callbackBudget}</small>
+        </div>
+        <div className="metric-tile">
+          <span>{copy.operatorService}</span>
+          <strong>{translateOperatorServiceStatus(props.operatorServiceStatus, locale)}</strong>
+          <small>
+            {copy.operatorLastHeartbeat} {translateDisplayValue(props.operatorLastHeartbeat, locale)}
+          </small>
+        </div>
+        <div className="metric-tile">
+          <span>{copy.automationReadinessLabel}</span>
+          <strong>{translateAutomationReadiness(props.automationReadiness, locale)}</strong>
+          <small>{listenerHelperLabel}</small>
         </div>
       </div>
 

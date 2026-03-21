@@ -59,7 +59,9 @@ export function IntentForm(props: IntentFormProps) {
         ? copy.connectedWalletMismatch
         : props.walletAccessState === 'unavailable'
           ? copy.walletAccessUnavailable
-          : copy.connectWalletToLoadRuntime
+          : props.isEditable
+            ? copy.planSigningNote
+            : copy.connectWalletToLoadRuntime
 
   return (
     <article className="panel">
@@ -167,7 +169,7 @@ export function IntentForm(props: IntentFormProps) {
           </button>
         ) : null}
       </div>
-      {!props.isEditable ? <p className="wallet-footnote">{helperMessage}</p> : null}
+      <p className="wallet-footnote">{helperMessage}</p>
     </article>
   )
 }

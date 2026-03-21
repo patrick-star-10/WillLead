@@ -11,6 +11,8 @@ source .env
 ./contracts/script/verify-env.sh >/dev/null
 ./contracts/script/verify-deployments.sh >/dev/null
 
+REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
+
 fail() {
   echo "readiness=failed"
   echo "reason=$1"
@@ -48,6 +50,8 @@ callback_reserve="$(numeric_value "$(cast call "$CALLBACK_PROXY" "reserves(addre
 callback_debt="$(numeric_value "$(cast call "$CALLBACK_PROXY" "debts(address)(uint256)" "$WILLLEAD_WALLET" --rpc-url "$DESTINATION_RPC_URL")")"
 listener_paused="$(cast call "$WILLLEAD_REACTIVE_LISTENER" "isPaused()(bool)" --rpc-url "$REACTIVE_RPC_URL")"
 listener_gas_limit="$(numeric_value "$(cast call "$WILLLEAD_REACTIVE_LISTENER" "callbackGasLimit()(uint64)" --rpc-url "$REACTIVE_RPC_URL")")"
+listener_balance="$(numeric_value "$(cast balance "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL")")"
+listener_debt="$(numeric_value "$(cast call "$REACTIVE_SYSTEM_CONTRACT" "debt(address)(uint256)" "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL")")"
 
 echo "readiness=checking"
 
@@ -85,6 +89,10 @@ if [[ "$listener_gas_limit" == "0" ]]; then
   fail "listener callback gas limit is zero"
 fi
 
+if (( listener_balance < listener_debt )); then
+  fail "reactive listener runtime is underfunded"
+fi
+
 if [[ ! -f frontend/.env.local ]]; then
   warn "frontend/.env.local is missing"
 else
@@ -115,3 +123,5 @@ echo "callback_reserve=$callback_reserve"
 echo "callback_debt=$callback_debt"
 echo "min_automation_balance=$min_automation_balance"
 echo "listener_callback_gas_limit=$listener_gas_limit"
+echo "listener_balance=$listener_balance"
+echo "listener_debt=$listener_debt"

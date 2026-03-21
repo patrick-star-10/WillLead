@@ -29,7 +29,10 @@ echo "Callback proxy:          $CALLBACK_PROXY"
 echo "Authorized RVM ID:       $AUTHORIZED_RVM_ID"
 echo
 
-if [[ "${AUTHORIZED_RVM_ID,,}" != "${OWNER_ADDRESS,,}" ]]; then
+AUTHORIZED_RVM_ID_LOWER="$(printf '%s' "$AUTHORIZED_RVM_ID" | tr '[:upper:]' '[:lower:]')"
+OWNER_ADDRESS_LOWER="$(printf '%s' "$OWNER_ADDRESS" | tr '[:upper:]' '[:lower:]')"
+
+if [[ "$AUTHORIZED_RVM_ID_LOWER" != "$OWNER_ADDRESS_LOWER" ]]; then
   echo "Mismatch: AUTHORIZED_RVM_ID must match the deployer EOA for wallet callback checks."
   exit 1
 fi
@@ -42,4 +45,3 @@ cast chain-id --rpc-url "$DESTINATION_RPC_URL"
 cast chain-id --rpc-url "$REACTIVE_RPC_URL"
 echo
 echo "Environment looks usable."
-

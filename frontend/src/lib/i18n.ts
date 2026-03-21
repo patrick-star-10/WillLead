@@ -26,7 +26,7 @@ const messages = {
     planTab: 'Transfer Plan',
     planDesc: 'Configure the onchain transfer this wallet should keep executing.',
     automationTab: 'Automation',
-    automationDesc: 'Operate the reactive listener and simulate the source trigger.',
+    automationDesc: 'Inspect listener health and the external trigger route.',
     activityTab: 'Activity',
     activityDesc: 'Review recent origin signals, callbacks, executions, and skipped runs.',
     walletOverviewTitle: 'Wallet Overview',
@@ -68,6 +68,9 @@ const messages = {
     health: 'Health',
     requiredFloor: 'Required floor',
     listenerStatus: 'Listener status',
+    operatorService: 'Operator service',
+    operatorLastHeartbeat: 'Operator heartbeat',
+    automationReadinessLabel: 'Automation readiness',
     subscriptionStatus: 'Subscription',
     listenerNotListening: 'Not listening yet',
     active: 'Active',
@@ -94,6 +97,8 @@ const messages = {
     topUpAutomation: 'Top Up Automation',
     transferPlanKicker: 'Transfer Plan',
     transferPlanNote: 'Define the transfer this wallet should keep executing.',
+    planSigningNote:
+      'Saving this plan signs the wallet intent only. The shared listener is already armed by the operator, so no extra start-listening signature is required.',
     initializeAutonomousWallet: 'Initialize Autonomous Wallet',
     initializingAutonomousWallet: 'Initializing wallet...',
     initializeAutonomousWalletNote:
@@ -111,7 +116,7 @@ const messages = {
     pausePlan: 'Pause Plan',
     resumePlan: 'Resume Plan',
     automationEngineKicker: 'Automation Engine',
-    automationEngineNote: 'Monitor the relay path that turns source signals into transfers.',
+    automationEngineNote: 'Monitor the relay path that turns external source events into wallet transfers.',
     lastExecutionNonce: 'Last Execution Nonce',
     lastExecutedAt: 'Last Executed At',
     lastSignalHash: 'Last Signal Hash',
@@ -120,6 +125,8 @@ const messages = {
     triggering: 'Triggering...',
     pauseListener: 'Pause Listener',
     resumeListener: 'Resume Listener',
+    externalSignalNote:
+      'Source events are triggered by an external operator or upstream protocol. The user wallet does not emit them from this UI.',
     activityKicker: 'Activity Ledger',
     activityNote:
       'A rolling execution history that shows what the wallet observed, executed, or skipped while you were away.',
@@ -164,9 +171,17 @@ const messages = {
     webWallet: 'Web Wallet',
     notConnected: 'Not connected',
     healthy: 'Healthy',
+    online: 'Online',
+    offline: 'Offline',
     low: 'Low',
     unknown: 'Unknown',
     unavailable: 'Unavailable',
+    waitingForSignal: 'Waiting for signal',
+    armingListener: 'Arming listener',
+    listenerUnarmed: 'Listener not armed',
+    intentPausedReadiness: 'Intent paused',
+    intentInactiveReadiness: 'Intent inactive',
+    intentExhaustedReadiness: 'Intent exhausted',
     never: 'Never',
     notConfigured: 'Not configured',
     origin: 'Origin',
@@ -209,7 +224,7 @@ const messages = {
     failedRefreshChainState: 'Failed to refresh chain state',
     rpcChainMismatch:
       '{label} is pointing at the wrong chain. Expected {expectedName} ({expectedId}), got chain id {actualId}. Update the RPC URL and try again.',
-    submittingIntentTransaction: 'Submitting intent transaction...',
+    submittingIntentTransaction: 'Saving transfer plan to the autonomous wallet...',
     intentConfigurationFailed: 'Intent configuration failed.',
     failedConfigureIntent: 'Failed to configure intent',
     fundingAutomationCredit: 'Funding automation credit...',
@@ -237,8 +252,12 @@ const messages = {
       'Source signal was sent, but destination execution is still pending. Refresh again if it takes longer.',
     signalEmissionFailed: 'Signal emission failed.',
     failedEmitSourceSignal: 'Failed to emit source signal',
-    intentConfiguredAction: 'Intent Configured',
-    intentConfiguredDesc: 'Configured the wallet intent on the destination chain.',
+    intentConfiguredAction: 'Transfer Plan Saved',
+    intentConfiguredDesc:
+      'Saved the wallet intent onchain. The shared listener remains armed by the operator for future external triggers.',
+    awaitingListenerArming: 'Transfer plan saved. Waiting for the shared listener to arm...',
+    listenerArmedForIntent:
+      'Transfer plan saved. Shared listener is armed and ready for future external triggers.',
     intentPausedAction: 'Intent Paused',
     intentPausedDesc: 'Paused reactive execution on the destination wallet.',
     intentResumedAction: 'Intent Resumed',
@@ -254,6 +273,9 @@ const messages = {
     reactiveListenerPausedDesc: 'Paused the reactive listener subscription set.',
     reactiveListenerResumedAction: 'Reactive Listener Resumed',
     reactiveListenerResumedDesc: 'Resumed the reactive listener subscription set.',
+    reactiveListenerArmedAction: 'Reactive Listener Armed',
+    reactiveListenerArmedDesc:
+      'Re-armed the shared listener after saving the transfer plan so future external events can trigger callbacks.',
     autonomousWalletCreatedAction: 'Autonomous Wallet Ready',
     autonomousWalletCreatedDesc: 'Created or recovered the autonomous wallet bound to this owner.',
     walletAddressMissing: 'VITE_WALLET_ADDRESS is not configured',
@@ -282,7 +304,7 @@ const messages = {
     planTab: '转账计划',
     planDesc: '配置这个钱包要持续执行的链上转账规则。',
     automationTab: '自动执行',
-    automationDesc: '管理监听器，并模拟源链触发。',
+    automationDesc: '查看监听器健康状态和外部触发路径。',
     activityTab: '链上记录',
     activityDesc: '查看最近的源链信号、回调、成功执行和跳过记录。',
     walletOverviewTitle: '钱包总览',
@@ -323,6 +345,9 @@ const messages = {
     health: '额度状态',
     requiredFloor: '最低保留额度',
     listenerStatus: '监听状态',
+    operatorService: 'Operator 服务',
+    operatorLastHeartbeat: 'Operator 心跳',
+    automationReadinessLabel: '自动化就绪状态',
     subscriptionStatus: '订阅状态',
     listenerNotListening: '暂未监听',
     active: '运行中',
@@ -348,6 +373,8 @@ const messages = {
     topUpAutomation: '补充自动执行额度',
     transferPlanKicker: '转账计划',
     transferPlanNote: '定义这个钱包需要持续执行的转账规则。',
+    planSigningNote:
+      '保存这条计划只是在给钱包写入 intent，不是在启动监听。共享 listener 已由 operator 预先 armed，不需要用户再额外签一次“开始监听”。',
     initializeAutonomousWallet: '初始化自主钱包',
     initializingAutonomousWallet: '正在初始化钱包...',
     initializeAutonomousWalletNote: '先为当前 owner 部署一只自主钱包，再配置第一条 intent。',
@@ -364,7 +391,7 @@ const messages = {
     pausePlan: '暂停计划',
     resumePlan: '恢复计划',
     automationEngineKicker: '自动执行引擎',
-    automationEngineNote: '查看从源链信号到目标转账的整条执行链路。',
+    automationEngineNote: '查看外部源事件如何经过 Reactive 路由并落到钱包转账。',
     lastExecutionNonce: '最近执行序号',
     lastExecutedAt: '最近执行时间',
     lastSignalHash: '最近信号哈希',
@@ -373,6 +400,8 @@ const messages = {
     triggering: '触发中...',
     pauseListener: '暂停监听',
     resumeListener: '恢复监听',
+    externalSignalNote:
+      '源事件由外部 operator 或上游协议触发，不会在这个用户钱包界面里由用户自己发送。',
     activityKicker: '链上记录',
     activityNote: '这里会持续展示钱包离线期间观察到、完成或跳过的执行历史。',
     chainEvidence: '链上证据',
@@ -413,9 +442,17 @@ const messages = {
     webWallet: '网页钱包',
     notConnected: '未连接',
     healthy: '充足',
+    online: '在线',
+    offline: '离线',
     low: '偏低',
     unknown: '待确认',
     unavailable: '不可用',
+    waitingForSignal: '等待信号',
+    armingListener: '正在准备监听',
+    listenerUnarmed: '监听尚未 armed',
+    intentPausedReadiness: '计划已暂停',
+    intentInactiveReadiness: '计划未启用',
+    intentExhaustedReadiness: '计划已耗尽',
     never: '暂无',
     notConfigured: '未配置',
     origin: '源链',
@@ -458,7 +495,7 @@ const messages = {
     failedRefreshChainState: '刷新链上状态失败',
     rpcChainMismatch:
       '{label} 指到了错误链。预期是 {expectedName}（{expectedId}），实际拿到的 chain id 是 {actualId}。请修正 RPC URL 后重试。',
-    submittingIntentTransaction: '正在提交转账计划交易...',
+    submittingIntentTransaction: '正在把转账计划写入自主钱包...',
     intentConfigurationFailed: '转账计划配置失败。',
     failedConfigureIntent: '配置转账计划失败',
     fundingAutomationCredit: '正在补充自动执行额度...',
@@ -485,8 +522,10 @@ const messages = {
     automationStillPending: '源链信号已经发出，但目标链执行还在等待中。如果更久还没变化，请再手动刷新一次。',
     signalEmissionFailed: '源链信号发送失败。',
     failedEmitSourceSignal: '发送源链信号失败',
-    intentConfiguredAction: '转账计划已配置',
-    intentConfiguredDesc: '已经在目标链上配置转账计划。',
+    intentConfiguredAction: '转账计划已保存',
+    intentConfiguredDesc: '已经把钱包 intent 写入链上。共享 listener 仍由 operator 保持 armed，后续外部事件可直接触发执行。',
+    awaitingListenerArming: '转账计划已保存，正在等待共享 listener 进入 armed 状态...',
+    listenerArmedForIntent: '转账计划已保存。共享 listener 已 armed，后续外部事件可以直接触发执行。',
     intentPausedAction: '转账计划已暂停',
     intentPausedDesc: '目标链钱包的自动执行已暂停。',
     intentResumedAction: '转账计划已恢复',
@@ -501,6 +540,8 @@ const messages = {
     reactiveListenerPausedDesc: 'Reactive 监听订阅集已暂停。',
     reactiveListenerResumedAction: 'Reactive 监听已恢复',
     reactiveListenerResumedDesc: 'Reactive 监听订阅集已恢复。',
+    reactiveListenerArmedAction: 'Reactive 监听已 armed',
+    reactiveListenerArmedDesc: '保存转账计划后，已重新让共享 listener 进入可工作状态，后续外部事件可直接触发回调。',
     autonomousWalletCreatedAction: '自主钱包已就绪',
     autonomousWalletCreatedDesc: '已经为当前 owner 创建或恢复对应的自主钱包。',
     walletAddressMissing: '还没有配置 VITE_WALLET_ADDRESS',
@@ -579,6 +620,25 @@ export function translateCreditLabel(value: string, locale: Locale) {
   if (value === 'Unknown') return copy.unknown
   if (value === 'Unavailable') return copy.unavailable
   return value
+}
+
+export function translateOperatorServiceStatus(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'online') return copy.online
+  if (value === 'offline') return copy.offline
+  return copy.unknown
+}
+
+export function translateAutomationReadiness(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'waiting_signal') return copy.waitingForSignal
+  if (value === 'arming_listener') return copy.armingListener
+  if (value === 'listener_paused') return copy.listenerPaused
+  if (value === 'listener_unarmed') return copy.listenerUnarmed
+  if (value === 'intent_paused') return copy.intentPausedReadiness
+  if (value === 'intent_inactive') return copy.intentInactiveReadiness
+  if (value === 'intent_exhausted') return copy.intentExhaustedReadiness
+  return copy.unavailable
 }
 
 export function translateDisplayValue(value: string, locale: Locale) {
