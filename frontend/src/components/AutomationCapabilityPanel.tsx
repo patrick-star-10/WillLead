@@ -4,6 +4,7 @@ import {
   translateCreditLabel,
   translateDisplayValue,
   translateOperatorServiceStatus,
+  translateSingleSignatureReadiness,
   translateSubscriptionStatus,
   useCopy
 } from '../lib/i18n'
@@ -22,7 +23,11 @@ type AutomationCapabilityPanelProps = {
   lastSyncedAt: string
   operatorServiceStatus: string
   operatorLastHeartbeat: string
+  operatorListenerBalance: string
+  operatorListenerDebt: string
+  operatorLastFundingResult: string
   automationReadiness: string
+  singleSignatureReadiness: string
   isPending: boolean
   walletAccessState: WalletAccessState
   onRefresh: () => void
@@ -69,6 +74,12 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
     : props.subscriptionStatus === 'missing'
       ? copy.subscriptionRepairNeeded
       : copy.subscriptionReady
+  const singleSignatureHelper =
+    props.singleSignatureReadiness === 'ready'
+      ? copy.singleSignatureReadyNote
+      : props.singleSignatureReadiness === 'requires_operator'
+        ? copy.singleSignatureRequiresOperatorNote
+        : copy.connectWalletToLoadRuntime
 
   return (
     <article className="panel automation-panel">
@@ -86,6 +97,10 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           <p className="wallet-balance">{translateDisplayValue(props.availableBalance, locale)}</p>
         </div>
         <div className="identity-stack">
+          <div className="identity-chip">
+            <span>{copy.singleSignatureMode}</span>
+            <strong>{translateSingleSignatureReadiness(props.singleSignatureReadiness, locale)}</strong>
+          </div>
           <div className="identity-chip">
             <span>{copy.health}</span>
             <strong>{translateCreditLabel(props.creditLabel, locale)}</strong>
@@ -121,9 +136,21 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           </small>
         </div>
         <div className="metric-tile">
+          <span>{copy.listenerRuntimeBalance}</span>
+          <strong>{translateDisplayValue(props.operatorListenerBalance, locale)}</strong>
+          <small>{copy.listenerRuntimeHealthyNote}</small>
+        </div>
+        <div className="metric-tile">
+          <span>{copy.listenerRuntimeDebt}</span>
+          <strong>{translateDisplayValue(props.operatorListenerDebt, locale)}</strong>
+          <small>
+            {copy.lastFundingAction} {translateDisplayValue(props.operatorLastFundingResult, locale)}
+          </small>
+        </div>
+        <div className="metric-tile">
           <span>{copy.automationReadinessLabel}</span>
           <strong>{translateAutomationReadiness(props.automationReadiness, locale)}</strong>
-          <small>{listenerHelperLabel}</small>
+          <small>{singleSignatureHelper}</small>
         </div>
       </div>
 

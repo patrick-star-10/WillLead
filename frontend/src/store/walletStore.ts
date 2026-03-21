@@ -46,6 +46,7 @@ type WillLeadStore = {
   disconnectWallet: () => Promise<void>
   createAutonomousWallet: () => Promise<void>
   refreshChainState: () => Promise<void>
+  backgroundRefreshChainState: () => Promise<void>
   submitIntent: (values: IntentFormValues) => Promise<void>
   fundAutomation: (values: AutomationFundingValues) => Promise<void>
   fundWallet: (values: WalletFundingValues) => Promise<void>
@@ -86,7 +87,11 @@ const initialWalletState: WalletState = {
   subscriptionTopic0: 'Unavailable',
   operatorServiceStatus: 'unknown',
   operatorLastHeartbeat: 'Never',
-  automationReadiness: 'unavailable'
+  operatorListenerBalance: 'Unavailable',
+  operatorListenerDebt: 'Unavailable',
+  operatorLastFundingResult: 'Unknown',
+  automationReadiness: 'unavailable',
+  singleSignatureReadiness: 'unavailable'
 }
 
 const initialIntentState: IntentState = {
@@ -157,7 +162,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       const restored = await restoreOwnerWallet()
       const snapshot = await readWalletState(
         restored?.address ?? null,
-        restored?.source ?? 'disconnected'
+        restored?.source ?? 'disconnected',
+        restored ? 'core' : 'full'
       )
 
       set({
@@ -168,6 +174,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
           : copy().readyToConnectWallet,
         errorMessage: null
       })
+
+      if (restored?.address) {
+        void hydrateDetailedSnapshot(set, restored.address, restored.source)
+      }
     } catch (error) {
       set({
         isPending: false,
@@ -181,7 +191,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
     try {
       const result = await connectOwnerWallet(providerId)
-      const snapshot = await readWalletState(result.address, result.source)
+      const snapshot = await readWalletState(result.address, result.source, 'core')
 
       set({
         ...snapshot,
@@ -196,6 +206,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         ),
         errorMessage: null
       })
+
+      void hydrateDetailedSnapshot(set, result.address, result.source)
     } catch (error) {
       set({
         isPending: false,
@@ -210,7 +222,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
     try {
       const result = await createOwnerWebWallet()
-      const snapshot = await readWalletState(result.address, result.source)
+      const snapshot = await readWalletState(result.address, result.source, 'core')
 
       set({
         ...snapshot,
@@ -218,6 +230,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         statusMessage: statusMessageForSnapshot(snapshot, `${copy().createdWebWallet} ${result.address}`),
         errorMessage: null
       })
+
+      void hydrateDetailedSnapshot(set, result.address, result.source)
 
       return result.mnemonic ?? ''
     } catch (error) {
@@ -234,7 +248,7 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
     try {
       const result = await importOwnerWebWallet(mnemonic)
-      const snapshot = await readWalletState(result.address, result.source)
+      const snapshot = await readWalletState(result.address, result.source, 'core')
 
       set({
         ...snapshot,
@@ -242,6 +256,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         statusMessage: statusMessageForSnapshot(snapshot, `${copy().importedWebWallet} ${result.address}`),
         errorMessage: null
       })
+
+      void hydrateDetailedSnapshot(set, result.address, result.source)
     } catch (error) {
       set({
         isPending: false,
@@ -313,18 +329,49 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
     }
   },
+  backgroundRefreshChainState: async () => {
+    const initialState = get()
+    if (initialState.isPending || !initialState.wallet.ownerAddress) return
+
+    try {
+      const snapshot = await readWalletState(
+        initialState.wallet.ownerAddress,
+        initialState.wallet.connectionSource
+      )
+
+      set((state) => {
+        if (state.isPending || state.wallet.ownerAddress !== initialState.wallet.ownerAddress) {
+          return {}
+        }
+
+        const settled =
+          snapshot.wallet.lastExecutionNonce > state.wallet.lastExecutionNonce ||
+          snapshot.intent.executedCount > state.intent.executedCount ||
+          snapshot.wallet.balanceLabel !== state.wallet.balanceLabel
+
+        return {
+          ...snapshot,
+          isPending: false,
+          errorMessage: null,
+          statusMessage: settled ? copy().automationResultDetected : state.statusMessage
+        }
+      })
+    } catch {}
+  },
   submitIntent: async (values) => {
     set({ isPending: true, errorMessage: null, statusMessage: copy().submittingIntentTransaction })
 
     try {
       const action = await configureIntent(values)
       await applyPostAction(set, get, action)
-      try {
-        const listenerAction = await ensureReactiveListenerArmed()
-        if (listenerAction) {
-          await applyPostAction(set, get, listenerAction)
-        }
-      } catch {}
+      if (get().wallet.operatorServiceStatus !== 'online') {
+        try {
+          const listenerAction = await ensureReactiveListenerArmed()
+          if (listenerAction) {
+            await applyPostAction(set, get, listenerAction)
+          }
+        } catch {}
+      }
       void pollForListenerActivation(set, get)
     } catch (error) {
       set({
@@ -469,10 +516,43 @@ async function applyPostAction(
   get: () => WillLeadStore,
   action: ActionResult
 ) {
-  const snapshot = await readWalletState(get().wallet.ownerAddress, get().wallet.connectionSource)
+  const ownerAddress = get().wallet.ownerAddress
+  const connectionSource = get().wallet.connectionSource
+  const snapshot = await readWalletState(ownerAddress, connectionSource, 'core')
 
   set((state) => ({
     ...snapshot,
+    wallet: {
+      ...snapshot.wallet,
+      signalEmitterAddress:
+        snapshot.wallet.signalEmitterAddress === '0x0000000000000000000000000000000000000000'
+          ? state.wallet.signalEmitterAddress
+          : snapshot.wallet.signalEmitterAddress,
+      canManageListener: state.wallet.canManageListener,
+      listenerPaused: state.wallet.listenerPaused,
+      callbackGasLimit: state.wallet.callbackGasLimit,
+      subscriptionStatus: state.wallet.subscriptionStatus,
+      subscriptionOriginChainId: state.wallet.subscriptionOriginChainId,
+      subscriptionDestinationChainId: state.wallet.subscriptionDestinationChainId,
+      subscriptionTopic0: state.wallet.subscriptionTopic0,
+      operatorServiceStatus: state.wallet.operatorServiceStatus,
+      operatorLastHeartbeat: state.wallet.operatorLastHeartbeat,
+      operatorListenerBalance: state.wallet.operatorListenerBalance,
+      operatorListenerDebt: state.wallet.operatorListenerDebt,
+      operatorLastFundingResult: state.wallet.operatorLastFundingResult,
+      automationReadiness:
+        snapshot.wallet.runtimeStatus === 'active'
+          ? state.wallet.operatorServiceStatus === 'online'
+            ? 'waiting_signal'
+            : state.wallet.automationReadiness
+          : snapshot.wallet.automationReadiness,
+      singleSignatureReadiness:
+        snapshot.wallet.runtimeStatus === 'active'
+          ? state.wallet.operatorServiceStatus === 'online'
+            ? 'ready'
+            : state.wallet.singleSignatureReadiness
+          : snapshot.wallet.singleSignatureReadiness
+    },
     isPending: false,
     statusMessage: `${action.label}: ${action.hash}`,
     errorMessage: null,
@@ -499,6 +579,40 @@ async function applyPostAction(
       ...state.executionProofs.filter((proof) => proof.reference !== action.hash)
     ]
   }))
+
+  if (ownerAddress) {
+    void hydrateDetailedSnapshot(set, ownerAddress, connectionSource)
+  }
+}
+
+async function hydrateDetailedSnapshot(
+  set: (partial:
+    | Partial<WillLeadStore>
+    | ((state: WillLeadStore) => Partial<WillLeadStore>)
+  ) => void,
+  ownerAddress: string,
+  connectionSource: WalletState['connectionSource']
+) {
+  try {
+    const snapshot = await readWalletState(ownerAddress, connectionSource, 'full')
+
+    set((state) => {
+      if (
+        state.isPending ||
+        state.wallet.ownerAddress !== ownerAddress ||
+        state.wallet.connectionSource !== connectionSource
+      ) {
+        return {}
+      }
+
+      return {
+        ...snapshot,
+        isPending: false,
+        errorMessage: null,
+        statusMessage: state.statusMessage
+      }
+    })
+  } catch {}
 }
 
 async function pollForSignalOutcome(

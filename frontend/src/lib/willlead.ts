@@ -11,7 +11,6 @@ import {
 
 import { callbackProxyAbi } from '../contracts/abi/callbackProxy'
 import { willLeadReactiveListenerAbi } from '../contracts/abi/willLeadReactiveListener'
-import { willLeadSignalEmitterAbi } from '../contracts/abi/willLeadSignalEmitter'
 import { willLeadWalletFactoryAbi } from '../contracts/abi/willLeadWalletFactory'
 import { willLeadWalletAbi } from '../contracts/abi/willLeadWallet'
 import { contractAddresses } from '../contracts/addresses'
@@ -26,6 +25,7 @@ import type {
   IntentState,
   WalletFundingValues,
   OperatorServiceStatus,
+  SingleSignatureReadiness,
   WalletAccessState,
   WalletConnectResult,
   WalletConnectionSource,
@@ -37,12 +37,11 @@ import {
   getDestinationWalletClient,
   getInjectedWalletOptions,
   getOriginPublicClient,
-  getOriginWalletClient,
   getReactivePublicClient,
   getReactiveWalletClient,
   requestWalletAddress
 } from './clients'
-import { destinationChain, originChain, reactiveChain } from './chains'
+import { destinationChain, reactiveChain } from './chains'
 import { txExplorerLink } from './explorers'
 import { getMessages, useLanguageStore } from './i18n'
 import {
@@ -155,18 +154,11 @@ function copy() {
   return getMessages(useLanguageStore.getState().locale)
 }
 
-function formatRpcChainMismatch(label: string, expectedName: string, expectedId: number, actualId: number) {
-  return copy().rpcChainMismatch
-    .replace('{label}', label)
-    .replace('{expectedName}', expectedName)
-    .replace('{expectedId}', String(expectedId))
-    .replace('{actualId}', String(actualId))
-}
-
 export async function connectOwnerWallet(providerId: string) {
   const { address, providerId: connectedProviderId, providerLabel } = await requestWalletAddress(
     providerId
   )
+  await getDestinationWalletClient()
   return {
     address,
     source: 'browser',
@@ -212,6 +204,19 @@ type BoundWalletBindingContext = Omit<WalletBindingContext, 'walletAddress'> & {
 type OperatorRuntime = {
   serviceStatus: OperatorServiceStatus
   lastHeartbeat: string
+  listenerBalance: string
+  listenerDebt: string
+  lastFundingResult: string
+  apiUrl: string | null
+}
+
+const unknownOperatorRuntime: OperatorRuntime = {
+  serviceStatus: 'unknown',
+  lastHeartbeat: 'Never',
+  listenerBalance: 'Unavailable',
+  listenerDebt: 'Unavailable',
+  lastFundingResult: 'Unknown',
+  apiUrl: null
 }
 
 async function resolveWalletBinding(ownerAddress: string | null): Promise<WalletBindingContext> {
@@ -344,7 +349,11 @@ function buildUnboundSnapshot(params: {
       subscriptionTopic0: 'Unavailable',
       operatorServiceStatus: 'unknown' as const,
       operatorLastHeartbeat: 'Never',
-      automationReadiness: 'unavailable' as const
+      operatorListenerBalance: 'Unavailable',
+      operatorListenerDebt: 'Unavailable',
+      operatorLastFundingResult: 'Unknown',
+      automationReadiness: 'unavailable' as const,
+      singleSignatureReadiness: 'unavailable' as const
     },
     intent: {
       token: 'native',
@@ -371,10 +380,7 @@ function buildUnboundSnapshot(params: {
 
 async function readOperatorRuntime(): Promise<OperatorRuntime> {
   if (typeof window === 'undefined') {
-    return {
-      serviceStatus: 'unknown',
-      lastHeartbeat: 'Never'
-    }
+    return unknownOperatorRuntime
   }
 
   try {
@@ -385,15 +391,30 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
     if (!response.ok) {
       return {
         serviceStatus: 'offline',
-        lastHeartbeat: 'Never'
+        lastHeartbeat: 'Never',
+        listenerBalance: 'Unavailable',
+        listenerDebt: 'Unavailable',
+        lastFundingResult: 'Unknown',
+        apiUrl: null
       }
     }
 
-    const payload = await response.json() as { heartbeatAt?: string; serviceStatus?: string }
+    const payload = await response.json() as {
+      heartbeatAt?: string
+      serviceStatus?: string
+      listenerBalanceWei?: string
+      listenerDebtWei?: string
+      lastFundingResult?: string
+      apiUrl?: string
+    }
     if (!payload.heartbeatAt) {
       return {
         serviceStatus: 'unknown',
-        lastHeartbeat: 'Never'
+        lastHeartbeat: 'Never',
+        listenerBalance: 'Unavailable',
+        listenerDebt: 'Unavailable',
+        lastFundingResult: 'Unknown',
+        apiUrl: null
       }
     }
 
@@ -411,12 +432,22 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
         minute: '2-digit',
         second: '2-digit',
         timeZoneName: 'short'
-      })
+      }),
+      listenerBalance: payload.listenerBalanceWei
+        ? formatAmount(BigInt(payload.listenerBalanceWei))
+        : 'Unavailable',
+      listenerDebt: payload.listenerDebtWei ? formatAmount(BigInt(payload.listenerDebtWei)) : 'Unavailable',
+      lastFundingResult: payload.lastFundingResult ?? 'Unknown',
+      apiUrl: payload.apiUrl ?? null
     }
   } catch {
     return {
       serviceStatus: 'offline',
-      lastHeartbeat: 'Never'
+      lastHeartbeat: 'Never',
+      listenerBalance: 'Unavailable',
+      listenerDebt: 'Unavailable',
+      lastFundingResult: 'Unknown',
+      apiUrl: null
     }
   }
 }
@@ -435,9 +466,19 @@ function computeAutomationReadiness(params: {
   return 'waiting_signal'
 }
 
+function computeSingleSignatureReadiness(params: {
+  operatorServiceStatus: WalletState['operatorServiceStatus']
+  automationReadiness: AutomationReadiness
+}): SingleSignatureReadiness {
+  if (params.automationReadiness === 'unavailable') return 'unavailable'
+  if (params.operatorServiceStatus !== 'online') return 'requires_operator'
+  return 'ready'
+}
+
 export async function readWalletState(
   ownerAddress: string | null,
-  connectionSource: WalletConnectionSource = 'disconnected'
+  connectionSource: WalletConnectionSource = 'disconnected',
+  detailLevel: 'core' | 'full' = 'full'
 ): Promise<{
   wallet: WalletState
   intent: IntentState
@@ -445,13 +486,15 @@ export async function readWalletState(
   executionProofs: ExecutionProof[]
 }> {
   const destinationClient = getDestinationPublicClient()
-  const originClient = getOriginPublicClient()
-  const reactiveClient = getReactivePublicClient()
+  const originClient = detailLevel === 'full' ? getOriginPublicClient() : null
+  const reactiveClient = detailLevel === 'full' ? getReactivePublicClient() : null
   const operatorRuntime = await readOperatorRuntime()
-  const connectedBalance =
-    destinationClient && ownerAddress !== null
-      ? await destinationClient.getBalance({ address: getAddress(ownerAddress) })
-      : 0n
+  let connectedBalance = 0n
+  if (destinationClient && ownerAddress !== null) {
+    try {
+      connectedBalance = await destinationClient.getBalance({ address: getAddress(ownerAddress) })
+    } catch {}
+  }
   const connectedBalanceLabel = ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable'
   const connectedAssetBalances =
     ownerAddress !== null
@@ -474,127 +517,200 @@ export async function readWalletState(
     })
   }
 
-  const binding = await resolveWalletBinding(ownerAddress)
-  const walletAddress = binding.walletAddress
-  const reactiveListenerAddress = binding.listenerAddress
+  try {
+    const binding = await resolveWalletBinding(ownerAddress)
+    const walletAddress = binding.walletAddress
+    const reactiveListenerAddress = binding.listenerAddress
 
-  if (!walletAddress || !reactiveListenerAddress || ownerAddress === null) {
-    return buildUnboundSnapshot({
-      ownerAddress,
-      connectionSource,
-      connectedBalanceLabel,
-      connectedAssetBalances,
-      walletAccessState:
-        ownerAddress === null
-          ? 'needs_connection'
-          : binding.source === 'factory'
-            ? 'needs_wallet'
-            : 'unavailable'
-    })
-  }
-
-  const configuredWalletOwner = await destinationClient.readContract({
-    address: walletAddress,
-    abi: willLeadWalletAbi,
-    functionName: 'owner'
-  }) as Address
-
-  if (!isSameAddress(configuredWalletOwner, ownerAddress)) {
-    return buildUnboundSnapshot({
-      ownerAddress,
-      connectionSource,
-      connectedBalanceLabel,
-      connectedAssetBalances,
-      walletAccessState: 'mismatch'
-    })
-  }
-
-  const [summary, balance, lastExecutionNonce, lastExecutedAt, lastSignalHash] = await Promise.all([
-    destinationClient.readContract({
-      address: walletAddress,
-      abi: willLeadWalletAbi,
-      functionName: 'getIntentSummary'
-    }) as Promise<readonly [number, Address, Address, bigint, bigint, bigint, bigint]>,
-    destinationClient.getBalance({ address: walletAddress }),
-    destinationClient.readContract({
-      address: walletAddress,
-      abi: willLeadWalletAbi,
-      functionName: 'lastExecutionNonce'
-    }) as Promise<bigint>,
-    destinationClient.readContract({
-      address: walletAddress,
-      abi: willLeadWalletAbi,
-      functionName: 'lastExecutedAt'
-    }) as Promise<bigint>,
-    destinationClient.readContract({
-      address: walletAddress,
-      abi: willLeadWalletAbi,
-      functionName: 'lastSignalHash'
-    }) as Promise<Hex>
-  ])
-
-  const [status, token, recipient, amountPerExecution, maxExecutions, executedCount, automationFloor] =
-    summary
-  const listenerState = await readReactiveListenerState(reactiveListenerAddress)
-  const assetBalances = await readTrackedAssets(destinationClient, walletAddress, balance, token)
-
-  const automation = await readAutomationCredit(walletAddress, automationFloor)
-  const proofs = await readExecutionProofs(
-    walletAddress,
-    reactiveListenerAddress,
-    listenerState.signalEmitter,
-    originClient,
-    reactiveClient,
-    destinationClient
-  )
-
-  return {
-    wallet: {
-      contractAddress: walletAddress,
-      listenerAddress: reactiveListenerAddress,
-      signalEmitterAddress: listenerState.signalEmitter,
-      ownerAddress,
-      connectionSource,
-      connectionLabel: formatConnectionLabel(connectionSource),
-      balanceContextLabel: 'Autonomous wallet contract balance',
-      balanceLabel: formatAmount(balance),
-      assetBalances,
-      connectedBalanceLabel,
-      connectedAssetBalances,
-      walletAccessState: 'bound',
-      runtimeStatus: formatRuntimeStatus(status),
-      isConnected: ownerAddress !== null,
-      lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
-      lastExecutionNonce: Number(lastExecutionNonce),
-      lastExecutedAt: formatTimestamp(lastExecutedAt),
-      lastSignalHash,
-      destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
-      canManageListener: listenerState.canManageListener(ownerAddress),
-      listenerPaused: listenerState.listenerPaused,
-      callbackGasLimit: listenerState.callbackGasLimit,
-      subscriptionStatus: listenerState.subscriptionStatus,
-      subscriptionOriginChainId: listenerState.originChainId,
-      subscriptionDestinationChainId: listenerState.destinationChainId,
-      subscriptionTopic0: listenerState.strategySignalTopic0,
-      operatorServiceStatus: operatorRuntime.serviceStatus,
-      operatorLastHeartbeat: operatorRuntime.lastHeartbeat,
-      automationReadiness: computeAutomationReadiness({
-        runtimeStatus: formatRuntimeStatus(status),
-        listenerPaused: listenerState.listenerPaused,
-        subscriptionStatus: listenerState.subscriptionStatus
+    if (!walletAddress || !reactiveListenerAddress || ownerAddress === null) {
+      return buildUnboundSnapshot({
+        ownerAddress,
+        connectionSource,
+        connectedBalanceLabel,
+        connectedAssetBalances,
+        walletAccessState:
+          ownerAddress === null
+            ? 'needs_connection'
+            : binding.source === 'factory'
+              ? 'needs_wallet'
+              : 'unavailable'
       })
-    },
-    intent: {
-      token: token === zeroAddress ? 'native' : token,
-      recipient,
-      amountPerExecution: formatEther(amountPerExecution),
-      maxExecutions: Number(maxExecutions),
-      executedCount: Number(executedCount),
-      minAutomationBalance: formatEther(automationFloor),
-      enabled: status === 1
-    },
-    automation,
-    executionProofs: proofs
+    }
+
+    const configuredWalletOwner = await destinationClient.readContract({
+      address: walletAddress,
+      abi: willLeadWalletAbi,
+      functionName: 'owner'
+    }) as Address
+
+    if (!isSameAddress(configuredWalletOwner, ownerAddress)) {
+      return buildUnboundSnapshot({
+        ownerAddress,
+        connectionSource,
+        connectedBalanceLabel,
+        connectedAssetBalances,
+        walletAccessState: 'mismatch'
+      })
+    }
+
+    const [summary, balance, lastExecutionNonce, lastExecutedAt, lastSignalHash] = await Promise.all([
+      destinationClient.readContract({
+        address: walletAddress,
+        abi: willLeadWalletAbi,
+        functionName: 'getIntentSummary'
+      }) as Promise<readonly [number, Address, Address, bigint, bigint, bigint, bigint]>,
+      destinationClient.getBalance({ address: walletAddress }),
+      destinationClient.readContract({
+        address: walletAddress,
+        abi: willLeadWalletAbi,
+        functionName: 'lastExecutionNonce'
+      }) as Promise<bigint>,
+      destinationClient.readContract({
+        address: walletAddress,
+        abi: willLeadWalletAbi,
+        functionName: 'lastExecutedAt'
+      }) as Promise<bigint>,
+      destinationClient.readContract({
+        address: walletAddress,
+        abi: willLeadWalletAbi,
+        functionName: 'lastSignalHash'
+      }) as Promise<Hex>
+    ])
+
+    const [status, token, recipient, amountPerExecution, maxExecutions, executedCount, automationFloor] =
+      summary
+    const assetBalances = await readTrackedAssets(destinationClient, walletAddress, balance, token)
+    const runtimeStatus = formatRuntimeStatus(status)
+    if (detailLevel === 'core') {
+      return {
+        wallet: {
+          contractAddress: walletAddress,
+          listenerAddress: reactiveListenerAddress,
+          signalEmitterAddress: binding.signalEmitterAddress ?? emptyAddress,
+          ownerAddress,
+          connectionSource,
+          connectionLabel: formatConnectionLabel(connectionSource),
+          balanceContextLabel: 'Autonomous wallet contract balance',
+          balanceLabel: formatAmount(balance),
+          assetBalances,
+          connectedBalanceLabel,
+          connectedAssetBalances,
+          walletAccessState: 'bound',
+          runtimeStatus,
+          isConnected: ownerAddress !== null,
+          lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
+          lastExecutionNonce: Number(lastExecutionNonce),
+          lastExecutedAt: formatTimestamp(lastExecutedAt),
+          lastSignalHash,
+          destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
+          canManageListener: false,
+          listenerPaused: null,
+          callbackGasLimit: 'Unavailable',
+          subscriptionStatus: 'unavailable',
+          subscriptionOriginChainId: 'Unavailable',
+          subscriptionDestinationChainId: 'Unavailable',
+          subscriptionTopic0: 'Unavailable',
+          operatorServiceStatus: operatorRuntime.serviceStatus,
+          operatorLastHeartbeat: operatorRuntime.lastHeartbeat,
+          operatorListenerBalance: operatorRuntime.listenerBalance,
+          operatorListenerDebt: operatorRuntime.listenerDebt,
+          operatorLastFundingResult: operatorRuntime.lastFundingResult,
+          automationReadiness: 'unavailable',
+          singleSignatureReadiness: 'unavailable'
+        },
+        intent: {
+          token: token === zeroAddress ? 'native' : token,
+          recipient,
+          amountPerExecution: formatEther(amountPerExecution),
+          maxExecutions: Number(maxExecutions),
+          executedCount: Number(executedCount),
+          minAutomationBalance: formatEther(automationFloor),
+          enabled: status === 1
+        },
+        automation: {
+          creditLabel: 'Unknown',
+          availableBalance: 'Unknown',
+          minRequiredBalance: formatAmount(automationFloor)
+        },
+        executionProofs: []
+      }
+    }
+
+    const listenerState = await readReactiveListenerState(reactiveListenerAddress)
+    const automation = await readAutomationCredit(walletAddress, automationFloor)
+    const proofs = await readExecutionProofs(
+      walletAddress,
+      reactiveListenerAddress,
+      listenerState.signalEmitter,
+      originClient,
+      reactiveClient,
+      destinationClient
+    )
+    const automationReadiness = computeAutomationReadiness({
+      runtimeStatus,
+      listenerPaused: listenerState.listenerPaused,
+      subscriptionStatus: listenerState.subscriptionStatus
+    })
+
+    return {
+      wallet: {
+        contractAddress: walletAddress,
+        listenerAddress: reactiveListenerAddress,
+        signalEmitterAddress: listenerState.signalEmitter,
+        ownerAddress,
+        connectionSource,
+        connectionLabel: formatConnectionLabel(connectionSource),
+        balanceContextLabel: 'Autonomous wallet contract balance',
+        balanceLabel: formatAmount(balance),
+        assetBalances,
+        connectedBalanceLabel,
+        connectedAssetBalances,
+        walletAccessState: 'bound',
+        runtimeStatus,
+        isConnected: ownerAddress !== null,
+        lastSyncedAt: formatTimestamp(BigInt(Math.floor(Date.now() / 1000))),
+        lastExecutionNonce: Number(lastExecutionNonce),
+        lastExecutedAt: formatTimestamp(lastExecutedAt),
+        lastSignalHash,
+        destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
+        canManageListener: listenerState.canManageListener(ownerAddress),
+        listenerPaused: listenerState.listenerPaused,
+        callbackGasLimit: listenerState.callbackGasLimit,
+        subscriptionStatus: listenerState.subscriptionStatus,
+        subscriptionOriginChainId: listenerState.originChainId,
+        subscriptionDestinationChainId: listenerState.destinationChainId,
+        subscriptionTopic0: listenerState.strategySignalTopic0,
+        operatorServiceStatus: operatorRuntime.serviceStatus,
+        operatorLastHeartbeat: operatorRuntime.lastHeartbeat,
+        operatorListenerBalance: operatorRuntime.listenerBalance,
+        operatorListenerDebt: operatorRuntime.listenerDebt,
+        operatorLastFundingResult: operatorRuntime.lastFundingResult,
+        automationReadiness,
+        singleSignatureReadiness: computeSingleSignatureReadiness({
+          operatorServiceStatus: operatorRuntime.serviceStatus,
+          automationReadiness
+        })
+      },
+      intent: {
+        token: token === zeroAddress ? 'native' : token,
+        recipient,
+        amountPerExecution: formatEther(amountPerExecution),
+        maxExecutions: Number(maxExecutions),
+        executedCount: Number(executedCount),
+        minAutomationBalance: formatEther(automationFloor),
+        enabled: status === 1
+      },
+      automation,
+      executionProofs: proofs
+    }
+  } catch {
+    return buildUnboundSnapshot({
+      ownerAddress,
+      connectionSource,
+      connectedBalanceLabel,
+      connectedAssetBalances,
+      walletAccessState: 'unavailable'
+    })
   }
 }
 
@@ -658,119 +774,125 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
   }
 
   const reactiveClient = getReactivePublicClient()
+  const unavailableRuntime = {
+    listenerPaused: null,
+    callbackGasLimit: '1000000',
+    signalEmitter: emptyAddress as Address,
+    ownerAddress: emptyAddress as Address,
+    originChainId: 'Unavailable',
+    destinationChainId: 'Unavailable',
+    strategySignalTopic0: 'Unavailable',
+    subscriptionStatus: 'unavailable' as const,
+    canManageListener: (_ownerAddress: string | null) => false
+  } satisfies ListenerRuntime
+
   if (!reactiveClient || !isConfiguredAddress(reactiveListenerAddress)) {
-    return {
-      listenerPaused: null,
-      callbackGasLimit: '1000000',
-      signalEmitter: emptyAddress as Address,
-      ownerAddress: emptyAddress as Address,
-      originChainId: 'Unavailable',
-      destinationChainId: 'Unavailable',
-      strategySignalTopic0: 'Unavailable',
-      subscriptionStatus: 'unavailable' as const,
-      canManageListener: (_ownerAddress: string | null) => false
-    } satisfies ListenerRuntime
+    return unavailableRuntime
   }
-
-  const [
-    listenerPaused,
-    callbackGasLimit,
-    signalEmitter,
-    listenerOwnerAddress,
-    originChainId,
-    destinationChainId,
-    strategySignalTopic0
-  ] = await Promise.all([
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'isPaused'
-    }) as Promise<boolean>,
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'callbackGasLimit'
-    }) as Promise<bigint>,
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'signalEmitter'
-    }) as Promise<Address>,
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'ownerAddress'
-    }) as Promise<Address>,
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'originChainId'
-    }) as Promise<bigint>,
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'destinationChainId'
-    }) as Promise<bigint>,
-    reactiveClient.readContract({
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      functionName: 'strategySignalTopic0'
-    }) as Promise<bigint>
-  ])
-
-  let subscriptionStatus: 'armed' | 'missing' | 'unavailable' = 'missing'
 
   try {
-    const logs = await reactiveClient.request({
-      method: 'eth_getLogs',
-      params: [
-        {
-          address: reactiveSystemContract as Hex,
-          fromBlock: '0x0',
-          topics: [
-            subscribeContractTopic0,
-            formatAddressTopic(reactiveListenerAddress),
-            formatUint256Topic(originChainId),
-            formatAddressTopic(signalEmitter)
-          ] as [Hex, Hex, Hex, Hex]
-        }
-      ]
-    })
+    const [
+      listenerPaused,
+      callbackGasLimit,
+      signalEmitter,
+      listenerOwnerAddress,
+      originChainId,
+      destinationChainId,
+      strategySignalTopic0
+    ] = await Promise.all([
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'isPaused'
+      }) as Promise<boolean>,
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'callbackGasLimit'
+      }) as Promise<bigint>,
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'signalEmitter'
+      }) as Promise<Address>,
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'ownerAddress'
+      }) as Promise<Address>,
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'originChainId'
+      }) as Promise<bigint>,
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'destinationChainId'
+      }) as Promise<bigint>,
+      reactiveClient.readContract({
+        address: reactiveListenerAddress,
+        abi: willLeadReactiveListenerAbi,
+        functionName: 'strategySignalTopic0'
+      }) as Promise<bigint>
+    ])
 
-    const expectedStrategySignalTopic0 = strategySignalTopic0
-      .toString(16)
-      .padStart(64, '0')
-      .toLowerCase()
-    const expectedAuthorizedRvmId = contractAddresses.authorizedRvmId
-      .toLowerCase()
-      .replace('0x', '')
-      .padStart(40, '0')
+    let subscriptionStatus: 'armed' | 'missing' | 'unavailable' = 'missing'
 
-    const matchingLogs = (logs as Array<{ data?: string }>).filter((entry) => {
-      const data = entry.data?.toLowerCase() ?? ''
-      return (
-        data.slice(2, 66) === expectedStrategySignalTopic0 &&
-        data.slice(282, 322) === expectedAuthorizedRvmId
-      )
-    })
+    try {
+      const logs = await reactiveClient.request({
+        method: 'eth_getLogs',
+        params: [
+          {
+            address: reactiveSystemContract as Hex,
+            fromBlock: '0x0',
+            topics: [
+              subscribeContractTopic0,
+              formatAddressTopic(reactiveListenerAddress),
+              formatUint256Topic(originChainId),
+              formatAddressTopic(signalEmitter)
+            ] as [Hex, Hex, Hex, Hex]
+          }
+        ]
+      })
 
-    subscriptionStatus = matchingLogs.length > 0 ? 'armed' : 'missing'
+      const expectedStrategySignalTopic0 = strategySignalTopic0
+        .toString(16)
+        .padStart(64, '0')
+        .toLowerCase()
+      const expectedAuthorizedRvmId = contractAddresses.authorizedRvmId
+        .toLowerCase()
+        .replace('0x', '')
+        .padStart(40, '0')
+
+      const matchingLogs = (logs as Array<{ data?: string }>).filter((entry) => {
+        const data = entry.data?.toLowerCase() ?? ''
+        return (
+          data.slice(2, 66) === expectedStrategySignalTopic0 &&
+          data.slice(282, 322) === expectedAuthorizedRvmId
+        )
+      })
+
+      subscriptionStatus = matchingLogs.length > 0 ? 'armed' : 'missing'
+    } catch {
+      subscriptionStatus = 'unavailable'
+    }
+
+    return {
+      listenerPaused,
+      callbackGasLimit: callbackGasLimit.toString(),
+      signalEmitter,
+      ownerAddress: listenerOwnerAddress,
+      originChainId: originChainId.toString(),
+      destinationChainId: destinationChainId.toString(),
+      strategySignalTopic0: `0x${strategySignalTopic0.toString(16)}`,
+      subscriptionStatus,
+      canManageListener: (ownerAddress: string | null) =>
+        ownerAddress !== null && isSameAddress(listenerOwnerAddress, ownerAddress)
+    } satisfies ListenerRuntime
   } catch {
-    subscriptionStatus = 'unavailable'
+    return unavailableRuntime
   }
-
-  return {
-    listenerPaused,
-    callbackGasLimit: callbackGasLimit.toString(),
-    signalEmitter,
-    ownerAddress: listenerOwnerAddress,
-    originChainId: originChainId.toString(),
-    destinationChainId: destinationChainId.toString(),
-    strategySignalTopic0: `0x${strategySignalTopic0.toString(16)}`,
-    subscriptionStatus,
-    canManageListener: (ownerAddress: string | null) =>
-      ownerAddress !== null && isSameAddress(listenerOwnerAddress, ownerAddress)
-  } satisfies ListenerRuntime
 }
 
 async function readAutomationCredit(
@@ -788,28 +910,36 @@ async function readAutomationCredit(
   }
 
   const callbackProxy = getAddress(contractAddresses.callbackProxy)
-  const [reserves, debts] = await Promise.all([
-    destinationClient.readContract({
-      address: callbackProxy,
-      abi: callbackProxyAbi,
-      functionName: 'reserves',
-      args: [walletAddress]
-    }) as Promise<bigint>,
-    destinationClient.readContract({
-      address: callbackProxy,
-      abi: callbackProxyAbi,
-      functionName: 'debts',
-      args: [walletAddress]
-    }) as Promise<bigint>
-  ])
+  try {
+    const [reserves, debts] = await Promise.all([
+      destinationClient.readContract({
+        address: callbackProxy,
+        abi: callbackProxyAbi,
+        functionName: 'reserves',
+        args: [walletAddress]
+      }) as Promise<bigint>,
+      destinationClient.readContract({
+        address: callbackProxy,
+        abi: callbackProxyAbi,
+        functionName: 'debts',
+        args: [walletAddress]
+      }) as Promise<bigint>
+    ])
 
-  const net = reserves > debts ? reserves - debts : 0n
-  const creditLabel = net >= automationFloor ? 'Healthy' : 'Low'
+    const net = reserves > debts ? reserves - debts : 0n
+    const creditLabel = net >= automationFloor ? 'Healthy' : 'Low'
 
-  return {
-    creditLabel,
-    availableBalance: formatAmount(net),
-    minRequiredBalance: formatAmount(automationFloor)
+    return {
+      creditLabel,
+      availableBalance: formatAmount(net),
+      minRequiredBalance: formatAmount(automationFloor)
+    }
+  } catch {
+    return {
+      creditLabel: 'Unknown',
+      availableBalance: 'Unknown',
+      minRequiredBalance: formatAmount(automationFloor)
+    }
   }
 }
 
@@ -1093,43 +1223,35 @@ export async function resumeIntent(): Promise<ActionResult> {
   }
 }
 
-export async function emitSignal(values: {
+export async function emitSignal(_values: {
   token: string
   recipient: string
   amountPerExecution: string
   nextNonce: number
 }): Promise<ActionResult> {
-  const { account, client } = await getOriginWalletClient()
-  const { walletAddress, signalEmitterAddress } = await resolveWalletAddressForOwner(account)
-  if (!signalEmitterAddress || !isConfiguredAddress(signalEmitterAddress)) {
-    throw new Error(copy().signalEmitterOrWalletMissing)
+  const operatorRuntime = await readOperatorRuntime()
+  if (operatorRuntime.serviceStatus !== 'online' || !operatorRuntime.apiUrl) {
+    throw new Error(copy().operatorServiceRequiredForTestSignal)
   }
-  const token = toTokenAddress(values.token)
-  const recipient = getAddress(values.recipient)
-  const amount = parseEther(values.amountPerExecution)
 
-  const hash = await client.writeContract({
-    account,
-    address: signalEmitterAddress,
-    abi: willLeadSignalEmitterAbi,
-    chain: originChain,
-    functionName: 'emitSignal',
-    args: [walletAddress, token, recipient, amount, BigInt(values.nextNonce)]
+  const response = await fetch(`${operatorRuntime.apiUrl}/test-signal`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({})
   })
 
-  const originClient = getOriginPublicClient()
-  if (originClient) {
-    const actualChainId = await originClient.getChainId()
-    if (actualChainId !== originChain.id) {
-      throw new Error(
-        formatRpcChainMismatch('Origin RPC', originChain.name, originChain.id, actualChainId)
-      )
-    }
-    await originClient.waitForTransactionReceipt({ hash })
+  const payload = await response
+    .json()
+    .catch(() => ({ error: copy().failedEmitSourceSignal })) as { hash?: string; error?: string }
+
+  if (!response.ok || !payload.hash) {
+    throw new Error(payload.error || copy().failedEmitSourceSignal)
   }
 
   return {
-    hash,
+    hash: payload.hash,
     label: copy().sourceSignalEmittedAction,
     description: copy().sourceSignalEmittedDesc
   }

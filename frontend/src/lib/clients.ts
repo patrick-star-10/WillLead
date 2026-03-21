@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  fallback,
   getAddress,
   http,
   toHex,
@@ -18,6 +19,17 @@ import { getActiveWalletSource, getStoredWebWallet, setActiveWalletSource } from
 import type { InjectedWalletOption } from '../types/willlead'
 
 const activeInjectedProviderKey = 'willlead.active-injected-provider'
+const defaultEthereumSepoliaRpcUrls = [
+  'https://ethereum-sepolia-rpc.publicnode.com',
+  'https://rpc.sepolia.org',
+  'https://eth-sepolia.public.blastapi.io'
+]
+const defaultBaseSepoliaRpcUrls = [
+  'https://base-sepolia-rpc.publicnode.com',
+  'https://sepolia.base.org',
+  'https://base-sepolia.public.blastapi.io'
+]
+const defaultReactiveRpcUrls = ['https://lasna-rpc.rnk.dev/']
 
 type InjectedProvider = {
   isMetaMask?: boolean
@@ -45,6 +57,48 @@ function getActiveInjectedProviderId() {
 function clearActiveInjectedProviderId() {
   if (!canUseStorage()) return
   window.localStorage.removeItem(activeInjectedProviderKey)
+}
+
+function parseRpcUrls(value: string | undefined) {
+  if (!value) return []
+
+  return value
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function uniqueRpcUrls(urls: string[]) {
+  return [...new Set(urls)]
+}
+
+function defaultOriginRpcUrls() {
+  return originChain.id === 84532 ? defaultBaseSepoliaRpcUrls : defaultEthereumSepoliaRpcUrls
+}
+
+function resolveRpcUrls(configuredValue: string | undefined, fallbackUrls: string[]) {
+  return uniqueRpcUrls([...parseRpcUrls(configuredValue), ...fallbackUrls])
+}
+
+function createRpcTransport(urls: string[]) {
+  if (urls.length === 0) {
+    throw new Error('Missing RPC URL')
+  }
+
+  const transports = urls.map((url) =>
+    http(url, {
+      retryCount: 0,
+      timeout: 8_000
+    })
+  )
+
+  if (transports.length === 1) {
+    return transports[0]!
+  }
+
+  return fallback(transports, {
+    rank: false
+  })
 }
 
 function getInjectedProviders(): InjectedProvider[] {
@@ -109,41 +163,54 @@ export function disconnectBrowserWalletSession() {
 }
 
 export function getOriginPublicClient(): PublicClient | null {
-  const rpcUrl = import.meta.env.VITE_ORIGIN_RPC_URL
-  if (!rpcUrl) return null
+  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_ORIGIN_RPC_URL, defaultOriginRpcUrls())
+  if (rpcUrls.length === 0) return null
 
   return createPublicClient({
     batch: {
       multicall: true
     },
     chain: originChain,
-    transport: http(rpcUrl)
+    transport: createRpcTransport(rpcUrls)
   })
 }
 
 export function getDestinationPublicClient(): PublicClient | null {
-  const rpcUrl = import.meta.env.VITE_DESTINATION_RPC_URL
-  if (!rpcUrl) return null
+  if (getActiveWalletSource() === 'browser') {
+    try {
+      const provider = resolveInjectedProvider()
+      return createPublicClient({
+        batch: {
+          multicall: true
+        },
+        chain: destinationChain,
+        transport: custom(provider)
+      })
+    } catch {}
+  }
+
+  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_DESTINATION_RPC_URL, defaultEthereumSepoliaRpcUrls)
+  if (rpcUrls.length === 0) return null
 
   return createPublicClient({
     batch: {
       multicall: true
     },
     chain: destinationChain,
-    transport: http(rpcUrl)
+    transport: createRpcTransport(rpcUrls)
   })
 }
 
 export function getReactivePublicClient(): PublicClient | null {
-  const rpcUrl = import.meta.env.VITE_REACTIVE_RPC_URL
-  if (!rpcUrl) return null
+  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_REACTIVE_RPC_URL, defaultReactiveRpcUrls)
+  if (rpcUrls.length === 0) return null
 
   return createPublicClient({
     batch: {
       multicall: true
     },
     chain: reactiveChain,
-    transport: http(rpcUrl)
+    transport: createRpcTransport(rpcUrls)
   })
 }
 
@@ -198,8 +265,11 @@ function resolveLocalWallet() {
   return wallet
 }
 
-function createLocalWalletClient(rpcUrl: string | undefined, chain: typeof originChain | typeof destinationChain | typeof reactiveChain) {
-  if (!rpcUrl) {
+function createLocalWalletClient(
+  rpcUrls: string[],
+  chain: typeof originChain | typeof destinationChain | typeof reactiveChain
+) {
+  if (rpcUrls.length === 0) {
     throw new Error(`Missing RPC for ${chain.name}`)
   }
 
@@ -208,7 +278,7 @@ function createLocalWalletClient(rpcUrl: string | undefined, chain: typeof origi
   const client = createWalletClient({
     account,
     chain,
-    transport: http(rpcUrl)
+    transport: createRpcTransport(rpcUrls)
   })
 
   return {
@@ -219,7 +289,10 @@ function createLocalWalletClient(rpcUrl: string | undefined, chain: typeof origi
 
 export async function getOriginWalletClient(): Promise<{ account: Address; client: WalletClient }> {
   if (getActiveWalletSource() === 'web') {
-    return createLocalWalletClient(import.meta.env.VITE_ORIGIN_RPC_URL, originChain)
+    return createLocalWalletClient(
+      resolveRpcUrls(import.meta.env.VITE_ORIGIN_RPC_URL, defaultOriginRpcUrls()),
+      originChain
+    )
   }
 
   ensureInjectedWallet()
@@ -245,7 +318,10 @@ export async function getDestinationWalletClient(): Promise<{
   client: WalletClient
 }> {
   if (getActiveWalletSource() === 'web') {
-    return createLocalWalletClient(import.meta.env.VITE_DESTINATION_RPC_URL, destinationChain)
+    return createLocalWalletClient(
+      resolveRpcUrls(import.meta.env.VITE_DESTINATION_RPC_URL, defaultEthereumSepoliaRpcUrls),
+      destinationChain
+    )
   }
 
   ensureInjectedWallet()
@@ -271,7 +347,10 @@ export async function getReactiveWalletClient(): Promise<{
   client: WalletClient
 }> {
   if (getActiveWalletSource() === 'web') {
-    return createLocalWalletClient(import.meta.env.VITE_REACTIVE_RPC_URL, reactiveChain)
+    return createLocalWalletClient(
+      resolveRpcUrls(import.meta.env.VITE_REACTIVE_RPC_URL, defaultReactiveRpcUrls),
+      reactiveChain
+    )
   }
 
   ensureInjectedWallet()

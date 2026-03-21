@@ -70,6 +70,19 @@ const messages = {
     listenerStatus: 'Listener status',
     operatorService: 'Operator service',
     operatorLastHeartbeat: 'Operator heartbeat',
+    listenerRuntimeBalance: 'Listener runtime balance',
+    listenerRuntimeDebt: 'Listener runtime debt',
+    lastFundingAction: 'Last funding action',
+    singleSignatureMode: 'Single-signature mode',
+    singleSignatureReady: 'Ready',
+    singleSignatureRequiresOperator: 'Operator required',
+    singleSignatureUnavailable: 'Unavailable',
+    singleSignatureReadyNote:
+      'The operator runtime is online, so saving the plan once is enough to arm the listener and wait for the next external signal.',
+    singleSignatureRequiresOperatorNote:
+      'The operator runtime is offline. Saving the plan may still need an extra Reactive-side management step before automation starts waiting for signals.',
+    listenerRuntimeHealthyNote:
+      'Listener runtime balance is above current debt, so Reactive dispatch can continue without manual funding.',
     automationReadinessLabel: 'Automation readiness',
     subscriptionStatus: 'Subscription',
     listenerNotListening: 'Not listening yet',
@@ -122,11 +135,14 @@ const messages = {
     lastSignalHash: 'Last Signal Hash',
     balanceDelta: 'Balance Delta',
     emitSourceSignal: 'Emit Source Signal',
+    testSourceEvent: 'Test Source Event',
     triggering: 'Triggering...',
     pauseListener: 'Pause Listener',
     resumeListener: 'Resume Listener',
     externalSignalNote:
-      'Source events are triggered by an external operator or upstream protocol. The user wallet does not emit them from this UI.',
+      'In the normal flow, source events are triggered by an external operator or upstream protocol, not by the user wallet.',
+    testSourceEventNote:
+      'Use the test button only for demo validation. It emits a source-chain signal directly from this UI and should not be presented as the production trigger path.',
     activityKicker: 'Activity Ledger',
     activityNote:
       'A rolling execution history that shows what the wallet observed, executed, or skipped while you were away.',
@@ -175,6 +191,9 @@ const messages = {
     offline: 'Offline',
     low: 'Low',
     unknown: 'Unknown',
+    fundedAndCleared: 'Funded and cleared',
+    alreadyFunded: 'Already funded',
+    funded: 'Funded',
     unavailable: 'Unavailable',
     waitingForSignal: 'Waiting for signal',
     armingListener: 'Arming listener',
@@ -252,6 +271,8 @@ const messages = {
       'Source signal was sent, but destination execution is still pending. Refresh again if it takes longer.',
     signalEmissionFailed: 'Signal emission failed.',
     failedEmitSourceSignal: 'Failed to emit source signal',
+    operatorServiceRequiredForTestSignal:
+      'Operator service must be online to emit a test source signal without asking the user wallet to sign again.',
     intentConfiguredAction: 'Transfer Plan Saved',
     intentConfiguredDesc:
       'Saved the wallet intent onchain. The shared listener remains armed by the operator for future external triggers.',
@@ -347,6 +368,19 @@ const messages = {
     listenerStatus: '监听状态',
     operatorService: 'Operator 服务',
     operatorLastHeartbeat: 'Operator 心跳',
+    listenerRuntimeBalance: 'Listener 运行余额',
+    listenerRuntimeDebt: 'Listener 当前欠费',
+    lastFundingAction: '最近一次补资动作',
+    singleSignatureMode: '单签名模式',
+    singleSignatureReady: '已就绪',
+    singleSignatureRequiresOperator: '需要 Operator 在线',
+    singleSignatureUnavailable: '不可用',
+    singleSignatureReadyNote:
+      '当前 operator runtime 在线，所以用户保存计划只签一次就够，系统会自动把 listener 准备到等待外部 signal 的状态。',
+    singleSignatureRequiresOperatorNote:
+      '当前 operator runtime 不在线。保存计划后可能还需要额外的 Reactive 侧管理动作，自动执行不会稳定进入等待状态。',
+    listenerRuntimeHealthyNote:
+      '当前 listener 的运行余额高于欠费，Reactive dispatch 不需要再手动补资就能继续运行。',
     automationReadinessLabel: '自动化就绪状态',
     subscriptionStatus: '订阅状态',
     listenerNotListening: '暂未监听',
@@ -397,11 +431,14 @@ const messages = {
     lastSignalHash: '最近信号哈希',
     balanceDelta: '余额变化',
     emitSourceSignal: '发送源链信号',
+    testSourceEvent: '测试源事件',
     triggering: '触发中...',
     pauseListener: '暂停监听',
     resumeListener: '恢复监听',
     externalSignalNote:
-      '源事件由外部 operator 或上游协议触发，不会在这个用户钱包界面里由用户自己发送。',
+      '正常流程里，源事件应由外部 operator 或上游协议触发，而不是由用户钱包自己触发。',
+    testSourceEventNote:
+      '下面这个按钮只用于 demo 验证。它会直接从这个 UI 发出一笔源链 signal，不应被当成正式产品里的触发路径。',
     activityKicker: '链上记录',
     activityNote: '这里会持续展示钱包离线期间观察到、完成或跳过的执行历史。',
     chainEvidence: '链上证据',
@@ -446,6 +483,9 @@ const messages = {
     offline: '离线',
     low: '偏低',
     unknown: '待确认',
+    fundedAndCleared: '已补资并清账',
+    alreadyFunded: '资金已充足',
+    funded: '已补资',
     unavailable: '不可用',
     waitingForSignal: '等待信号',
     armingListener: '正在准备监听',
@@ -522,6 +562,8 @@ const messages = {
     automationStillPending: '源链信号已经发出，但目标链执行还在等待中。如果更久还没变化，请再手动刷新一次。',
     signalEmissionFailed: '源链信号发送失败。',
     failedEmitSourceSignal: '发送源链信号失败',
+    operatorServiceRequiredForTestSignal:
+      '要想在不让用户再次签名的情况下触发测试源事件，operator service 必须先在线。',
     intentConfiguredAction: '转账计划已保存',
     intentConfiguredDesc: '已经把钱包 intent 写入链上。共享 listener 仍由 operator 保持 armed，后续外部事件可直接触发执行。',
     awaitingListenerArming: '转账计划已保存，正在等待共享 listener 进入 armed 状态...',
@@ -641,10 +683,20 @@ export function translateAutomationReadiness(value: string, locale: Locale) {
   return copy.unavailable
 }
 
+export function translateSingleSignatureReadiness(value: string, locale: Locale) {
+  const copy = messages[locale]
+  if (value === 'ready') return copy.singleSignatureReady
+  if (value === 'requires_operator') return copy.singleSignatureRequiresOperator
+  return copy.singleSignatureUnavailable
+}
+
 export function translateDisplayValue(value: string, locale: Locale) {
   const copy = messages[locale]
   if (value === 'Not connected') return copy.notConnected
   if (value === 'Unknown') return copy.unknown
+  if (value === 'funded_and_cleared') return copy.fundedAndCleared
+  if (value === 'already_funded') return copy.alreadyFunded
+  if (value === 'funded') return copy.funded
   if (value === 'Unavailable') return copy.unavailable
   if (value === 'Never') return copy.never
   if (value === 'Not configured') return copy.notConfigured

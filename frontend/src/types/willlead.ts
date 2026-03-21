@@ -11,6 +11,7 @@ export type AutomationReadiness =
   | 'intent_inactive'
   | 'intent_exhausted'
   | 'unavailable'
+export type SingleSignatureReadiness = 'ready' | 'requires_operator' | 'unavailable'
 
 export type WalletState = {
   contractAddress: string
@@ -41,7 +42,11 @@ export type WalletState = {
   subscriptionTopic0: string
   operatorServiceStatus: OperatorServiceStatus
   operatorLastHeartbeat: string
+  operatorListenerBalance: string
+  operatorListenerDebt: string
+  operatorLastFundingResult: string
   automationReadiness: AutomationReadiness
+  singleSignatureReadiness: SingleSignatureReadiness
 }
 
 export type IntentState = {

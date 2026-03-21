@@ -15,11 +15,13 @@ type RuntimePanelProps = {
   subscriptionDestinationChainId: string
   subscriptionTopic0: string
   callbackGasLimit: string
+  operatorServiceStatus: string
   canManageListener: boolean
   isPending: boolean
   walletAccessState: WalletAccessState
   onPauseListener: () => void
   onResumeListener: () => void
+  onTriggerSignal: () => void
 }
 
 function shortenAddress(value: string) {
@@ -33,6 +35,7 @@ export function RuntimePanel(props: RuntimePanelProps) {
   const { copy, locale } = useCopy()
   const listenerUnavailable = props.listenerPaused === null
   const hasBoundWallet = props.walletAccessState === 'bound'
+  const canTriggerTestSignal = props.operatorServiceStatus === 'online'
   const listenerStatusLabel = listenerUnavailable
     ? props.walletAccessState === 'mismatch'
       ? copy.connectedWalletMismatch
@@ -106,6 +109,14 @@ export function RuntimePanel(props: RuntimePanelProps) {
       </dl>
       <div className="action-row">
         <button
+          className="primary-button"
+          disabled={props.isPending || !canTriggerTestSignal}
+          onClick={props.onTriggerSignal}
+          type="button"
+        >
+          {props.isPending ? copy.triggering : copy.testSourceEvent}
+        </button>
+        <button
           className="secondary-button"
           disabled={props.isPending || listenerUnavailable || !props.canManageListener}
           onClick={props.onPauseListener}
@@ -123,6 +134,7 @@ export function RuntimePanel(props: RuntimePanelProps) {
         </button>
       </div>
       <p className="wallet-footnote">{copy.externalSignalNote}</p>
+      <p className="wallet-footnote">{copy.testSourceEventNote}</p>
       {hasBoundWallet && !props.canManageListener ? (
         <p className="wallet-footnote">{copy.listenerManagedByOperator}</p>
       ) : null}

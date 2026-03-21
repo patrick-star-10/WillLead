@@ -30,6 +30,7 @@ export function App() {
   const disconnectWallet = useWalletStore((state) => state.disconnectWallet)
   const createAutonomousWallet = useWalletStore((state) => state.createAutonomousWallet)
   const refreshChainState = useWalletStore((state) => state.refreshChainState)
+  const backgroundRefreshChainState = useWalletStore((state) => state.backgroundRefreshChainState)
   const submitIntent = useWalletStore((state) => state.submitIntent)
   const fundAutomation = useWalletStore((state) => state.fundAutomation)
   const fundWallet = useWalletStore((state) => state.fundWallet)
@@ -37,6 +38,7 @@ export function App() {
   const resumeWalletIntent = useWalletStore((state) => state.resumeWalletIntent)
   const pauseListener = useWalletStore((state) => state.pauseListener)
   const resumeListener = useWalletStore((state) => state.resumeListener)
+  const triggerSignal = useWalletStore((state) => state.triggerSignal)
   const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
   const isActionPending = useWalletStore((state) => state.isPending)
   const statusMessage = useWalletStore((state) => state.statusMessage)
@@ -95,6 +97,25 @@ export function App() {
   useEffect(() => {
     syncIdleCopy()
   }, [locale, syncIdleCopy])
+
+  useEffect(() => {
+    if (wallet.walletAccessState !== 'bound' || wallet.runtimeStatus !== 'active') return
+
+    const poll = () => {
+      if (document.visibilityState !== 'visible') return
+      void backgroundRefreshChainState()
+    }
+
+    poll()
+    const timer = window.setInterval(poll, 6000)
+    return () => window.clearInterval(timer)
+  }, [
+    backgroundRefreshChainState,
+    wallet.walletAccessState,
+    wallet.runtimeStatus,
+    wallet.ownerAddress,
+    wallet.lastExecutionNonce
+  ])
 
   const handleRefresh = () => {
     startUiTransition(() => {
@@ -227,7 +248,11 @@ export function App() {
               subscriptionStatus={wallet.subscriptionStatus}
               operatorServiceStatus={wallet.operatorServiceStatus}
               operatorLastHeartbeat={wallet.operatorLastHeartbeat}
+              operatorListenerBalance={wallet.operatorListenerBalance}
+              operatorListenerDebt={wallet.operatorListenerDebt}
+              operatorLastFundingResult={wallet.operatorLastFundingResult}
               automationReadiness={wallet.automationReadiness}
+              singleSignatureReadiness={wallet.singleSignatureReadiness}
             />
           ) : null}
 
@@ -265,11 +290,13 @@ export function App() {
               subscriptionDestinationChainId={wallet.subscriptionDestinationChainId}
               subscriptionTopic0={wallet.subscriptionTopic0}
               callbackGasLimit={wallet.callbackGasLimit}
+              operatorServiceStatus={wallet.operatorServiceStatus}
               canManageListener={wallet.canManageListener}
               isPending={isActionPending}
               walletAccessState={wallet.walletAccessState}
               onPauseListener={() => void pauseListener()}
               onResumeListener={() => void resumeListener()}
+              onTriggerSignal={() => void triggerSignal()}
             />
           ) : null}
 
