@@ -8,26 +8,34 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 
 ## 当前进度
 
-截至 2026-03-21，这个 MVP 已经在当前测试网环境里完成了一次真实闭环验证：
+截至 2026-03-21，这个 MVP 已经完成了两层验证：
 
-- 用户先保存 onchain intent
-- shared listener 由 operator/runtime 自动保持在可运行状态
-- 用户前端离线后，外部 signal 仍可触发钱包执行
-- autonomous wallet 在目标链上完成真实转账，前端重新打开后可读到执行结果
+1. 原始 `emitSignal(...)` 路径的真实闭环
+2. 新的 `protocol operator + mirrored intent + permissionless poke()` 路径的真实闭环
 
-这次最新验证里，关键交易为：
+当前最新版本已经做到：
 
-- Reactive listener runtime 修复：`0x8f4c88b60b28120cf16da27bf8886ec75a9376b3e6d3e6a9186f13c3c268d5b1`
-- listener `coverDebt()`：`0x2b8f17d53affa24a0033c7a4fdd0c71998f891e3e9198011728cf810b0278d3a`
-- origin signal：`0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
-- destination execution：`0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
+- 用户只在 setup 阶段签一次，把 intent 写进 autonomous wallet
+- protocol operator 会把 destination wallet 的当前 intent 镜像到 origin `WillLeadSignalEmitter`
+- source side 不再需要每次人工重填 `token / recipient / amount`
+- keeper 或脚本只需要调用 `poke(wallet, nonce)` 就能触发 source signal
+- shared listener 会继续把 signal 路由到 destination callback，wallet 按已保存的 intent 执行
+
+这次最新的 `poke()` 版本验证里，关键交易为：
+
+- intent configured: `0xd2c178ea2a913de8d2753d39cb30064ea28525c26ce9194197d0f2bfe908d1e1`
+- origin permissionless poke: `0x6eb2c2db96dba97c5f75c5fcb6c515e5f2a3794c98e1f6c17054b95af2e4d5a9`
+- reactive dispatch: `0x615eed2c1948971dbe5bf3f73d42e48bdc943b4c676d4fce8ceda124e7730e5f`
+- destination execution: `0x5e01719af3cfad116144118372cc5d6a69e0141ca5ece0a41e7de3b27cf77abe`
 
 当前系统层面的判断是：
 
 - `intent save -> listener armed -> external signal -> destination execution` 这条主链路已经成立
+- `protocol operator -> mirrored intent -> permissionless poke()` 这条更接近正式产品的运行路径也已经成立
 - controller wallet 和 autonomous wallet 的资产语义已经在前端分开展示
-- operator service 已经会自动补 Reactive listener runtime 资金、清理 debt、恢复订阅并 resume listener
-- 还没做的是更完整的钱包化体验，而不是基础自动执行闭环
+- operator service 已经会自动同步 mirrored intent、补 Reactive listener runtime 资金、清理 debt、恢复订阅并 resume listener
+- 当前还没有做到“完全不依赖链下服务”；更准确地说，这是链上执行 + 协议 operator 维护的版本
+- 还没做的是真实上游协议事件接入、keeper 网络化和更完整的钱包产品体验，而不是基础自动执行闭环
 
 ## 项目结构
 
@@ -46,7 +54,7 @@ frontend/
 - `WillLeadWalletFactory`
   在目标链上为每个 owner 创建并发现对应的 autonomous wallet
 - `WillLeadSignalEmitter`
-  在源链发出 `StrategySignal`
+  在源链保存由 protocol operator 镜像过来的 intent，并提供 permissionless `poke()` 来发出 `StrategySignal`
 - `WillLeadReactiveListener`
   基于官方 `reactive-lib` 订阅源链事件，并生成目标链 callback payload
 
@@ -55,6 +63,7 @@ frontend/
 - `WillLeadReactiveListener` 现在已经切到本地 vendor 的官方 `reactive-lib` 最小依赖和 `AbstractPausableReactive` 抽象类
 - callback payload 的第一个 `address` 参数按官方模式保留为 `address(0)` 占位，实际回调时由 Reactive 基础设施覆写成 RVM ID
 - `automation credit` 的产品语义已经进入前端和钱包配置，但实际 callback 资金准备仍然要通过官方 `depositTo(wallet)` 路径完成
+- `WillLeadSignalEmitter` 现在不再只是一只 demo event emitter；operator 会把 destination wallet 的当前 intent 镜像到 origin emitter，之后任意 keeper 都可以通过 `poke(wallet, nonce)` 触发 source signal，而不需要用户再次签名
 
 ## 前端范围
 
@@ -113,10 +122,10 @@ cp .env.example .env
 
 如果要继续往下做，当前更合理的方向是：
 
-1. 把 Reactive runtime / listener debt / operator heartbeat 做成前端更显式的运行时状态
-2. 增加真实链路的回归测试和 proof 留存，而不只依赖临场脚本
-3. 把单 intent 模型扩展成更像钱包的多 intent / 历史记录体验
-4. 继续收敛 operator service，让前端用户完全不用理解 listener/runtime 细节
+1. 把 protocol operator 从“本机脚本”升级成长期在线的部署方服务
+2. 用真实上游协议事件替代测试网里的 `poke()` 复现入口
+3. 增加真实链路的回归测试和 proof 留存，而不只依赖临场脚本
+4. 把单 intent 模型扩展成更像钱包的多 intent / 历史记录体验
 
 当前目录里已经有可直接运行的 shell 脚本：
 
@@ -131,6 +140,7 @@ cp .env.example .env
 - [pause-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/pause-intent.sh)
 - [resume-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/resume-intent.sh)
 - [emit-signal.sh](/Users/wx/Desktop/WillLead/contracts/script/emit-signal.sh)
+- [poke-signal.sh](/Users/wx/Desktop/WillLead/contracts/script/poke-signal.sh)
 - [watch-intent-automation.sh](/Users/wx/Desktop/WillLead/contracts/script/watch-intent-automation.sh)
 - [start-operator-service.sh](/Users/wx/Desktop/WillLead/contracts/script/start-operator-service.sh)
 - [collect-proof.sh](/Users/wx/Desktop/WillLead/contracts/script/collect-proof.sh)
@@ -177,9 +187,24 @@ npm run build
 
 这条 operator service 会监听目标链上的 `IntentConfigured` 事件，并自动执行：
 
+- `syncIntent(...)`，把 destination wallet 的当前 intent 镜像到 origin `WillLeadSignalEmitter`
 - `fund-reactive-listener.sh` 对应的 funding / `coverDebt()` 逻辑
 - `sync-listener-subscription.sh`
 - `resume-listener.sh`（当 operator key 拥有 listener 且当前处于 paused）
+
+同时，这条 service 现在还会持续轮询 wallet runtime：
+
+- 当 intent 变成 `Paused / Exhausted / Inactive` 时，把 mirrored intent 标成 inactive
+- 当 intent 重新变成 `Active` 时，自动恢复 mirrored intent、listener funding 和 armed 状态
+
+如果你想在测试网里复现“非用户签名的外部触发”，优先用：
+
+```bash
+./contracts/script/poke-signal.sh <wallet> <executionNonce>
+```
+
+这条命令调用的是 origin emitter 上的 permissionless `poke()`。  
+`emit-signal.sh` 仍然保留，主要用于低层 raw event 调试。
 
 如果你只是想用最轻量的 shell watcher，也可以继续跑：
 

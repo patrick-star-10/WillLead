@@ -41,7 +41,12 @@ extract_address() {
 }
 
 echo "Deploying WillLeadSignalEmitter on origin chain..."
-SIGNAL_OUTPUT="$(deploy_contract "$ORIGIN_RPC_URL" contracts/src/WillLeadSignalEmitter.sol:WillLeadSignalEmitter)"
+SIGNAL_OUTPUT="$(
+  deploy_contract \
+    "$ORIGIN_RPC_URL" \
+    contracts/src/WillLeadSignalEmitter.sol:WillLeadSignalEmitter \
+    --constructor-args "$OWNER_ADDRESS"
+)"
 SIGNAL_ADDRESS="$(extract_address "$SIGNAL_OUTPUT")"
 echo "SignalEmitter: $SIGNAL_ADDRESS"
 

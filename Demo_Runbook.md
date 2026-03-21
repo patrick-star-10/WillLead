@@ -2,10 +2,16 @@
 
 ## Latest Verified Run
 
-截至 2026-03-21，当前仓库和这组测试网地址已经验证过一条真实闭环：
+截至 2026-03-21，当前仓库和这组测试网地址已经验证过两条真实闭环：
 
-- origin signal：`0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
-- destination execution：`0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
+- 原始 raw signal 路径
+  - origin signal：`0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
+  - destination execution：`0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
+
+- 新的 permissionless `poke()` 路径
+  - origin poke：`0x6eb2c2db96dba97c5f75c5fcb6c515e5f2a3794c98e1f6c17054b95af2e4d5a9`
+  - reactive dispatch：`0x615eed2c1948971dbe5bf3f73d42e48bdc943b4c676d4fce8ceda124e7730e5f`
+  - destination execution：`0x5e01719af3cfad116144118372cc5d6a69e0141ca5ece0a41e7de3b27cf77abe`
 
 这次验证里还额外确认了一个关键运行条件：
 
@@ -83,7 +89,14 @@
 
 - 这一步是 external signal operator 在触发，不是用户自己又签了一次钱包操作
 - 演示时不要使用 owner/controller wallet 再去点前端按钮发 signal
-- 最好使用独立 operator key 或终端脚本来触发 source event
+- 最好使用独立 operator key、keeper 或终端脚本来触发 source event
+- 现在推荐优先演示 permissionless `poke()`，因为它更接近正式形态里的“外部触发，不需要用户再签名”
+
+```bash
+./contracts/script/poke-signal.sh <wallet> <executionNonce>
+```
+
+如果你需要展示底层 raw signal 参数，也还可以保留：
 
 ```bash
 ./contracts/script/emit-signal.sh <token> <recipient> <amountPerExecution> <executionNonce>

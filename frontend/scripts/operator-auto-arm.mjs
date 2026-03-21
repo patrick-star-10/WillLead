@@ -33,7 +33,10 @@ const walletAbi = parseAbi([
   'function lastExecutionNonce() view returns (uint256)'
 ])
 const signalEmitterAbi = parseAbi([
-  'function emitSignal(address wallet,address token,address recipient,uint256 amount,uint256 executionNonce)'
+  'function emitSignal(address wallet,address token,address recipient,uint256 amount,uint256 executionNonce)',
+  'function syncIntent(address wallet,address token,address recipient,uint256 amountPerExecution,uint256 maxExecutions,bool active)',
+  'function poke(address wallet,uint256 executionNonce)',
+  'function mirroredIntentOf(address wallet) view returns (bool active,address token,address recipient,uint256 amountPerExecution,uint256 maxExecutions)'
 ])
 const listenerAbi = parseAbi([
   'function isPaused() view returns (bool)',
@@ -359,14 +362,90 @@ async function ensureListenerFunded({
 }
 
 async function readWalletRuntime(destinationClient, walletAddress) {
-  const [status] = await destinationClient.readContract({
-    address: walletAddress,
-    abi: walletAbi,
-    functionName: 'getIntentSummary'
-  })
+  const [status, token, recipient, amountPerExecution, maxExecutions, executedCount, automationBalanceFloor] =
+    await destinationClient.readContract({
+      address: walletAddress,
+      abi: walletAbi,
+      functionName: 'getIntentSummary'
+    })
 
   return {
-    runtimeStatus: Number(status)
+    runtimeStatus: Number(status),
+    token,
+    recipient,
+    amountPerExecution,
+    maxExecutions,
+    executedCount,
+    automationBalanceFloor
+  }
+}
+
+function mirroredIntentMatches(mirroredIntent, walletRuntime) {
+  const mirroredActive = mirroredIntent[0]
+  const mirroredToken = mirroredIntent[1]
+  const mirroredRecipient = mirroredIntent[2]
+  const mirroredAmountPerExecution = mirroredIntent[3]
+  const mirroredMaxExecutions = mirroredIntent[4]
+  const shouldBeActive = walletRuntime.runtimeStatus === 1
+
+  return (
+    mirroredActive === shouldBeActive &&
+    mirroredToken.toLowerCase() === walletRuntime.token.toLowerCase() &&
+    mirroredRecipient.toLowerCase() === walletRuntime.recipient.toLowerCase() &&
+    mirroredAmountPerExecution === walletRuntime.amountPerExecution &&
+    mirroredMaxExecutions === walletRuntime.maxExecutions
+  )
+}
+
+async function syncMirroredIntent({
+  destinationClient,
+  originClient,
+  originWalletClient,
+  operatorAccount,
+  walletAddress,
+  signalEmitter,
+  runtimeState
+}) {
+  const walletRuntime = await readWalletRuntime(destinationClient, walletAddress)
+  const mirroredIntent = await originClient.readContract({
+    address: signalEmitter,
+    abi: signalEmitterAbi,
+    functionName: 'mirroredIntentOf',
+    args: [walletAddress]
+  })
+
+  if (mirroredIntentMatches(mirroredIntent, walletRuntime)) {
+    runtimeState.lastMirrorResult = 'already_synced'
+    runtimeState.mirroredIntentActive = walletRuntime.runtimeStatus === 1 ? 'true' : 'false'
+    return {
+      status: 'already_synced',
+      walletRuntime
+    }
+  }
+
+  const hash = await originWalletClient.writeContract({
+    account: operatorAccount,
+    chain: undefined,
+    address: signalEmitter,
+    abi: signalEmitterAbi,
+    functionName: 'syncIntent',
+    args: [
+      walletAddress,
+      walletRuntime.token,
+      walletRuntime.recipient,
+      walletRuntime.amountPerExecution,
+      walletRuntime.maxExecutions,
+      walletRuntime.runtimeStatus === 1
+    ]
+  })
+
+  await originClient.waitForTransactionReceipt({ hash })
+  runtimeState.lastMirrorResult = 'synced'
+  runtimeState.lastMirrorTx = hash
+  runtimeState.mirroredIntentActive = walletRuntime.runtimeStatus === 1 ? 'true' : 'false'
+  return {
+    status: hash,
+    walletRuntime
   }
 }
 
@@ -377,14 +456,10 @@ async function emitTestSignal({
   originWalletClient,
   operatorAccount,
   walletAddress,
-  listenerAddress
+  listenerAddress,
+  runtimeState
 }) {
-  const [summary, lastExecutionNonce, signalEmitter] = await Promise.all([
-    destinationClient.readContract({
-      address: walletAddress,
-      abi: walletAbi,
-      functionName: 'getIntentSummary'
-    }),
+  const [lastExecutionNonce, signalEmitter] = await Promise.all([
     destinationClient.readContract({
       address: walletAddress,
       abi: walletAbi,
@@ -397,14 +472,24 @@ async function emitTestSignal({
     })
   ])
 
-  const [status, token, recipient, amountPerExecution] = summary
-  if (Number(status) !== 1) {
+  const mirrorResult = await syncMirroredIntent({
+    destinationClient,
+    originClient,
+    originWalletClient,
+    operatorAccount,
+    walletAddress,
+    signalEmitter,
+    runtimeState
+  })
+  const { walletRuntime } = mirrorResult
+
+  if (walletRuntime.runtimeStatus !== 1) {
     throw new Error('Intent is not active. Save or resume the plan before triggering a test signal.')
   }
 
   if (
-    recipient.toLowerCase() === '0x0000000000000000000000000000000000000000' ||
-    amountPerExecution === 0n
+    walletRuntime.recipient.toLowerCase() === '0x0000000000000000000000000000000000000000' ||
+    walletRuntime.amountPerExecution === 0n
   ) {
     throw new Error('Intent is not configured with a valid recipient and amount.')
   }
@@ -415,8 +500,8 @@ async function emitTestSignal({
     chain: undefined,
     address: signalEmitter,
     abi: signalEmitterAbi,
-    functionName: 'emitSignal',
-    args: [walletAddress, token, recipient, amountPerExecution, nextNonce]
+    functionName: 'poke',
+    args: [walletAddress, nextNonce]
   })
 
   await originClient.waitForTransactionReceipt({ hash })
@@ -456,6 +541,31 @@ async function prepareListenerForTestSignal({
   })
   runtimeState.lastArmResult = String(armResult)
   runtimeState.lastArmTx = typeof armResult === 'string' && armResult.startsWith('0x') ? armResult : null
+}
+
+async function maintainActiveRuntime({
+  reactiveClient,
+  reactiveWalletClient,
+  operatorAccount,
+  listenerAddress,
+  authorizedRvmId,
+  fundingBufferWei,
+  walletRuntime,
+  runtimeState
+}) {
+  if (walletRuntime.runtimeStatus !== 1) {
+    return
+  }
+
+  await prepareListenerForTestSignal({
+    reactiveClient,
+    reactiveWalletClient,
+    operatorAccount,
+    listenerAddress,
+    authorizedRvmId,
+    fundingBufferWei,
+    runtimeState
+  })
 }
 
 function writeJsonResponse(response, statusCode, payload) {
@@ -597,6 +707,9 @@ async function main() {
     lastTestSignalNonce: null,
     lastArmResult: null,
     lastArmTx: null,
+    lastMirrorResult: null,
+    lastMirrorTx: null,
+    mirroredIntentActive: null,
     lastError: null
   }
   writeRuntimeStatus(runtimeState)
@@ -612,7 +725,8 @@ async function main() {
           originWalletClient,
           operatorAccount,
           walletAddress: config.walletAddress,
-          listenerAddress: config.listenerAddress
+          listenerAddress: config.listenerAddress,
+          runtimeState
         }),
       {
         reactiveClient,
@@ -633,31 +747,36 @@ async function main() {
     console.log(`operator_api=${runtimeState.apiUrl}`)
   }
 
-  const initialRuntime = await readWalletRuntime(destinationClient, config.walletAddress)
-  if (initialRuntime.runtimeStatus === 1) {
-    const fundingResult = await ensureListenerFunded({
-      reactiveClient,
-      reactiveWalletClient,
-      operatorAccount,
-      listenerAddress: config.listenerAddress,
-      fundingBufferWei: config.listenerFundingBufferWei
-    })
-    console.log(`startup_funding=${fundingResult.status}`)
-    runtimeState.listenerBalanceWei = fundingResult.after.listenerBalance.toString()
-    runtimeState.listenerDebtWei = fundingResult.after.listenerDebt.toString()
-    runtimeState.lastFundingResult = fundingResult.status
-    runtimeState.lastFundingTx = fundingResult.coverDebtTx || fundingResult.topUpTx
+  const signalEmitter = await reactiveClient.readContract({
+    address: config.listenerAddress,
+    abi: listenerAbi,
+    functionName: 'signalEmitter'
+  })
+  const initialMirror = await syncMirroredIntent({
+    destinationClient,
+    originClient,
+    originWalletClient,
+    operatorAccount,
+    walletAddress: config.walletAddress,
+    signalEmitter,
+    runtimeState
+  })
+  writeRuntimeStatus(runtimeState)
 
-    const armResult = await ensureListenerArmed({
+  const initialRuntime = initialMirror.walletRuntime
+  if (initialRuntime.runtimeStatus === 1) {
+    await maintainActiveRuntime({
       reactiveClient,
       reactiveWalletClient,
       operatorAccount,
       listenerAddress: config.listenerAddress,
-      authorizedRvmId: config.authorizedRvmId
+      authorizedRvmId: config.authorizedRvmId,
+      fundingBufferWei: config.listenerFundingBufferWei,
+      walletRuntime: initialRuntime,
+      runtimeState
     })
-    console.log(`startup_arm=${armResult}`)
-    runtimeState.lastArmResult = String(armResult)
-    runtimeState.lastArmTx = typeof armResult === 'string' && armResult.startsWith('0x') ? armResult : null
+    console.log(`startup_funding=${runtimeState.lastFundingResult}`)
+    console.log(`startup_arm=${runtimeState.lastArmResult}`)
     runtimeState.heartbeatAt = new Date().toISOString()
     writeRuntimeStatus(runtimeState)
   } else {
@@ -696,29 +815,28 @@ async function main() {
       lastSeenKey = logKey
       console.log(`intent_detected=${log.transactionHash}`)
       runtimeState.lastIntentTx = log.transactionHash
-      const fundingResult = await ensureListenerFunded({
+      const mirrorResult = await syncMirroredIntent({
+        destinationClient,
+        originClient,
+        originWalletClient,
+        operatorAccount,
+        walletAddress: config.walletAddress,
+        signalEmitter,
+        runtimeState
+      })
+      console.log(`mirror_intent=${mirrorResult.status}`)
+      await maintainActiveRuntime({
         reactiveClient,
         reactiveWalletClient,
         operatorAccount,
         listenerAddress: config.listenerAddress,
-        fundingBufferWei: config.listenerFundingBufferWei
+        authorizedRvmId: config.authorizedRvmId,
+        fundingBufferWei: config.listenerFundingBufferWei,
+        walletRuntime: mirrorResult.walletRuntime,
+        runtimeState
       })
-      console.log(`listener_funding=${fundingResult.status}`)
-      runtimeState.listenerBalanceWei = fundingResult.after.listenerBalance.toString()
-      runtimeState.listenerDebtWei = fundingResult.after.listenerDebt.toString()
-      runtimeState.lastFundingResult = fundingResult.status
-      runtimeState.lastFundingTx = fundingResult.coverDebtTx || fundingResult.topUpTx
-
-      const armResult = await ensureListenerArmed({
-        reactiveClient,
-        reactiveWalletClient,
-        operatorAccount,
-        listenerAddress: config.listenerAddress,
-        authorizedRvmId: config.authorizedRvmId
-      })
-      console.log(`listener_arm=${armResult}`)
-      runtimeState.lastArmResult = String(armResult)
-      runtimeState.lastArmTx = typeof armResult === 'string' && armResult.startsWith('0x') ? armResult : null
+      console.log(`listener_funding=${runtimeState.lastFundingResult}`)
+      console.log(`listener_arm=${runtimeState.lastArmResult}`)
       runtimeState.lastError = null
       runtimeState.heartbeatAt = new Date().toISOString()
       writeRuntimeStatus(runtimeState)
@@ -726,6 +844,25 @@ async function main() {
 
     lastSeenBlock = latestBlock
     try {
+      const mirrorResult = await syncMirroredIntent({
+        destinationClient,
+        originClient,
+        originWalletClient,
+        operatorAccount,
+        walletAddress: config.walletAddress,
+        signalEmitter,
+        runtimeState
+      })
+      await maintainActiveRuntime({
+        reactiveClient,
+        reactiveWalletClient,
+        operatorAccount,
+        listenerAddress: config.listenerAddress,
+        authorizedRvmId: config.authorizedRvmId,
+        fundingBufferWei: config.listenerFundingBufferWei,
+        walletRuntime: mirrorResult.walletRuntime,
+        runtimeState
+      })
       const fundingState = await readListenerFundingState({
         reactiveClient,
         listenerAddress: config.listenerAddress
