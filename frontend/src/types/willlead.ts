@@ -13,10 +13,20 @@ export type AutomationReadiness =
   | 'unavailable'
 export type SingleSignatureReadiness = 'ready' | 'requires_operator' | 'unavailable'
 
-export type WalletState = {
-  contractAddress: string
+export type RuntimeRouteState = {
   listenerAddress: string
   signalEmitterAddress: string
+  sourceChainId: string
+  destinationChainId: string
+  signalTopic0: string
+  listenerPaused: boolean | null
+  callbackGasLimit: string
+  subscriptionStatus: ListenerSubscriptionStatus
+  canManageListener: boolean
+}
+
+export type WalletState = {
+  contractAddress: string
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
   connectionLabel: string
@@ -33,13 +43,7 @@ export type WalletState = {
   lastExecutedAt: string
   lastSignalHash: string
   destinationBalanceDelta: string
-  canManageListener: boolean
-  listenerPaused: boolean | null
-  callbackGasLimit: string
-  subscriptionStatus: ListenerSubscriptionStatus
-  subscriptionOriginChainId: string
-  subscriptionDestinationChainId: string
-  subscriptionTopic0: string
+  runtimeRoute: RuntimeRouteState
   operatorServiceStatus: OperatorServiceStatus
   operatorLastHeartbeat: string
   operatorListenerBalance: string
@@ -84,6 +88,11 @@ export type IntentFormValues = {
   amountPerExecution: string
   maxExecutions: number
   minAutomationBalance: string
+  listenerAddress: string
+  signalEmitterAddress: string
+  sourceChainId: string
+  destinationChainId: string
+  signalTopic0: string
 }
 
 export type ActionResult = {

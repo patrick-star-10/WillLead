@@ -19,6 +19,8 @@ type AutomationCapabilityPanelProps = {
   signalEmitterAddress: string
   subscriptionStatus: string
   subscriptionOriginChainId: string
+  subscriptionDestinationChainId: string
+  subscriptionTopic0: string
   callbackGasLimit: string
   lastSyncedAt: string
   operatorServiceStatus: string
@@ -168,6 +170,18 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           <span>{copy.signalSource}</span>
           <strong>{translateDisplayValue(shortenAddress(props.signalEmitterAddress), locale)}</strong>
         </div>
+        <div className="identity-chip">
+          <span>{copy.originChainRoute}</span>
+          <strong>{translateDisplayValue(props.subscriptionOriginChainId, locale)}</strong>
+        </div>
+        <div className="identity-chip">
+          <span>{copy.destinationChainRoute}</span>
+          <strong>{translateDisplayValue(props.subscriptionDestinationChainId, locale)}</strong>
+        </div>
+        <div className="identity-chip">
+          <span>{copy.signalTopic}</span>
+          <strong>{translateDisplayValue(props.subscriptionTopic0, locale)}</strong>
+        </div>
       </div>
 
       <div className="action-row">
@@ -181,7 +195,7 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
         />
         <button
           className="primary-button"
-          disabled={listenerUnavailable || !hasBoundWallet}
+          disabled={props.isPending || !hasBoundWallet}
           onClick={() => props.onFundAutomation(topUpAmount)}
           type="button"
         >

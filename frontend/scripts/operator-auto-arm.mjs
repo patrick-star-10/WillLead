@@ -14,6 +14,7 @@ const frontendDir = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(frontendDir, '..')
 const runtimeDir = path.join(frontendDir, 'public', 'runtime')
 const runtimeStatusPath = path.join(runtimeDir, 'operator-status.json')
+const chainRegistryPath = path.join(frontendDir, 'src', 'lib', 'chainRegistry.json')
 
 const reactiveSystemAddress = '0x0000000000000000000000000000000000fffFfF'
 const subscribeContractTopic0 =
@@ -21,15 +22,10 @@ const subscribeContractTopic0 =
 const reactiveIgnore = BigInt(
   '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad'
 )
-const defaultEthereumSepoliaRpcUrls = [
-  'https://ethereum-sepolia-rpc.publicnode.com',
-  'https://rpc.sepolia.org',
-  'https://eth-sepolia.public.blastapi.io'
-]
-const defaultReactiveRpcUrls = ['https://lasna-rpc.rnk.dev/']
 
 const walletAbi = parseAbi([
   'function getIntentSummary() view returns (uint8 status, address token, address recipient, uint256 amountPerExecution, uint256 maxExecutions, uint256 executedCount, uint256 automationBalanceFloor)',
+  'function getRuntimeBinding() view returns (address runtimeListener,address runtimeSignalEmitter,uint256 runtimeSourceChainId,uint256 runtimeDestinationChainId,uint256 runtimeStrategySignalTopic0)',
   'function lastExecutionNonce() view returns (uint256)'
 ])
 const signalEmitterAbi = parseAbi([
@@ -53,6 +49,7 @@ const reactiveSystemAbi = parseAbi([
 const intentConfiguredEvent = parseAbiItem(
   'event IntentConfigured(address indexed wallet, address indexed token, address indexed recipient, uint256 amountPerExecution, uint256 maxExecutions, uint256 minAutomationBalance)'
 )
+const chainRegistry = loadChainRegistry()
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {}
@@ -78,6 +75,10 @@ function loadEnvFile(filePath) {
 function normalizePrivateKey(value) {
   if (!value) throw new Error('Missing operator private key')
   return value.startsWith('0x') ? value : `0x${value}`
+}
+
+function loadChainRegistry() {
+  return JSON.parse(fs.readFileSync(chainRegistryPath, 'utf8'))
 }
 
 function parseRpcUrls(value) {
@@ -118,6 +119,11 @@ function createRpcTransport(urls) {
   })
 }
 
+function resolveKnownChain(chainId) {
+  if (!chainId) return null
+  return chainRegistry[String(chainId)] || null
+}
+
 function topicForAddress(address) {
   return `0x${address.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`
 }
@@ -142,24 +148,32 @@ function buildConfig() {
     throw new Error('Missing REACTIVE_CHAIN_ID or VITE_REACTIVE_CHAIN_ID')
   }
 
+  const originChainId = Number(merged.ORIGIN_CHAIN_ID || merged.VITE_ORIGIN_CHAIN_ID || 84532)
+  const destinationChainId = Number(merged.DESTINATION_CHAIN_ID || merged.VITE_DESTINATION_CHAIN_ID || 11155111)
+  const originChain = resolveKnownChain(originChainId)
+  const destinationChain = resolveKnownChain(destinationChainId)
+  const reactiveChain = resolveKnownChain(reactiveChainId)
+
   return {
     originRpcUrls: resolveRpcUrls(
       merged.ORIGIN_RPC_URL || merged.VITE_ORIGIN_RPC_URL,
-      defaultEthereumSepoliaRpcUrls
+      originChain?.defaultRpcUrls || []
     ),
     destinationRpcUrls: resolveRpcUrls(
       merged.DESTINATION_RPC_URL || merged.VITE_DESTINATION_RPC_URL,
-      defaultEthereumSepoliaRpcUrls
+      destinationChain?.defaultRpcUrls || []
     ),
     reactiveRpcUrls: resolveRpcUrls(
       merged.REACTIVE_RPC_URL || merged.VITE_REACTIVE_RPC_URL,
-      defaultReactiveRpcUrls
+      reactiveChain?.defaultRpcUrls || []
     ),
     walletAddress: getAddress(merged.WILLLEAD_WALLET || merged.VITE_WALLET_ADDRESS),
     listenerAddress: getAddress(
       merged.WILLLEAD_REACTIVE_LISTENER || merged.VITE_REACTIVE_LISTENER_ADDRESS
     ),
     authorizedRvmId: getAddress(merged.AUTHORIZED_RVM_ID || merged.VITE_AUTHORIZED_RVM_ID),
+    originChainId,
+    destinationChainId,
     reactiveChainId,
     listenerFundingBufferWei: BigInt(
       merged.WILLLEAD_OPERATOR_LISTENER_BUFFER_WEI || merged.WILLLEAD_REACTIVE_BUFFER_WEI || '1000000000000000'
@@ -380,6 +394,23 @@ async function readWalletRuntime(destinationClient, walletAddress) {
   }
 }
 
+async function readWalletBinding({ destinationClient, walletAddress, fallbackListenerAddress }) {
+  const [listenerAddress, signalEmitter, sourceChainId, destinationChainId, strategySignalTopic0] =
+    await destinationClient.readContract({
+      address: walletAddress,
+      abi: walletAbi,
+      functionName: 'getRuntimeBinding'
+    })
+
+  return {
+    listenerAddress: listenerAddress || fallbackListenerAddress,
+    signalEmitter,
+    sourceChainId,
+    destinationChainId,
+    strategySignalTopic0
+  }
+}
+
 function mirroredIntentMatches(mirroredIntent, walletRuntime) {
   const mirroredActive = mirroredIntent[0]
   const mirroredToken = mirroredIntent[1]
@@ -451,26 +482,27 @@ async function syncMirroredIntent({
 
 async function emitTestSignal({
   destinationClient,
-  reactiveClient,
   originClient,
   originWalletClient,
   operatorAccount,
   walletAddress,
-  listenerAddress,
+  fallbackListenerAddress,
   runtimeState
 }) {
-  const [lastExecutionNonce, signalEmitter] = await Promise.all([
+  const [lastExecutionNonce, runtimeBinding] = await Promise.all([
     destinationClient.readContract({
       address: walletAddress,
       abi: walletAbi,
       functionName: 'lastExecutionNonce'
     }),
-    reactiveClient.readContract({
-      address: listenerAddress,
-      abi: listenerAbi,
-      functionName: 'signalEmitter'
+    readWalletBinding({
+      destinationClient,
+      walletAddress,
+      fallbackListenerAddress
     })
   ])
+
+  runtimeState.listenerAddress = runtimeBinding.listenerAddress
 
   const mirrorResult = await syncMirroredIntent({
     destinationClient,
@@ -478,7 +510,7 @@ async function emitTestSignal({
     originWalletClient,
     operatorAccount,
     walletAddress,
-    signalEmitter,
+    signalEmitter: runtimeBinding.signalEmitter,
     runtimeState
   })
   const { walletRuntime } = mirrorResult
@@ -498,7 +530,7 @@ async function emitTestSignal({
   const hash = await originWalletClient.writeContract({
     account: operatorAccount,
     chain: undefined,
-    address: signalEmitter,
+    address: runtimeBinding.signalEmitter,
     abi: signalEmitterAbi,
     functionName: 'poke',
     args: [walletAddress, nextNonce]
@@ -512,14 +544,24 @@ async function emitTestSignal({
 }
 
 async function prepareListenerForTestSignal({
+  destinationClient,
   reactiveClient,
   reactiveWalletClient,
   operatorAccount,
-  listenerAddress,
+  walletAddress,
+  fallbackListenerAddress,
   authorizedRvmId,
   fundingBufferWei,
   runtimeState
 }) {
+  const runtimeBinding = await readWalletBinding({
+    destinationClient,
+    walletAddress,
+    fallbackListenerAddress
+  })
+  const listenerAddress = runtimeBinding.listenerAddress
+
+  runtimeState.listenerAddress = listenerAddress
   const fundingResult = await ensureListenerFunded({
     reactiveClient,
     reactiveWalletClient,
@@ -544,10 +586,12 @@ async function prepareListenerForTestSignal({
 }
 
 async function maintainActiveRuntime({
+  destinationClient,
   reactiveClient,
   reactiveWalletClient,
   operatorAccount,
-  listenerAddress,
+  walletAddress,
+  fallbackListenerAddress,
   authorizedRvmId,
   fundingBufferWei,
   walletRuntime,
@@ -558,10 +602,12 @@ async function maintainActiveRuntime({
   }
 
   await prepareListenerForTestSignal({
+    destinationClient,
     reactiveClient,
     reactiveWalletClient,
     operatorAccount,
-    listenerAddress,
+    walletAddress,
+    fallbackListenerAddress,
     authorizedRvmId,
     fundingBufferWei,
     runtimeState
@@ -614,10 +660,12 @@ function startOperatorApi({
 
       inFlight = (async () => {
         await prepareListenerForTestSignal({
+          destinationClient: emitTestSignalHandler.destinationClient,
           reactiveClient: emitTestSignalHandler.reactiveClient,
           reactiveWalletClient: emitTestSignalHandler.reactiveWalletClient,
           operatorAccount: emitTestSignalHandler.operatorAccount,
-          listenerAddress: emitTestSignalHandler.listenerAddress,
+          walletAddress: emitTestSignalHandler.walletAddress,
+          fallbackListenerAddress: emitTestSignalHandler.fallbackListenerAddress,
           authorizedRvmId: emitTestSignalHandler.authorizedRvmId,
           fundingBufferWei: emitTestSignalHandler.fundingBufferWei,
           runtimeState
@@ -690,6 +738,9 @@ async function main() {
   console.log(`wallet=${config.walletAddress}`)
   console.log(`listener=${config.listenerAddress}`)
   console.log(`operator=${operatorAccount.address}`)
+  console.log(`origin_chain_id=${config.originChainId}`)
+  console.log(`destination_chain_id=${config.destinationChainId}`)
+  console.log(`reactive_chain_id=${config.reactiveChainId}`)
 
   const runtimeState = {
     serviceStatus: 'online',
@@ -720,19 +771,20 @@ async function main() {
       () =>
         emitTestSignal({
           destinationClient,
-          reactiveClient,
           originClient,
           originWalletClient,
           operatorAccount,
           walletAddress: config.walletAddress,
-          listenerAddress: config.listenerAddress,
+          fallbackListenerAddress: config.listenerAddress,
           runtimeState
         }),
       {
+        destinationClient,
         reactiveClient,
         reactiveWalletClient,
         operatorAccount,
-        listenerAddress: config.listenerAddress,
+        walletAddress: config.walletAddress,
+        fallbackListenerAddress: config.listenerAddress,
         authorizedRvmId: config.authorizedRvmId,
         fundingBufferWei: config.listenerFundingBufferWei
       }
@@ -747,18 +799,19 @@ async function main() {
     console.log(`operator_api=${runtimeState.apiUrl}`)
   }
 
-  const signalEmitter = await reactiveClient.readContract({
-    address: config.listenerAddress,
-    abi: listenerAbi,
-    functionName: 'signalEmitter'
+  const initialBinding = await readWalletBinding({
+    destinationClient,
+    walletAddress: config.walletAddress,
+    fallbackListenerAddress: config.listenerAddress
   })
+  runtimeState.listenerAddress = initialBinding.listenerAddress
   const initialMirror = await syncMirroredIntent({
     destinationClient,
     originClient,
     originWalletClient,
     operatorAccount,
     walletAddress: config.walletAddress,
-    signalEmitter,
+    signalEmitter: initialBinding.signalEmitter,
     runtimeState
   })
   writeRuntimeStatus(runtimeState)
@@ -766,10 +819,12 @@ async function main() {
   const initialRuntime = initialMirror.walletRuntime
   if (initialRuntime.runtimeStatus === 1) {
     await maintainActiveRuntime({
+      destinationClient,
       reactiveClient,
       reactiveWalletClient,
       operatorAccount,
-      listenerAddress: config.listenerAddress,
+      walletAddress: config.walletAddress,
+      fallbackListenerAddress: config.listenerAddress,
       authorizedRvmId: config.authorizedRvmId,
       fundingBufferWei: config.listenerFundingBufferWei,
       walletRuntime: initialRuntime,
@@ -815,21 +870,29 @@ async function main() {
       lastSeenKey = logKey
       console.log(`intent_detected=${log.transactionHash}`)
       runtimeState.lastIntentTx = log.transactionHash
+      const runtimeBinding = await readWalletBinding({
+        destinationClient,
+        walletAddress: config.walletAddress,
+        fallbackListenerAddress: config.listenerAddress
+      })
+      runtimeState.listenerAddress = runtimeBinding.listenerAddress
       const mirrorResult = await syncMirroredIntent({
         destinationClient,
         originClient,
         originWalletClient,
         operatorAccount,
         walletAddress: config.walletAddress,
-        signalEmitter,
+        signalEmitter: runtimeBinding.signalEmitter,
         runtimeState
       })
       console.log(`mirror_intent=${mirrorResult.status}`)
       await maintainActiveRuntime({
+        destinationClient,
         reactiveClient,
         reactiveWalletClient,
         operatorAccount,
-        listenerAddress: config.listenerAddress,
+        walletAddress: config.walletAddress,
+        fallbackListenerAddress: config.listenerAddress,
         authorizedRvmId: config.authorizedRvmId,
         fundingBufferWei: config.listenerFundingBufferWei,
         walletRuntime: mirrorResult.walletRuntime,
@@ -844,20 +907,28 @@ async function main() {
 
     lastSeenBlock = latestBlock
     try {
+      const runtimeBinding = await readWalletBinding({
+        destinationClient,
+        walletAddress: config.walletAddress,
+        fallbackListenerAddress: config.listenerAddress
+      })
+      runtimeState.listenerAddress = runtimeBinding.listenerAddress
       const mirrorResult = await syncMirroredIntent({
         destinationClient,
         originClient,
         originWalletClient,
         operatorAccount,
         walletAddress: config.walletAddress,
-        signalEmitter,
+        signalEmitter: runtimeBinding.signalEmitter,
         runtimeState
       })
       await maintainActiveRuntime({
+        destinationClient,
         reactiveClient,
         reactiveWalletClient,
         operatorAccount,
-        listenerAddress: config.listenerAddress,
+        walletAddress: config.walletAddress,
+        fallbackListenerAddress: config.listenerAddress,
         authorizedRvmId: config.authorizedRvmId,
         fundingBufferWei: config.listenerFundingBufferWei,
         walletRuntime: mirrorResult.walletRuntime,
@@ -865,7 +936,7 @@ async function main() {
       })
       const fundingState = await readListenerFundingState({
         reactiveClient,
-        listenerAddress: config.listenerAddress
+        listenerAddress: runtimeBinding.listenerAddress
       })
       runtimeState.listenerBalanceWei = fundingState.listenerBalance.toString()
       runtimeState.listenerDebtWei = fundingState.listenerDebt.toString()

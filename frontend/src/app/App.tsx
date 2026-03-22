@@ -39,6 +39,7 @@ export function App() {
   const pauseListener = useWalletStore((state) => state.pauseListener)
   const resumeListener = useWalletStore((state) => state.resumeListener)
   const triggerSignal = useWalletStore((state) => state.triggerSignal)
+  const watchAssetToken = useWalletStore((state) => state.watchAssetToken)
   const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
   const isActionPending = useWalletStore((state) => state.isPending)
   const statusMessage = useWalletStore((state) => state.statusMessage)
@@ -237,25 +238,28 @@ export function App() {
               lastSyncedAt={wallet.lastSyncedAt}
               walletAccessState={wallet.walletAccessState}
               onFundWallet={(amount) => void fundWallet({ amount })}
+              onWatchToken={(tokenAddress) => void watchAssetToken(tokenAddress)}
             />
           ) : null}
 
           {activeSection === 'overview' ? (
             <AutomationCapabilityPanel
               availableBalance={automation.availableBalance}
-              callbackGasLimit={wallet.callbackGasLimit}
+              callbackGasLimit={wallet.runtimeRoute.callbackGasLimit}
               creditLabel={automation.creditLabel}
               isPending={isActionPending}
               lastSyncedAt={wallet.lastSyncedAt}
-              listenerAddress={wallet.listenerAddress}
-              listenerPaused={wallet.listenerPaused}
+              listenerAddress={wallet.runtimeRoute.listenerAddress}
+              listenerPaused={wallet.runtimeRoute.listenerPaused}
               minRequiredBalance={automation.minRequiredBalance}
               walletAccessState={wallet.walletAccessState}
               onFundAutomation={(amount) => void fundAutomation({ amount })}
               onRefresh={handleRefresh}
-              signalEmitterAddress={wallet.signalEmitterAddress}
-              subscriptionOriginChainId={wallet.subscriptionOriginChainId}
-              subscriptionStatus={wallet.subscriptionStatus}
+              signalEmitterAddress={wallet.runtimeRoute.signalEmitterAddress}
+              subscriptionOriginChainId={wallet.runtimeRoute.sourceChainId}
+              subscriptionDestinationChainId={wallet.runtimeRoute.destinationChainId}
+              subscriptionTopic0={wallet.runtimeRoute.signalTopic0}
+              subscriptionStatus={wallet.runtimeRoute.subscriptionStatus}
               operatorServiceStatus={wallet.operatorServiceStatus}
               operatorLastHeartbeat={wallet.operatorLastHeartbeat}
               operatorListenerBalance={wallet.operatorListenerBalance}
@@ -274,6 +278,11 @@ export function App() {
               maxExecutions={intent.maxExecutions}
               executedCount={intent.executedCount}
               minAutomationBalance={intent.minAutomationBalance}
+              listenerAddress={wallet.runtimeRoute.listenerAddress}
+              signalEmitterAddress={wallet.runtimeRoute.signalEmitterAddress}
+              sourceChainId={wallet.runtimeRoute.sourceChainId}
+              destinationChainId={wallet.runtimeRoute.destinationChainId}
+              signalTopic0={wallet.runtimeRoute.signalTopic0}
               enabled={intent.enabled}
               isEditable={hasBoundWallet}
               isPending={isActionPending}
@@ -292,16 +301,16 @@ export function App() {
               lastExecutedAt={wallet.lastExecutedAt}
               lastSignalHash={wallet.lastSignalHash}
               destinationBalanceDelta={wallet.destinationBalanceDelta}
-              listenerAddress={wallet.listenerAddress}
-              listenerPaused={wallet.listenerPaused}
-              signalEmitterAddress={wallet.signalEmitterAddress}
-              subscriptionStatus={wallet.subscriptionStatus}
-              subscriptionOriginChainId={wallet.subscriptionOriginChainId}
-              subscriptionDestinationChainId={wallet.subscriptionDestinationChainId}
-              subscriptionTopic0={wallet.subscriptionTopic0}
-              callbackGasLimit={wallet.callbackGasLimit}
+              listenerAddress={wallet.runtimeRoute.listenerAddress}
+              listenerPaused={wallet.runtimeRoute.listenerPaused}
+              signalEmitterAddress={wallet.runtimeRoute.signalEmitterAddress}
+              subscriptionStatus={wallet.runtimeRoute.subscriptionStatus}
+              subscriptionOriginChainId={wallet.runtimeRoute.sourceChainId}
+              subscriptionDestinationChainId={wallet.runtimeRoute.destinationChainId}
+              subscriptionTopic0={wallet.runtimeRoute.signalTopic0}
+              callbackGasLimit={wallet.runtimeRoute.callbackGasLimit}
               operatorServiceStatus={wallet.operatorServiceStatus}
-              canManageListener={wallet.canManageListener}
+              canManageListener={wallet.runtimeRoute.canManageListener}
               isPending={isActionPending}
               walletAccessState={wallet.walletAccessState}
               onPauseListener={() => void pauseListener()}

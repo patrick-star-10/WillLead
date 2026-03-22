@@ -29,6 +29,27 @@ export const willLeadWalletFactoryAbi = [
   },
   {
     type: 'function',
+    name: 'originChainId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'destinationChainId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'strategySignalTopic0',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    type: 'function',
     name: 'walletOf',
     stateMutability: 'view',
     inputs: [{ name: 'owner', type: 'address' }],
@@ -47,6 +68,20 @@ export const willLeadWalletFactoryAbi = [
     stateMutability: 'nonpayable',
     inputs: [],
     outputs: [{ name: 'wallet', type: 'address' }]
+  },
+  {
+    type: 'function',
+    name: 'getWalletContext',
+    stateMutability: 'view',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [
+      { name: 'wallet', type: 'address' },
+      { name: 'listener', type: 'address' },
+      { name: 'emitter', type: 'address' },
+      { name: 'sourceChain', type: 'uint256' },
+      { name: 'targetChain', type: 'uint256' },
+      { name: 'signalTopic0', type: 'uint256' }
+    ]
   },
   {
     anonymous: false,

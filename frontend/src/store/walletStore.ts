@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 import {
+  addWatchedToken,
   configureIntent,
   connectOwnerWallet,
   createOwnerWebWallet,
@@ -55,13 +56,12 @@ type WillLeadStore = {
   pauseListener: () => Promise<void>
   resumeListener: () => Promise<void>
   triggerSignal: () => Promise<void>
+  watchAssetToken: (tokenAddress: string) => Promise<void>
   syncIdleCopy: () => void
 }
 
 const initialWalletState: WalletState = {
   contractAddress: 'Unavailable',
-  listenerAddress: 'Unavailable',
-  signalEmitterAddress: 'Unavailable',
   ownerAddress: null,
   connectionSource: 'disconnected',
   connectionLabel: 'Not connected',
@@ -78,13 +78,17 @@ const initialWalletState: WalletState = {
   lastExecutedAt: 'Never',
   lastSignalHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
   destinationBalanceDelta: '0 ETH',
-  canManageListener: false,
-  listenerPaused: null,
-  callbackGasLimit: 'Unavailable',
-  subscriptionStatus: 'unavailable',
-  subscriptionOriginChainId: 'Unavailable',
-  subscriptionDestinationChainId: 'Unavailable',
-  subscriptionTopic0: 'Unavailable',
+  runtimeRoute: {
+    listenerAddress: 'Unavailable',
+    signalEmitterAddress: 'Unavailable',
+    sourceChainId: 'Unavailable',
+    destinationChainId: 'Unavailable',
+    signalTopic0: 'Unavailable',
+    listenerPaused: null,
+    callbackGasLimit: 'Unavailable',
+    subscriptionStatus: 'unavailable',
+    canManageListener: false
+  },
   operatorServiceStatus: 'unknown',
   operatorLastHeartbeat: 'Never',
   operatorListenerBalance: 'Unavailable',
@@ -161,34 +165,40 @@ function mergeCoreSnapshotIntoState(
     ...snapshot,
     wallet: {
       ...snapshot.wallet,
-      signalEmitterAddress:
-        snapshot.wallet.signalEmitterAddress === '0x0000000000000000000000000000000000000000'
-          ? state.wallet.signalEmitterAddress
-          : snapshot.wallet.signalEmitterAddress,
-      canManageListener:
-        snapshot.wallet.canManageListener || state.wallet.canManageListener,
-      listenerPaused:
-        snapshot.wallet.listenerPaused === null ? state.wallet.listenerPaused : snapshot.wallet.listenerPaused,
-      callbackGasLimit:
-        snapshot.wallet.callbackGasLimit === 'Unavailable'
-          ? state.wallet.callbackGasLimit
-          : snapshot.wallet.callbackGasLimit,
-      subscriptionStatus:
-        snapshot.wallet.subscriptionStatus === 'unavailable'
-          ? state.wallet.subscriptionStatus
-          : snapshot.wallet.subscriptionStatus,
-      subscriptionOriginChainId:
-        snapshot.wallet.subscriptionOriginChainId === 'Unavailable'
-          ? state.wallet.subscriptionOriginChainId
-          : snapshot.wallet.subscriptionOriginChainId,
-      subscriptionDestinationChainId:
-        snapshot.wallet.subscriptionDestinationChainId === 'Unavailable'
-          ? state.wallet.subscriptionDestinationChainId
-          : snapshot.wallet.subscriptionDestinationChainId,
-      subscriptionTopic0:
-        snapshot.wallet.subscriptionTopic0 === 'Unavailable'
-          ? state.wallet.subscriptionTopic0
-          : snapshot.wallet.subscriptionTopic0,
+      runtimeRoute: {
+        ...snapshot.wallet.runtimeRoute,
+        signalEmitterAddress:
+          snapshot.wallet.runtimeRoute.signalEmitterAddress ===
+          '0x0000000000000000000000000000000000000000'
+            ? state.wallet.runtimeRoute.signalEmitterAddress
+            : snapshot.wallet.runtimeRoute.signalEmitterAddress,
+        canManageListener:
+          snapshot.wallet.runtimeRoute.canManageListener || state.wallet.runtimeRoute.canManageListener,
+        listenerPaused:
+          snapshot.wallet.runtimeRoute.listenerPaused === null
+            ? state.wallet.runtimeRoute.listenerPaused
+            : snapshot.wallet.runtimeRoute.listenerPaused,
+        callbackGasLimit:
+          snapshot.wallet.runtimeRoute.callbackGasLimit === 'Unavailable'
+            ? state.wallet.runtimeRoute.callbackGasLimit
+            : snapshot.wallet.runtimeRoute.callbackGasLimit,
+        subscriptionStatus:
+          snapshot.wallet.runtimeRoute.subscriptionStatus === 'unavailable'
+            ? state.wallet.runtimeRoute.subscriptionStatus
+            : snapshot.wallet.runtimeRoute.subscriptionStatus,
+        sourceChainId:
+          snapshot.wallet.runtimeRoute.sourceChainId === 'Unavailable'
+            ? state.wallet.runtimeRoute.sourceChainId
+            : snapshot.wallet.runtimeRoute.sourceChainId,
+        destinationChainId:
+          snapshot.wallet.runtimeRoute.destinationChainId === 'Unavailable'
+            ? state.wallet.runtimeRoute.destinationChainId
+            : snapshot.wallet.runtimeRoute.destinationChainId,
+        signalTopic0:
+          snapshot.wallet.runtimeRoute.signalTopic0 === 'Unavailable'
+            ? state.wallet.runtimeRoute.signalTopic0
+            : snapshot.wallet.runtimeRoute.signalTopic0
+      },
       operatorServiceStatus:
         snapshot.wallet.operatorServiceStatus === 'unknown'
           ? state.wallet.operatorServiceStatus
@@ -389,9 +399,12 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     set({ isPending: true, errorMessage: null, statusMessage: copy().refreshingWalletState })
 
     try {
+      const ownerAddress = get().wallet.ownerAddress
+      const connectionSource = get().wallet.connectionSource
       const snapshot = await readWalletState(
-        get().wallet.ownerAddress,
-        get().wallet.connectionSource
+        ownerAddress,
+        connectionSource,
+        'core'
       )
       set({
         ...snapshot,
@@ -399,6 +412,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         statusMessage: copy().walletStateRefreshed,
         errorMessage: null
       })
+
+      if (ownerAddress) {
+        void hydrateDetailedSnapshot(set, ownerAddress, connectionSource)
+      }
     } catch (error) {
       set({
         isPending: false,
@@ -568,6 +585,20 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         isPending: false,
         errorMessage: error instanceof Error ? error.message : copy().failedEmitSourceSignal,
         statusMessage: copy().signalEmissionFailed
+      })
+    }
+  },
+  watchAssetToken: async (tokenAddress) => {
+    set({ isPending: true, errorMessage: null, statusMessage: copy().addingWatchedToken })
+
+    try {
+      const action = addWatchedToken(tokenAddress)
+      await applyPostAction(set, get, action)
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().failedAddWatchedToken,
+        statusMessage: copy().addWatchedTokenFailed
       })
     }
   },
@@ -764,8 +795,8 @@ async function pollForListenerActivation(
       const snapshot = await readWalletState(initialOwnerAddress, initialConnectionSource)
       const listenerArmed =
         snapshot.wallet.runtimeStatus === 'active' &&
-        snapshot.wallet.listenerPaused === false &&
-        snapshot.wallet.subscriptionStatus === 'armed'
+        snapshot.wallet.runtimeRoute.listenerPaused === false &&
+        snapshot.wallet.runtimeRoute.subscriptionStatus === 'armed'
 
       set({
         ...snapshot,

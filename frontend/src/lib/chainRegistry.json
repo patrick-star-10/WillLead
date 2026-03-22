@@ -1,0 +1,81 @@
+{
+  "11155111": {
+    "name": "Ethereum Sepolia",
+    "nativeCurrency": {
+      "decimals": 18,
+      "name": "Sepolia Ether",
+      "symbol": "ETH"
+    },
+    "defaultRpcUrls": [
+      "https://ethereum-sepolia-rpc.publicnode.com",
+      "https://rpc.sepolia.org",
+      "https://eth-sepolia.public.blastapi.io"
+    ],
+    "explorerBaseUrl": "https://sepolia.etherscan.io"
+  },
+  "84532": {
+    "name": "Base Sepolia",
+    "nativeCurrency": {
+      "decimals": 18,
+      "name": "Ether",
+      "symbol": "ETH"
+    },
+    "defaultRpcUrls": [
+      "https://base-sepolia-rpc.publicnode.com",
+      "https://sepolia.base.org",
+      "https://base-sepolia.public.blastapi.io"
+    ],
+    "explorerBaseUrl": "https://sepolia.basescan.org"
+  },
+  "421614": {
+    "name": "Arbitrum Sepolia",
+    "nativeCurrency": {
+      "decimals": 18,
+      "name": "Ether",
+      "symbol": "ETH"
+    },
+    "defaultRpcUrls": [
+      "https://arbitrum-sepolia-rpc.publicnode.com",
+      "https://sepolia-rollup.arbitrum.io/rpc"
+    ],
+    "explorerBaseUrl": "https://sepolia.arbiscan.io"
+  },
+  "11155420": {
+    "name": "OP Sepolia",
+    "nativeCurrency": {
+      "decimals": 18,
+      "name": "Ether",
+      "symbol": "ETH"
+    },
+    "defaultRpcUrls": [
+      "https://optimism-sepolia-rpc.publicnode.com",
+      "https://sepolia.optimism.io"
+    ],
+    "explorerBaseUrl": "https://sepolia-optimism.etherscan.io"
+  },
+  "80002": {
+    "name": "Polygon Amoy",
+    "nativeCurrency": {
+      "decimals": 18,
+      "name": "POL",
+      "symbol": "POL"
+    },
+    "defaultRpcUrls": [
+      "https://polygon-amoy-bor-rpc.publicnode.com",
+      "https://rpc-amoy.polygon.technology"
+    ],
+    "explorerBaseUrl": "https://amoy.polygonscan.com"
+  },
+  "5318007": {
+    "name": "Reactive Lasna",
+    "nativeCurrency": {
+      "decimals": 18,
+      "name": "REACT",
+      "symbol": "REACT"
+    },
+    "defaultRpcUrls": [
+      "https://lasna-rpc.rnk.dev/"
+    ],
+    "explorerBaseUrl": "https://reactscan.net"
+  }
+}

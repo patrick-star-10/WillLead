@@ -14,22 +14,18 @@ import {
 } from 'viem'
 import { mnemonicToAccount } from 'viem/accounts'
 
-import { destinationChain, originChain, reactiveChain } from './chains'
+import {
+  destinationChain,
+  destinationChainConfig,
+  originChain,
+  originChainConfig,
+  reactiveChain,
+  reactiveChainConfig
+} from './chains'
 import { getActiveWalletSource, getStoredWebWallet, setActiveWalletSource } from './webWallet'
 import type { InjectedWalletOption } from '../types/willlead'
 
 const activeInjectedProviderKey = 'willlead.active-injected-provider'
-const defaultEthereumSepoliaRpcUrls = [
-  'https://ethereum-sepolia-rpc.publicnode.com',
-  'https://rpc.sepolia.org',
-  'https://eth-sepolia.public.blastapi.io'
-]
-const defaultBaseSepoliaRpcUrls = [
-  'https://base-sepolia-rpc.publicnode.com',
-  'https://sepolia.base.org',
-  'https://base-sepolia.public.blastapi.io'
-]
-const defaultReactiveRpcUrls = ['https://lasna-rpc.rnk.dev/']
 
 type InjectedProvider = {
   isMetaMask?: boolean
@@ -70,10 +66,6 @@ function parseRpcUrls(value: string | undefined) {
 
 function uniqueRpcUrls(urls: string[]) {
   return [...new Set(urls)]
-}
-
-function defaultOriginRpcUrls() {
-  return originChain.id === 84532 ? defaultBaseSepoliaRpcUrls : defaultEthereumSepoliaRpcUrls
 }
 
 function resolveRpcUrls(configuredValue: string | undefined, fallbackUrls: string[]) {
@@ -163,7 +155,7 @@ export function disconnectBrowserWalletSession() {
 }
 
 export function getOriginPublicClient(): PublicClient | null {
-  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_ORIGIN_RPC_URL, defaultOriginRpcUrls())
+  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_ORIGIN_RPC_URL, originChainConfig.defaultRpcUrls)
   if (rpcUrls.length === 0) return null
 
   return createPublicClient({
@@ -176,20 +168,10 @@ export function getOriginPublicClient(): PublicClient | null {
 }
 
 export function getDestinationPublicClient(): PublicClient | null {
-  if (getActiveWalletSource() === 'browser') {
-    try {
-      const provider = resolveInjectedProvider()
-      return createPublicClient({
-        batch: {
-          multicall: true
-        },
-        chain: destinationChain,
-        transport: custom(provider)
-      })
-    } catch {}
-  }
-
-  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_DESTINATION_RPC_URL, defaultEthereumSepoliaRpcUrls)
+  const rpcUrls = resolveRpcUrls(
+    import.meta.env.VITE_DESTINATION_RPC_URL,
+    destinationChainConfig.defaultRpcUrls
+  )
   if (rpcUrls.length === 0) return null
 
   return createPublicClient({
@@ -202,7 +184,7 @@ export function getDestinationPublicClient(): PublicClient | null {
 }
 
 export function getReactivePublicClient(): PublicClient | null {
-  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_REACTIVE_RPC_URL, defaultReactiveRpcUrls)
+  const rpcUrls = resolveRpcUrls(import.meta.env.VITE_REACTIVE_RPC_URL, reactiveChainConfig.defaultRpcUrls)
   if (rpcUrls.length === 0) return null
 
   return createPublicClient({
@@ -287,10 +269,43 @@ function createLocalWalletClient(
   }
 }
 
+async function switchInjectedChain(
+  provider: InjectedProvider,
+  chain: typeof originChain | typeof destinationChain | typeof reactiveChain
+) {
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: toHex(chain.id) }]
+    })
+    return
+  } catch (error) {
+    const code = typeof error === 'object' && error !== null && 'code' in error ? Number(error.code) : null
+    if (code !== 4902) {
+      throw error
+    }
+  }
+
+  await provider.request({
+    method: 'wallet_addEthereumChain',
+    params: [
+      {
+        chainId: toHex(chain.id),
+        chainName: chain.name,
+        nativeCurrency: chain.nativeCurrency,
+        rpcUrls: chain.rpcUrls.default.http,
+        blockExplorerUrls: chain.blockExplorers?.default?.url
+          ? [chain.blockExplorers.default.url]
+          : undefined
+      }
+    ]
+  })
+}
+
 export async function getOriginWalletClient(): Promise<{ account: Address; client: WalletClient }> {
   if (getActiveWalletSource() === 'web') {
     return createLocalWalletClient(
-      resolveRpcUrls(import.meta.env.VITE_ORIGIN_RPC_URL, defaultOriginRpcUrls()),
+      resolveRpcUrls(import.meta.env.VITE_ORIGIN_RPC_URL, originChainConfig.defaultRpcUrls),
       originChain
     )
   }
@@ -299,10 +314,7 @@ export async function getOriginWalletClient(): Promise<{ account: Address; clien
   const provider = resolveInjectedProvider()
   const account = await getConnectedInjectedAddress(provider)
 
-  await provider.request({
-    method: 'wallet_switchEthereumChain',
-    params: [{ chainId: toHex(originChain.id) }]
-  })
+  await switchInjectedChain(provider, originChain)
 
   const client = createWalletClient({
     account,
@@ -319,7 +331,7 @@ export async function getDestinationWalletClient(): Promise<{
 }> {
   if (getActiveWalletSource() === 'web') {
     return createLocalWalletClient(
-      resolveRpcUrls(import.meta.env.VITE_DESTINATION_RPC_URL, defaultEthereumSepoliaRpcUrls),
+      resolveRpcUrls(import.meta.env.VITE_DESTINATION_RPC_URL, destinationChainConfig.defaultRpcUrls),
       destinationChain
     )
   }
@@ -328,10 +340,7 @@ export async function getDestinationWalletClient(): Promise<{
   const provider = resolveInjectedProvider()
   const account = await getConnectedInjectedAddress(provider)
 
-  await provider.request({
-    method: 'wallet_switchEthereumChain',
-    params: [{ chainId: toHex(destinationChain.id) }]
-  })
+  await switchInjectedChain(provider, destinationChain)
 
   const client = createWalletClient({
     account,
@@ -348,7 +357,7 @@ export async function getReactiveWalletClient(): Promise<{
 }> {
   if (getActiveWalletSource() === 'web') {
     return createLocalWalletClient(
-      resolveRpcUrls(import.meta.env.VITE_REACTIVE_RPC_URL, defaultReactiveRpcUrls),
+      resolveRpcUrls(import.meta.env.VITE_REACTIVE_RPC_URL, reactiveChainConfig.defaultRpcUrls),
       reactiveChain
     )
   }
@@ -357,10 +366,7 @@ export async function getReactiveWalletClient(): Promise<{
   const provider = resolveInjectedProvider()
   const account = await getConnectedInjectedAddress(provider)
 
-  await provider.request({
-    method: 'wallet_switchEthereumChain',
-    params: [{ chainId: toHex(reactiveChain.id) }]
-  })
+  await switchInjectedChain(provider, reactiveChain)
 
   const client = createWalletClient({
     account,

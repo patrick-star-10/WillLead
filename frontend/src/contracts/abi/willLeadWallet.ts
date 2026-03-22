@@ -36,6 +36,32 @@ export const willLeadWalletAbi = [
   },
   {
     type: 'function',
+    name: 'configureRuntimeRoute',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'runtimeListener', type: 'address' },
+      { name: 'runtimeSignalEmitter', type: 'address' },
+      { name: 'runtimeSourceChainId', type: 'uint256' },
+      { name: 'runtimeDestinationChainId', type: 'uint256' },
+      { name: 'runtimeStrategySignalTopic0', type: 'uint256' }
+    ],
+    outputs: []
+  },
+  {
+    type: 'function',
+    name: 'getRuntimeBinding',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'runtimeListener', type: 'address' },
+      { name: 'runtimeSignalEmitter', type: 'address' },
+      { name: 'runtimeSourceChainId', type: 'uint256' },
+      { name: 'runtimeDestinationChainId', type: 'uint256' },
+      { name: 'runtimeStrategySignalTopic0', type: 'uint256' }
+    ]
+  },
+  {
+    type: 'function',
     name: 'pauseIntent',
     stateMutability: 'nonpayable',
     inputs: [],

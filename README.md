@@ -114,6 +114,9 @@ cp .env.example .env
 其中：
 
 - `AUTHORIZED_RVM_ID` 应该填部署 `WillLeadWallet` 和 `WillLeadReactiveListener` 的同一个 EOA 地址
+- `ORIGIN_CHAIN_ID / DESTINATION_CHAIN_ID / REACTIVE_CHAIN_ID` 不再要求固定是当前这套 Sepolia 组合；前端和 operator 现在按 chain id 解析链元数据
+- 当前内置链注册表包含 `Ethereum Sepolia / Base Sepolia / Arbitrum Sepolia / OP Sepolia / Polygon Amoy / Reactive Lasna`
+- 如果你要接入新的 Reactive-supported source chain，可以直接改 env 里的 chain id + RPC；若前端注册表里还没有这条链，再补 `*_CHAIN_NAME` 和 explorer，或把它加入 [frontend/src/lib/chainRegistry.json](/Users/wx/Desktop/WillLead/frontend/src/lib/chainRegistry.json)
 - `deploy-local.sh` 现在会部署共享的 `WillLeadWalletFactory`，然后为当前 `OWNER_PRIVATE_KEY` 对应的 owner 自动创建第一只 wallet
 - `create-wallet.sh` 可以在任意时刻为当前 `OWNER_PRIVATE_KEY` 对应的 owner 创建或恢复 autonomous wallet，并把 `.env` / 前端地址同步到这只 wallet
 - listener 本身不再把该值写进 callback payload，payload 里使用 `address(0)` 让 Reactive 在真实 callback 时填充 RVM ID
@@ -135,6 +138,7 @@ cp .env.example .env
 - [verify-deployments.sh](/Users/wx/Desktop/WillLead/contracts/script/verify-deployments.sh)
 - [create-wallet.sh](/Users/wx/Desktop/WillLead/contracts/script/create-wallet.sh)
 - [configure-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/configure-intent.sh)
+- [configure-runtime-route.sh](/Users/wx/Desktop/WillLead/contracts/script/configure-runtime-route.sh)
 - [ensure-listener-armed.sh](/Users/wx/Desktop/WillLead/contracts/script/ensure-listener-armed.sh)
 - [fund-reactive-listener.sh](/Users/wx/Desktop/WillLead/contracts/script/fund-reactive-listener.sh)
 - [pause-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/pause-intent.sh)
@@ -191,6 +195,12 @@ npm run build
 - `fund-reactive-listener.sh` 对应的 funding / `coverDebt()` 逻辑
 - `sync-listener-subscription.sh`
 - `resume-listener.sh`（当 operator key 拥有 listener 且当前处于 paused）
+
+链配置说明：
+
+- 前端当前会优先读 `VITE_*_CHAIN_ID / VITE_*_RPC_URL / VITE_*_EXPLORER_BASE_URL`
+- 运行 `./contracts/script/sync-frontend-env.sh` 后，`.env` 里的 `ORIGIN_* / DESTINATION_* / REACTIVE_*` 会同步到 `frontend/.env.local`
+- 浏览器钱包切到未预置链时，前端现在会尝试自动 `wallet_addEthereumChain`
 
 同时，这条 service 现在还会持续轮询 wallet runtime：
 

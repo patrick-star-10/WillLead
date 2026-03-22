@@ -35,7 +35,12 @@ export function RuntimePanel(props: RuntimePanelProps) {
   const { copy, locale } = useCopy()
   const listenerUnavailable = props.listenerPaused === null
   const hasBoundWallet = props.walletAccessState === 'bound'
-  const canTriggerTestSignal = props.operatorServiceStatus === 'online'
+  const canTriggerTestSignal =
+    hasBoundWallet &&
+    props.runtimeStatus === 'active' &&
+    props.operatorServiceStatus === 'online' &&
+    props.signalEmitterAddress !== 'Unavailable' &&
+    !props.signalEmitterAddress.startsWith('0x0000000000000000000000000000000000000000')
   const listenerStatusLabel = listenerUnavailable
     ? props.walletAccessState === 'mismatch'
       ? copy.connectedWalletMismatch

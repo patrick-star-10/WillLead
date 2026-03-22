@@ -25,13 +25,13 @@ const messages = {
     overviewDesc: 'Balance, identity, execution runway, and automation credit.',
     planTab: 'Transfer Plan',
     planDesc: 'Configure the onchain transfer this wallet should keep executing.',
-    automationTab: 'Automation',
-    automationDesc: 'Inspect listener health and the external trigger route.',
+    automationTab: 'Runtime',
+    automationDesc: 'Inspect the wallet runtime route, activation state, and execution path.',
     activityTab: 'Activity',
     activityDesc: 'Review recent origin signals, callbacks, executions, and skipped runs.',
     walletOverviewTitle: 'Wallet Overview',
     transferPlanTitle: 'Transfer Plan',
-    automationTitle: 'Automation Engine',
+    automationTitle: 'Wallet Runtime',
     activityTitle: 'Activity Ledger',
     walletOverviewKicker: 'Wallet Overview',
     controllerWalletBalance: 'Controller wallet balance',
@@ -42,7 +42,7 @@ const messages = {
     executionMode: 'Execution mode',
     reactiveCallback: 'Reactive callback',
     controllerWalletAssets: 'Controller wallet assets',
-    controllerAssetsEmpty: 'Connect a Sepolia wallet to load controller assets.',
+    controllerAssetsEmpty: 'Connect the controller wallet to load controller assets.',
     autonomousWalletAssets: 'Autonomous wallet assets',
     autonomousAssetsEmpty:
       'Connect the wallet that owns this autonomous wallet to load its balance and assets.',
@@ -50,6 +50,10 @@ const messages = {
     fundingAutonomousWalletShort: 'Funding...',
     autonomousWalletFundingNote:
       'Send native execution funds into the autonomous wallet itself. This is separate from automation credit.',
+    watchToken: 'Watch ERC20',
+    watchTokenPlaceholder: 'ERC20 token address',
+    watchTokenNote:
+      'Token discovery is manual in this MVP. Add an ERC20 address to load balances for both the controller wallet and the autonomous wallet.',
     connection: 'Connection',
     walletConnected: 'Wallet connected',
     connectWalletShort: 'Connect wallet',
@@ -102,23 +106,34 @@ const messages = {
     originChainRoute: 'Origin chain',
     destinationChainRoute: 'Destination chain',
     signalTopic: 'Signal topic',
-    listenerRoutingKicker: 'Listener Routing',
+    listenerRoutingKicker: 'Wallet Runtime Route',
     listenerRoutingNote:
-      'This wallet runtime listens to one source emitter and only reacts when the matching subscription is armed.',
+      'This autonomous wallet declares its source event route directly and only executes when the matching runtime subscription is armed.',
     refreshCredit: 'Refresh Credit',
     refreshing: 'Refreshing...',
     topUpAutomation: 'Top Up Automation',
     transferPlanKicker: 'Transfer Plan',
     transferPlanNote: 'Define the transfer this wallet should keep executing.',
+    planRouteNote:
+      'These route fields bind the wallet to a specific listener and source event path. Update them when switching to another deployed Reactive route.',
+    destinationChainLockedNote:
+      'In the current MVP, the execution destination chain is fixed to the deployed wallet chain. Only the source event route should be switched here.',
+    useCurrentRoute: 'Use Current Route',
     planSigningNote:
       'Saving this plan signs the wallet intent only. The shared listener is already armed by the operator, so no extra start-listening signature is required.',
     initializeAutonomousWallet: 'Initialize Autonomous Wallet',
     initializingAutonomousWallet: 'Initializing wallet...',
     initializeAutonomousWalletNote:
       'Deploy a dedicated autonomous wallet for this owner before configuring the first intent.',
+    assetType: 'Asset Type',
+    nativeAsset: 'Native Asset',
+    erc20Asset: 'ERC20 Token',
     enabled: 'Enabled',
     disabled: 'Disabled',
     token: 'Token',
+    erc20TokenAddress: 'ERC20 token address',
+    tokenFieldNote:
+      'Choose Native Asset to transfer the destination-chain gas asset, or ERC20 Token to transfer a token held by the autonomous wallet.',
     recipient: 'Recipient',
     amountPerExecution: 'Amount / Execution',
     maxExecutions: 'Max Executions',
@@ -126,10 +141,13 @@ const messages = {
     minAutomationBalance: 'Min Automation Balance',
     saving: 'Saving...',
     saveTransferPlan: 'Save Transfer Plan',
+    addingWatchedToken: 'Adding watched token...',
+    addWatchedTokenFailed: 'Add watched token failed.',
+    failedAddWatchedToken: 'Failed to add watched token',
     pausePlan: 'Pause Plan',
     resumePlan: 'Resume Plan',
-    automationEngineKicker: 'Automation Engine',
-    automationEngineNote: 'Monitor the relay path that turns external source events into wallet transfers.',
+    automationEngineKicker: 'Wallet Runtime',
+    automationEngineNote: 'Monitor the runtime route that turns external source events into autonomous wallet execution.',
     lastExecutionNonce: 'Last Execution Nonce',
     lastExecutedAt: 'Last Executed At',
     lastSignalHash: 'Last Signal Hash',
@@ -142,7 +160,7 @@ const messages = {
     externalSignalNote:
       'In the normal flow, source events are triggered by an external operator or upstream protocol, not by the user wallet.',
     testSourceEventNote:
-      'Use the test button only for demo validation. It emits a source-chain signal directly from this UI and should not be presented as the production trigger path.',
+      'Use the test button only for demo validation. It relays the origin-chain trigger through the operator service so the user does not sign a second time.',
     activityKicker: 'Activity Ledger',
     activityNote:
       'A rolling execution history that shows what the wallet observed, executed, or skipped while you were away.',
@@ -208,10 +226,12 @@ const messages = {
     destination: 'Destination',
     originSignal: 'Origin Signal',
     reactiveCallbackLabel: 'Reactive Dispatch',
+    walletRuntimeBound: 'Wallet Runtime Bound',
     destinationExecution: 'Destination Execution',
     destinationSkipped: 'Destination Skipped',
     originSignalDesc: 'Signal emitted on the source chain.',
     reactiveCallbackDesc: 'Reactive system accepted the listener job and dispatched the destination callback.',
+    walletRuntimeBoundDesc: 'Autonomous wallet declared its Reactive runtime route onchain.',
     destinationExecutionDesc: 'Autonomous wallet executed the transfer on the destination chain.',
     destinationSkippedDesc: 'Autonomous wallet skipped execution and recorded the reason.',
     readyBindWallet: 'Ready to bind a wallet and configure the first intent.',
@@ -271,8 +291,27 @@ const messages = {
       'Source signal was sent, but destination execution is still pending. Refresh again if it takes longer.',
     signalEmissionFailed: 'Signal emission failed.',
     failedEmitSourceSignal: 'Failed to emit source signal',
+    sourceSignalUnavailable: 'Source signal route is unavailable for this wallet.',
+    reactiveRouteVerificationUnavailable:
+      'Reactive route verification is unavailable. Check the Reactive RPC configuration and try again.',
+    runtimeRouteValidationFailed:
+      'The requested runtime route does not match the selected listener deployment.',
+    runtimeRouteListenerUnreadable:
+      'The selected listener cannot be read from the Reactive chain.',
+    runtimeRouteEmitterMismatch:
+      'The selected listener is wired to a different source emitter.',
+    runtimeRouteSourceChainMismatch:
+      'The selected listener is wired to a different source chain id.',
+    runtimeRouteDestinationChainMismatch:
+      'The selected listener is wired to a different destination chain id.',
+    runtimeRouteTopicMismatch:
+      'The selected listener is wired to a different source event topic.',
+    runtimeRouteOriginConfigMismatch:
+      'The requested runtime route is pointing at a different origin chain than the app is currently configured for.',
+    runtimeRouteDestinationConfigMismatch:
+      'The requested runtime route is pointing at a different destination chain than the app is currently configured for.',
     operatorServiceRequiredForTestSignal:
-      'Operator service must be online to emit a test source signal without asking the user wallet to sign again.',
+      'To emit a test source signal without asking the user wallet to sign again, the operator service for this wallet must be online.',
     intentConfiguredAction: 'Transfer Plan Saved',
     intentConfiguredDesc:
       'Saved the wallet intent onchain. The shared listener remains armed by the operator for future external triggers.',
@@ -283,8 +322,10 @@ const messages = {
     intentPausedDesc: 'Paused reactive execution on the destination wallet.',
     intentResumedAction: 'Intent Resumed',
     intentResumedDesc: 'Reactivated reactive execution on the destination wallet.',
+    watchedTokenAddedAction: 'Watched Token Added',
+    watchedTokenAddedDesc: 'Added ERC20 token to the watched asset list:',
     sourceSignalEmittedAction: 'Source Signal Emitted',
-    sourceSignalEmittedDesc: 'Emitted StrategySignal on the origin chain.',
+    sourceSignalEmittedDesc: 'The operator relay emitted the origin-chain test StrategySignal for this wallet.',
     automationCreditToppedUpAction: 'Automation Credit Topped Up',
     automationCreditToppedUpDesc:
       'Deposited funds into the callback proxy for wallet automation.',
@@ -324,13 +365,13 @@ const messages = {
     overviewDesc: '查看资产、身份、执行次数和自动执行额度。',
     planTab: '转账计划',
     planDesc: '配置这个钱包要持续执行的链上转账规则。',
-    automationTab: '自动执行',
-    automationDesc: '查看监听器健康状态和外部触发路径。',
+    automationTab: '运行时',
+    automationDesc: '查看钱包运行时路由、激活状态和执行链路。',
     activityTab: '链上记录',
     activityDesc: '查看最近的源链信号、回调、成功执行和跳过记录。',
     walletOverviewTitle: '钱包总览',
     transferPlanTitle: '转账计划',
-    automationTitle: '自动执行引擎',
+    automationTitle: '钱包运行时',
     activityTitle: '链上记录',
     walletOverviewKicker: '钱包总览',
     controllerWalletBalance: '控制钱包余额',
@@ -341,13 +382,17 @@ const messages = {
     executionMode: '执行方式',
     reactiveCallback: 'Reactive 回调',
     controllerWalletAssets: '控制钱包资产',
-    controllerAssetsEmpty: '连接 Sepolia 钱包后，这里会显示控制钱包资产。',
+    controllerAssetsEmpty: '连接控制钱包后，这里会显示控制钱包资产。',
     autonomousWalletAssets: '自主执行钱包资产',
     autonomousAssetsEmpty: '连接拥有这只自主钱包的地址后，这里才会显示它的余额和资产。',
     fundAutonomousWallet: '补充钱包执行资金',
     fundingAutonomousWalletShort: '充值中...',
     autonomousWalletFundingNote:
       '这里补的是 autonomous wallet 自己的原生执行资产，不是 automation credit。',
+    watchToken: '添加 ERC20',
+    watchTokenPlaceholder: 'ERC20 代币地址',
+    watchTokenNote:
+      '当前 MVP 不会自动发现全部代币。手动添加 ERC20 地址后，controller wallet 和 autonomous wallet 两边都会读取它的余额。',
     connection: '连接状态',
     walletConnected: '钱包已连接',
     connectWalletShort: '连接钱包',
@@ -400,21 +445,31 @@ const messages = {
     originChainRoute: '源链',
     destinationChainRoute: '目标链',
     signalTopic: '监听 Topic',
-    listenerRoutingKicker: '监听路由',
-    listenerRoutingNote: '这个钱包运行时只监听一类源事件，只有订阅真正 armed 后才会继续驱动目标链执行。',
+    listenerRoutingKicker: '钱包运行时路由',
+    listenerRoutingNote: '这只 autonomous wallet 会直接声明自己的源事件路由，只有对应订阅真正 armed 后才会继续驱动目标链执行。',
     refreshCredit: '刷新额度',
     refreshing: '刷新中...',
     topUpAutomation: '补充自动执行额度',
     transferPlanKicker: '转账计划',
     transferPlanNote: '定义这个钱包需要持续执行的转账规则。',
+    planRouteNote: '这些 route 字段会把钱包绑定到具体的 listener 和 source event path。切到另一套已部署的 Reactive route 时，需要一起更新。',
+    destinationChainLockedNote:
+      '当前 MVP 里，执行目标链固定为这只钱包实际部署所在的链。这里应该只切换源事件路由，不应该把目标链当成可随意切换的执行落点。',
+    useCurrentRoute: '恢复当前 Route',
     planSigningNote:
       '保存这条计划只是在给钱包写入 intent，不是在启动监听。共享 listener 已由 operator 预先 armed，不需要用户再额外签一次“开始监听”。',
     initializeAutonomousWallet: '初始化自主钱包',
     initializingAutonomousWallet: '正在初始化钱包...',
     initializeAutonomousWalletNote: '先为当前 owner 部署一只自主钱包，再配置第一条 intent。',
+    assetType: '资产类型',
+    nativeAsset: '原生资产',
+    erc20Asset: 'ERC20 代币',
     enabled: '已启用',
     disabled: '未启用',
     token: '代币',
+    erc20TokenAddress: 'ERC20 代币地址',
+    tokenFieldNote:
+      '选择“原生资产”时，转的是目标链 gas 资产；选择“ERC20 代币”时，转的是这只 autonomous wallet 当前持有的目标链代币。',
     recipient: '收款地址',
     amountPerExecution: '每次执行金额',
     maxExecutions: '最大执行次数',
@@ -422,10 +477,13 @@ const messages = {
     minAutomationBalance: '自动执行最低额度',
     saving: '保存中...',
     saveTransferPlan: '保存转账计划',
+    addingWatchedToken: '正在添加观察代币...',
+    addWatchedTokenFailed: '添加观察代币失败。',
+    failedAddWatchedToken: '添加观察代币失败',
     pausePlan: '暂停计划',
     resumePlan: '恢复计划',
-    automationEngineKicker: '自动执行引擎',
-    automationEngineNote: '查看外部源事件如何经过 Reactive 路由并落到钱包转账。',
+    automationEngineKicker: '钱包运行时',
+    automationEngineNote: '查看外部源事件如何经过 Reactive runtime route 并落到 autonomous wallet 执行。',
     lastExecutionNonce: '最近执行序号',
     lastExecutedAt: '最近执行时间',
     lastSignalHash: '最近信号哈希',
@@ -438,7 +496,7 @@ const messages = {
     externalSignalNote:
       '正常流程里，源事件应由外部 operator 或上游协议触发，而不是由用户钱包自己触发。',
     testSourceEventNote:
-      '下面这个按钮只用于 demo 验证。它会直接从这个 UI 发出一笔源链 signal，不应被当成正式产品里的触发路径。',
+      '下面这个按钮只用于 demo 验证。它会通过 operator service 代发源链触发，所以不会要求用户再签第二次。',
     activityKicker: '链上记录',
     activityNote: '这里会持续展示钱包离线期间观察到、完成或跳过的执行历史。',
     chainEvidence: '链上证据',
@@ -500,10 +558,12 @@ const messages = {
     destination: '目标链',
     originSignal: '源链信号',
     reactiveCallbackLabel: 'Reactive 派发',
+    walletRuntimeBound: '钱包运行时已绑定',
     destinationExecution: '目标链执行',
     destinationSkipped: '目标链跳过',
     originSignalDesc: '信号已在源链发出。',
     reactiveCallbackDesc: 'Reactive system 已接收这次监听任务，并向目标链发起回调派发。',
+    walletRuntimeBoundDesc: 'autonomous wallet 已在链上声明自己的 Reactive runtime route。',
     destinationExecutionDesc: '自主执行钱包已在目标链完成转账。',
     destinationSkippedDesc: '自主执行钱包已跳过这次执行，并记录了原因。',
     readyBindWallet: '准备好连接钱包并配置第一条转账计划。',
@@ -562,8 +622,21 @@ const messages = {
     automationStillPending: '源链信号已经发出，但目标链执行还在等待中。如果更久还没变化，请再手动刷新一次。',
     signalEmissionFailed: '源链信号发送失败。',
     failedEmitSourceSignal: '发送源链信号失败',
+    sourceSignalUnavailable: '这只钱包当前没有可用的源链触发路由。',
+    reactiveRouteVerificationUnavailable: '当前无法校验 Reactive route。请检查 Reactive RPC 配置后再试。',
+    runtimeRouteValidationFailed: '你填写的 runtime route 与选定的 listener 部署不一致。',
+    runtimeRouteListenerUnreadable: '当前无法从 Reactive 链读取这个 listener。',
+    runtimeRouteEmitterMismatch: '这个 listener 绑定的 source emitter 与当前填写值不一致。',
+    runtimeRouteSourceChainMismatch: '这个 listener 绑定的 source chain id 与当前填写值不一致。',
+    runtimeRouteDestinationChainMismatch:
+      '这个 listener 绑定的 destination chain id 与当前填写值不一致。',
+    runtimeRouteTopicMismatch: '这个 listener 绑定的 source event topic 与当前填写值不一致。',
+    runtimeRouteOriginConfigMismatch:
+      '当前填写的 runtime route 指向的 source chain 与应用当前配置的 origin chain 不一致。',
+    runtimeRouteDestinationConfigMismatch:
+      '当前填写的 runtime route 指向的 destination chain 与应用当前配置的 destination chain 不一致。',
     operatorServiceRequiredForTestSignal:
-      '要想在不让用户再次签名的情况下触发测试源事件，operator service 必须先在线。',
+      '要想在不让用户再次签名的情况下触发测试源事件，这只钱包对应的 operator service 必须先在线。',
     intentConfiguredAction: '转账计划已保存',
     intentConfiguredDesc: '已经把钱包 intent 写入链上。共享 listener 仍由 operator 保持 armed，后续外部事件可直接触发执行。',
     awaitingListenerArming: '转账计划已保存，正在等待共享 listener 进入 armed 状态...',
@@ -572,8 +645,10 @@ const messages = {
     intentPausedDesc: '目标链钱包的自动执行已暂停。',
     intentResumedAction: '转账计划已恢复',
     intentResumedDesc: '目标链钱包的自动执行已重新启用。',
+    watchedTokenAddedAction: '观察代币已添加',
+    watchedTokenAddedDesc: '已把 ERC20 加入资产观察列表：',
     sourceSignalEmittedAction: '源链信号已发出',
-    sourceSignalEmittedDesc: '已在源链上发出 StrategySignal。',
+    sourceSignalEmittedDesc: 'operator relay 已替这只钱包在源链发出测试 StrategySignal。',
     automationCreditToppedUpAction: '自动执行额度已补充',
     automationCreditToppedUpDesc: '已经向 callback proxy 存入自动执行所需资金。',
     autonomousWalletFundedAction: '自主钱包执行资金已补充',
@@ -824,6 +899,7 @@ export function translateProofLabel(value: string, locale: Locale) {
   const copy = messages[locale]
   if (value === 'Origin Signal') return copy.originSignal
   if (value === 'Reactive Callback' || value === 'Reactive Dispatch') return copy.reactiveCallbackLabel
+  if (value === 'Wallet Runtime Bound') return copy.walletRuntimeBound
   if (value === 'Destination Execution') return copy.destinationExecution
   if (value === 'Destination Skipped') return copy.destinationSkipped
   return value
@@ -833,6 +909,7 @@ export function translateProofDescription(label: string, description: string, lo
   const copy = messages[locale]
   if (label === 'Origin Signal') return copy.originSignalDesc
   if (label === 'Reactive Callback' || label === 'Reactive Dispatch') return copy.reactiveCallbackDesc
+  if (label === 'Wallet Runtime Bound') return copy.walletRuntimeBoundDesc
   if (label === 'Destination Execution') return copy.destinationExecutionDesc
   if (label === 'Destination Skipped') return copy.destinationSkippedDesc
   return description

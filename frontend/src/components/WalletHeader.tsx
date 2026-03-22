@@ -26,6 +26,7 @@ type WalletHeaderProps = {
   lastSyncedAt: string
   walletAccessState: WalletAccessState
   onFundWallet: (amount: string) => void
+  onWatchToken: (tokenAddress: string) => void
 }
 
 function shortenAddress(value: string | null) {
@@ -39,6 +40,7 @@ function shortenAddress(value: string | null) {
 export function WalletHeader(props: WalletHeaderProps) {
   const { copy, locale } = useCopy()
   const [fundAmount, setFundAmount] = useState('0.05')
+  const [watchedToken, setWatchedToken] = useState('')
   const remainingExecutions = Math.max(props.maxExecutions - props.executedCount, 0)
   const hasBoundWallet = props.walletAccessState === 'bound'
   const fundingHelper =
@@ -109,6 +111,27 @@ export function WalletHeader(props: WalletHeaderProps) {
         </button>
       </div>
       <p className="wallet-footnote">{fundingHelper}</p>
+      <div className="action-row">
+        <input
+          className="field compact-field"
+          disabled={!props.isConnected || props.isPending}
+          onChange={(event) => setWatchedToken(event.target.value)}
+          placeholder={copy.watchTokenPlaceholder}
+          value={watchedToken}
+        />
+        <button
+          className="secondary-button"
+          disabled={!props.isConnected || props.isPending || watchedToken.trim().length === 0}
+          onClick={() => {
+            props.onWatchToken(watchedToken)
+            setWatchedToken('')
+          }}
+          type="button"
+        >
+          {copy.watchToken}
+        </button>
+      </div>
+      <p className="wallet-footnote">{copy.watchTokenNote}</p>
       <div className="dual-asset-grid">
         <div>
           <p className="section-note">{copy.controllerWalletAssets}</p>

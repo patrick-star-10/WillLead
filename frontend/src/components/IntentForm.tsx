@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { translateDisplayValue, useCopy } from '../lib/i18n'
+import { buildRuntimeRouteChainOptions, formatRuntimeRouteChainLabel } from '../lib/runtimeRouteOptions'
 import type { IntentFormValues, WalletAccessState } from '../types/willlead'
 
 type IntentFormProps = {
@@ -10,6 +11,11 @@ type IntentFormProps = {
   maxExecutions: number
   executedCount: number
   minAutomationBalance: string
+  listenerAddress: string
+  signalEmitterAddress: string
+  sourceChainId: string
+  destinationChainId: string
+  signalTopic0: string
   enabled: boolean
   isPending: boolean
   isEditable: boolean
@@ -27,7 +33,12 @@ export function IntentForm(props: IntentFormProps) {
     recipient: props.recipient,
     amountPerExecution: props.amountPerExecution,
     maxExecutions: props.maxExecutions,
-    minAutomationBalance: props.minAutomationBalance
+    minAutomationBalance: props.minAutomationBalance,
+    listenerAddress: props.listenerAddress,
+    signalEmitterAddress: props.signalEmitterAddress,
+    sourceChainId: props.sourceChainId,
+    destinationChainId: props.destinationChainId,
+    signalTopic0: props.signalTopic0
   })
 
   useEffect(() => {
@@ -36,22 +47,47 @@ export function IntentForm(props: IntentFormProps) {
       recipient: props.recipient,
       amountPerExecution: props.amountPerExecution,
       maxExecutions: props.maxExecutions,
-      minAutomationBalance: props.minAutomationBalance
+      minAutomationBalance: props.minAutomationBalance,
+      listenerAddress: props.listenerAddress,
+      signalEmitterAddress: props.signalEmitterAddress,
+      sourceChainId: props.sourceChainId,
+      destinationChainId: props.destinationChainId,
+      signalTopic0: props.signalTopic0
     })
   }, [
     props.amountPerExecution,
+    props.destinationChainId,
+    props.listenerAddress,
     props.maxExecutions,
     props.minAutomationBalance,
     props.recipient,
+    props.signalEmitterAddress,
+    props.signalTopic0,
+    props.sourceChainId,
     props.token
   ])
 
   const remainingExecutions = props.maxExecutions - props.executedCount
+  const isNativeAsset = form.token.trim().toLowerCase() === 'native'
+  const hasValidTokenConfig =
+    isNativeAsset || /^0x[a-fA-F0-9]{40}$/.test(form.token.trim())
+  const chainOptions = buildRuntimeRouteChainOptions([
+    form.sourceChainId,
+    props.sourceChainId,
+    props.destinationChainId
+  ])
+  const destinationChainLabel = formatRuntimeRouteChainLabel(form.destinationChainId)
   const formIsValid =
+    hasValidTokenConfig &&
     form.recipient.trim().length > 0 &&
     form.amountPerExecution.trim().length > 0 &&
     Number(form.amountPerExecution) > 0 &&
-    form.maxExecutions > 0
+    form.maxExecutions > 0 &&
+    form.listenerAddress.trim().length > 0 &&
+    form.signalEmitterAddress.trim().length > 0 &&
+    Number(form.sourceChainId) > 0 &&
+    Number(form.destinationChainId) > 0 &&
+    form.signalTopic0.trim().startsWith('0x')
   const helperMessage =
     props.walletAccessState === 'needs_wallet'
       ? copy.initializeAutonomousWalletNote
@@ -76,13 +112,37 @@ export function IntentForm(props: IntentFormProps) {
       </div>
       <dl className="data-list form-grid">
         <div>
+          <dt>{copy.assetType}</dt>
+          <dd>
+            <select
+              className="field"
+              disabled={!props.isEditable}
+              onChange={(event) =>
+                setForm((state) => ({
+                  ...state,
+                  token: event.target.value === 'native' ? 'native' : ''
+                }))
+              }
+              value={isNativeAsset ? 'native' : 'erc20'}
+            >
+              <option value="native">{copy.nativeAsset}</option>
+              <option value="erc20">{copy.erc20Asset}</option>
+            </select>
+          </dd>
+        </div>
+        <div>
           <dt>{copy.token}</dt>
           <dd>
             <input
               className="field"
-              disabled={!props.isEditable}
+              disabled={!props.isEditable || isNativeAsset}
               onChange={(event) => setForm((state) => ({ ...state, token: event.target.value }))}
-              value={form.token}
+              placeholder={isNativeAsset ? copy.nativeAsset : copy.erc20TokenAddress}
+              value={
+                props.isEditable
+                  ? (isNativeAsset ? copy.nativeAsset : form.token)
+                  : translateDisplayValue(isNativeAsset ? copy.nativeAsset : form.token, locale)
+              }
             />
           </dd>
         </div>
@@ -148,6 +208,105 @@ export function IntentForm(props: IntentFormProps) {
           </dd>
         </div>
       </dl>
+      <p className="wallet-footnote">{copy.tokenFieldNote}</p>
+      <div className="panel-header">
+        <div>
+          <p className="panel-kicker">{copy.listenerRoutingKicker}</p>
+          <p className="section-note">{copy.planRouteNote}</p>
+        </div>
+      </div>
+      <dl className="data-list form-grid">
+        <div>
+          <dt>{copy.listenerContract}</dt>
+          <dd>
+            <input
+              className="field"
+              disabled={!props.isEditable}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, listenerAddress: event.target.value }))
+              }
+              value={props.isEditable ? form.listenerAddress : translateDisplayValue(form.listenerAddress, locale)}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>{copy.signalSource}</dt>
+          <dd>
+            <input
+              className="field"
+              disabled={!props.isEditable}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, signalEmitterAddress: event.target.value }))
+              }
+              value={
+                props.isEditable
+                  ? form.signalEmitterAddress
+                  : translateDisplayValue(form.signalEmitterAddress, locale)
+              }
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>{copy.originChainRoute}</dt>
+          <dd>
+            <select
+              className="field"
+              disabled={!props.isEditable}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, sourceChainId: event.target.value }))
+              }
+              value={form.sourceChainId}
+            >
+              {chainOptions.map((option) => (
+                <option key={`source-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </dd>
+        </div>
+        <div>
+          <dt>{copy.destinationChainRoute}</dt>
+          <dd>
+            <input
+              className="field"
+              disabled
+              value={destinationChainLabel}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>{copy.signalTopic}</dt>
+          <dd>
+            <input
+              className="field"
+              disabled={!props.isEditable}
+              onChange={(event) => setForm((state) => ({ ...state, signalTopic0: event.target.value }))}
+              value={form.signalTopic0}
+            />
+          </dd>
+        </div>
+      </dl>
+      <p className="wallet-footnote">{copy.destinationChainLockedNote}</p>
+      <div className="action-row">
+        <button
+          className="secondary-button"
+          disabled={!props.isEditable}
+          onClick={() =>
+            setForm((state) => ({
+              ...state,
+              listenerAddress: props.listenerAddress,
+              signalEmitterAddress: props.signalEmitterAddress,
+              sourceChainId: props.sourceChainId,
+              destinationChainId: props.destinationChainId,
+              signalTopic0: props.signalTopic0
+            }))
+          }
+          type="button"
+        >
+          {copy.useCurrentRoute}
+        </button>
+      </div>
       <div className="action-row">
         <button
           className="primary-button"

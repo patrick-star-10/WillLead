@@ -1,7 +1,10 @@
+import { destinationChainConfig, originChainConfig, reactiveChainConfig } from './chains'
+
 const explorerBases = {
-  origin: import.meta.env.VITE_ORIGIN_EXPLORER_BASE_URL || '',
-  destination: import.meta.env.VITE_DESTINATION_EXPLORER_BASE_URL || '',
-  reactive: import.meta.env.VITE_REACTIVE_EXPLORER_BASE_URL || ''
+  origin: import.meta.env.VITE_ORIGIN_EXPLORER_BASE_URL || originChainConfig.explorerBaseUrl || '',
+  destination:
+    import.meta.env.VITE_DESTINATION_EXPLORER_BASE_URL || destinationChainConfig.explorerBaseUrl || '',
+  reactive: import.meta.env.VITE_REACTIVE_EXPLORER_BASE_URL || reactiveChainConfig.explorerBaseUrl || ''
 } as const
 
 export function txExplorerLink(

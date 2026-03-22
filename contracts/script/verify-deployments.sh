@@ -66,12 +66,16 @@ factory_callback_proxy="$(cast call "$WILLLEAD_WALLET_FACTORY" "callbackProxy()(
 factory_authorized_rvm_id="$(cast call "$WILLLEAD_WALLET_FACTORY" "authorizedRvmId()(address)" --rpc-url "$DESTINATION_RPC_URL")"
 factory_listener="$(cast call "$WILLLEAD_WALLET_FACTORY" "reactiveListener()(address)" --rpc-url "$DESTINATION_RPC_URL")"
 factory_signal_emitter="$(cast call "$WILLLEAD_WALLET_FACTORY" "signalEmitter()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+factory_origin_chain_id="$(cast call "$WILLLEAD_WALLET_FACTORY" "originChainId()(uint256)" --rpc-url "$DESTINATION_RPC_URL")"
+factory_destination_chain_id="$(cast call "$WILLLEAD_WALLET_FACTORY" "destinationChainId()(uint256)" --rpc-url "$DESTINATION_RPC_URL")"
 factory_wallet_for_owner="$(cast call "$WILLLEAD_WALLET_FACTORY" "walletOf(address)(address)" "$OWNER_ADDRESS" --rpc-url "$DESTINATION_RPC_URL")"
 
 assert_eq "$factory_callback_proxy" "$CALLBACK_PROXY" "Factory callback proxy"
 assert_eq "$factory_authorized_rvm_id" "$AUTHORIZED_RVM_ID" "Factory authorized RVM ID"
 assert_eq "$factory_listener" "$WILLLEAD_REACTIVE_LISTENER" "Factory reactive listener"
 assert_eq "$factory_signal_emitter" "$WILLLEAD_SIGNAL_EMITTER" "Factory signal emitter"
+assert_eq "$factory_origin_chain_id" "$ORIGIN_CHAIN_ID" "Factory origin chain id"
+assert_eq "$factory_destination_chain_id" "$DESTINATION_CHAIN_ID" "Factory destination chain id"
 assert_eq "$factory_wallet_for_owner" "$WILLLEAD_WALLET" "Factory wallet for owner"
 echo
 
@@ -79,10 +83,18 @@ echo "== Wallet wiring =="
 wallet_owner="$(cast call "$WILLLEAD_WALLET" "owner()(address)" --rpc-url "$DESTINATION_RPC_URL")"
 wallet_callback_proxy="$(cast call "$WILLLEAD_WALLET" "callbackProxy()(address)" --rpc-url "$DESTINATION_RPC_URL")"
 wallet_authorized_rvm_id="$(cast call "$WILLLEAD_WALLET" "authorizedRvmId()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+wallet_listener="$(cast call "$WILLLEAD_WALLET" "listener()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+wallet_signal_emitter="$(cast call "$WILLLEAD_WALLET" "signalEmitter()(address)" --rpc-url "$DESTINATION_RPC_URL")"
+wallet_source_chain_id="$(cast call "$WILLLEAD_WALLET" "sourceChainId()(uint256)" --rpc-url "$DESTINATION_RPC_URL")"
+wallet_destination_chain_id="$(cast call "$WILLLEAD_WALLET" "destinationChainId()(uint256)" --rpc-url "$DESTINATION_RPC_URL")"
 
 assert_eq "$wallet_owner" "$OWNER_ADDRESS" "Wallet owner"
 assert_eq "$wallet_callback_proxy" "$CALLBACK_PROXY" "Wallet callback proxy"
 assert_eq "$wallet_authorized_rvm_id" "$AUTHORIZED_RVM_ID" "Wallet authorized RVM ID"
+assert_eq "$wallet_listener" "$WILLLEAD_REACTIVE_LISTENER" "Wallet reactive listener"
+assert_eq "$wallet_signal_emitter" "$WILLLEAD_SIGNAL_EMITTER" "Wallet signal emitter"
+assert_eq "$wallet_source_chain_id" "$ORIGIN_CHAIN_ID" "Wallet source chain id"
+assert_eq "$wallet_destination_chain_id" "$DESTINATION_CHAIN_ID" "Wallet destination chain id"
 echo
 
 echo "== Reactive listener wiring =="

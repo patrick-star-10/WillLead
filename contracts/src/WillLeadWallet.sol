@@ -53,9 +53,22 @@ contract WillLeadWallet {
         string reason
     );
     event FundsWithdrawn(address indexed wallet, address indexed token, address indexed to, uint256 amount);
+    event RuntimeBindingConfigured(
+        address indexed wallet,
+        address indexed listener,
+        address indexed signalEmitter,
+        uint256 sourceChainId,
+        uint256 destinationChainId,
+        uint256 strategySignalTopic0
+    );
 
     address public immutable callbackProxy;
     address public immutable authorizedRvmId;
+    address public listener;
+    address public signalEmitter;
+    uint256 public sourceChainId;
+    uint256 public destinationChainId;
+    uint256 public strategySignalTopic0;
     address public owner;
     IntentConfig public intent;
     RuntimeStatus public runtimeStatus;
@@ -75,12 +88,30 @@ contract WillLeadWallet {
         _;
     }
 
-    constructor(address initialOwner, address initialCallbackProxy, address initialAuthorizedRvmId) {
-        if (initialOwner == address(0) || initialCallbackProxy == address(0)) revert InvalidConfig();
+    constructor(
+        address initialOwner,
+        address initialCallbackProxy,
+        address initialAuthorizedRvmId,
+        address initialListener,
+        address initialSignalEmitter,
+        uint256 initialSourceChainId,
+        uint256 initialDestinationChainId
+    ) {
+        if (
+            initialOwner == address(0) || initialCallbackProxy == address(0) || initialListener == address(0)
+                || initialSignalEmitter == address(0) || initialSourceChainId == 0 || initialDestinationChainId == 0
+        ) revert InvalidConfig();
 
         owner = initialOwner;
         callbackProxy = initialCallbackProxy;
         authorizedRvmId = initialAuthorizedRvmId;
+        _configureRuntimeBinding(
+            initialListener,
+            initialSignalEmitter,
+            initialSourceChainId,
+            initialDestinationChainId,
+            uint256(keccak256("StrategySignal(address,address,address,uint256,uint256,uint256)"))
+        );
         runtimeStatus = RuntimeStatus.Inactive;
     }
 
@@ -113,6 +144,22 @@ contract WillLeadWallet {
 
         emit IntentConfigured(address(this), token, recipient, amountPerExecution, maxExecutions, automationBalanceFloor);
         emit RuntimeStatusUpdated(address(this), runtimeStatus);
+    }
+
+    function configureRuntimeRoute(
+        address runtimeListener,
+        address runtimeSignalEmitter,
+        uint256 runtimeSourceChainId,
+        uint256 runtimeDestinationChainId,
+        uint256 runtimeStrategySignalTopic0
+    ) external onlyOwner {
+        _configureRuntimeBinding(
+            runtimeListener,
+            runtimeSignalEmitter,
+            runtimeSourceChainId,
+            runtimeDestinationChainId,
+            runtimeStrategySignalTopic0
+        );
     }
 
     function pauseIntent() external onlyOwner {
@@ -214,6 +261,20 @@ contract WillLeadWallet {
         );
     }
 
+    function getRuntimeBinding()
+        external
+        view
+        returns (
+            address runtimeListener,
+            address runtimeSignalEmitter,
+            uint256 runtimeSourceChainId,
+            uint256 runtimeDestinationChainId,
+            uint256 runtimeStrategySignalTopic0
+        )
+    {
+        return (listener, signalEmitter, sourceChainId, destinationChainId, strategySignalTopic0);
+    }
+
     function _executeTransfer(address token, address recipient, uint256 amount) internal {
         if (token == address(0)) {
             (bool sent, ) = payable(recipient).call{value: amount}("");
@@ -223,5 +284,33 @@ contract WillLeadWallet {
 
         bool ok = IERC20Like(token).transfer(recipient, amount);
         if (!ok) revert NativeTransferFailed();
+    }
+
+    function _configureRuntimeBinding(
+        address runtimeListener,
+        address runtimeSignalEmitter,
+        uint256 runtimeSourceChainId,
+        uint256 runtimeDestinationChainId,
+        uint256 runtimeStrategySignalTopic0
+    ) internal {
+        if (
+            runtimeListener == address(0) || runtimeSignalEmitter == address(0) || runtimeSourceChainId == 0
+                || runtimeDestinationChainId == 0 || runtimeStrategySignalTopic0 == 0
+        ) revert InvalidConfig();
+
+        listener = runtimeListener;
+        signalEmitter = runtimeSignalEmitter;
+        sourceChainId = runtimeSourceChainId;
+        destinationChainId = runtimeDestinationChainId;
+        strategySignalTopic0 = runtimeStrategySignalTopic0;
+
+        emit RuntimeBindingConfigured(
+            address(this),
+            runtimeListener,
+            runtimeSignalEmitter,
+            runtimeSourceChainId,
+            runtimeDestinationChainId,
+            runtimeStrategySignalTopic0
+        );
     }
 }
