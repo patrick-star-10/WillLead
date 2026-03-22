@@ -7,9 +7,19 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
 
-./contracts/script/verify-env.sh >/dev/null
-./contracts/script/verify-deployments.sh >/dev/null
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+CALLBACK_PROXY="$(execution_env_value "$EXECUTION_ENV" CALLBACK_PROXY)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+WILLLEAD_WALLET_FACTORY="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET_FACTORY)"
+WILLLEAD_SIGNAL_EMITTER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER)"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
+
+EXECUTION_ENV="$EXECUTION_ENV" ./contracts/script/verify-env.sh >/dev/null
+EXECUTION_ENV="$EXECUTION_ENV" ./contracts/script/verify-deployments.sh >/dev/null
 
 REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
 
@@ -27,7 +37,7 @@ numeric_value() {
   printf '%s' "$1" | awk '{print $1}'
 }
 
-./contracts/script/sync-listener-subscription.sh --check >/dev/null || fail "reactive listener subscription is missing or stale"
+EXECUTION_ENV="$EXECUTION_ENV" ./contracts/script/sync-listener-subscription.sh --check >/dev/null || fail "reactive listener subscription is missing or stale"
 
 expect_nonzero_address() {
   local value="$1"
@@ -53,6 +63,7 @@ listener_gas_limit="$(numeric_value "$(cast call "$WILLLEAD_REACTIVE_LISTENER" "
 listener_balance="$(numeric_value "$(cast balance "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL")")"
 listener_debt="$(numeric_value "$(cast call "$REACTIVE_SYSTEM_CONTRACT" "debt(address)(uint256)" "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL")")"
 
+echo "execution_env=$EXECUTION_ENV"
 echo "readiness=checking"
 
 if [[ "$intent_enabled" != "true" ]]; then

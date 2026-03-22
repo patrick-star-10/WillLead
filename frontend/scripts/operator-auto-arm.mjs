@@ -13,8 +13,12 @@ const __dirname = path.dirname(__filename)
 const frontendDir = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(frontendDir, '..')
 const runtimeDir = path.join(frontendDir, 'public', 'runtime')
-const runtimeStatusPath = path.join(runtimeDir, 'operator-status.json')
 const chainRegistryPath = path.join(frontendDir, 'src', 'lib', 'chainRegistry.json')
+const executionEnvironment = normalizeExecutionEnvironment(process.env.EXECUTION_ENV)
+const runtimeStatusPath = path.join(
+  runtimeDir,
+  executionEnvironment === 'lasna' ? 'operator-status-lasna.json' : 'operator-status.json'
+)
 
 const reactiveSystemAddress = '0x0000000000000000000000000000000000fffFfF'
 const subscribeContractTopic0 =
@@ -50,6 +54,28 @@ const intentConfiguredEvent = parseAbiItem(
   'event IntentConfigured(address indexed wallet, address indexed token, address indexed recipient, uint256 amountPerExecution, uint256 maxExecutions, uint256 minAutomationBalance)'
 )
 const chainRegistry = loadChainRegistry()
+
+function normalizeExecutionEnvironment(value) {
+  return value === 'lasna' ? 'lasna' : 'primary'
+}
+
+function executionEnvPrefix(executionEnvironmentName) {
+  return executionEnvironmentName === 'lasna' ? 'LASNA_EXECUTION_' : ''
+}
+
+function readExecutionEnvValue(merged, executionEnvironmentName, baseName, viteBaseName = baseName) {
+  const prefix = executionEnvPrefix(executionEnvironmentName)
+  if (executionEnvironmentName === 'lasna') {
+    return (
+      merged[`${prefix}${baseName}`] ||
+      merged[`VITE_${prefix}${viteBaseName}`] ||
+      merged[baseName] ||
+      merged[`VITE_${viteBaseName}`]
+    )
+  }
+
+  return merged[baseName] || merged[`VITE_${viteBaseName}`]
+}
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {}
@@ -149,10 +175,13 @@ function buildConfig() {
   }
 
   const originChainId = Number(merged.ORIGIN_CHAIN_ID || merged.VITE_ORIGIN_CHAIN_ID || 84532)
-  const destinationChainId = Number(merged.DESTINATION_CHAIN_ID || merged.VITE_DESTINATION_CHAIN_ID || 11155111)
+  const destinationChainId = Number(
+    readExecutionEnvValue(merged, executionEnvironment, 'DESTINATION_CHAIN_ID') || 11155111
+  )
   const originChain = resolveKnownChain(originChainId)
   const destinationChain = resolveKnownChain(destinationChainId)
   const reactiveChain = resolveKnownChain(reactiveChainId)
+  const defaultOperatorPort = executionEnvironment === 'lasna' ? 8788 : 8787
 
   return {
     originRpcUrls: resolveRpcUrls(
@@ -160,16 +189,21 @@ function buildConfig() {
       originChain?.defaultRpcUrls || []
     ),
     destinationRpcUrls: resolveRpcUrls(
-      merged.DESTINATION_RPC_URL || merged.VITE_DESTINATION_RPC_URL,
+      readExecutionEnvValue(merged, executionEnvironment, 'DESTINATION_RPC_URL'),
       destinationChain?.defaultRpcUrls || []
     ),
     reactiveRpcUrls: resolveRpcUrls(
       merged.REACTIVE_RPC_URL || merged.VITE_REACTIVE_RPC_URL,
       reactiveChain?.defaultRpcUrls || []
     ),
-    walletAddress: getAddress(merged.WILLLEAD_WALLET || merged.VITE_WALLET_ADDRESS),
+    walletAddress: getAddress(readExecutionEnvValue(merged, executionEnvironment, 'WILLLEAD_WALLET', 'WALLET_ADDRESS')),
     listenerAddress: getAddress(
-      merged.WILLLEAD_REACTIVE_LISTENER || merged.VITE_REACTIVE_LISTENER_ADDRESS
+      readExecutionEnvValue(
+        merged,
+        executionEnvironment,
+        'WILLLEAD_REACTIVE_LISTENER',
+        'REACTIVE_LISTENER_ADDRESS'
+      )
     ),
     authorizedRvmId: getAddress(merged.AUTHORIZED_RVM_ID || merged.VITE_AUTHORIZED_RVM_ID),
     originChainId,
@@ -179,8 +213,16 @@ function buildConfig() {
       merged.WILLLEAD_OPERATOR_LISTENER_BUFFER_WEI || merged.WILLLEAD_REACTIVE_BUFFER_WEI || '1000000000000000'
     ),
     operatorApiHost: merged.WILLLEAD_OPERATOR_API_HOST || '127.0.0.1',
-    operatorApiPort: Number(merged.WILLLEAD_OPERATOR_API_PORT || 8787),
-    operatorPrivateKey
+    operatorApiPort: Number(
+      readExecutionEnvValue(
+        merged,
+        executionEnvironment,
+        'WILLLEAD_OPERATOR_API_PORT',
+        'OPERATOR_API_PORT'
+      ) || merged.WILLLEAD_OPERATOR_API_PORT || defaultOperatorPort
+    ),
+    operatorPrivateKey,
+    executionEnvironment
   }
 }
 
@@ -735,6 +777,7 @@ async function main() {
   let lastSeenKey = ''
 
   console.log(`operator_service=starting`)
+  console.log(`execution_env=${config.executionEnvironment}`)
   console.log(`wallet=${config.walletAddress}`)
   console.log(`listener=${config.listenerAddress}`)
   console.log(`operator=${operatorAccount.address}`)

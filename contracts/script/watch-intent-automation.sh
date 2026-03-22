@@ -9,8 +9,13 @@ fi
 source .env
 source contracts/script/lib/env-utils.sh
 
-require_env DESTINATION_RPC_URL
-require_env WILLLEAD_WALLET
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
+require_execution_env "$EXECUTION_ENV" DESTINATION_RPC_URL
+require_execution_env "$EXECUTION_ENV" WILLLEAD_WALLET
+
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
 
 POLL_INTERVAL="${1:-5}"
 LOOKBACK_BLOCKS="${2:-200}"
@@ -19,6 +24,7 @@ RUN_MODE="${3:-}"
 last_seen_id=""
 
 echo "intent_watch=starting"
+echo "execution_env=$EXECUTION_ENV"
 echo "wallet=$WILLLEAD_WALLET"
 echo "poll_interval=$POLL_INTERVAL"
 echo "lookback_blocks=$LOOKBACK_BLOCKS"
@@ -65,7 +71,7 @@ process_latest_intent() {
   echo "intent_block=$block_number"
   echo "intent_tx=$tx_hash"
 
-  ./contracts/script/ensure-listener-armed.sh
+  EXECUTION_ENV="$EXECUTION_ENV" ./contracts/script/ensure-listener-armed.sh
 }
 
 while true; do

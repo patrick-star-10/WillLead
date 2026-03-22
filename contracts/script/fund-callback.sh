@@ -7,14 +7,20 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
+
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
 
 AMOUNT="${1:-0.02ether}"
 
-if [[ -z "${CALLBACK_PROXY:-}" || -z "${DESTINATION_RPC_URL:-}" || -z "${OWNER_PRIVATE_KEY:-}" || -z "${WILLLEAD_WALLET:-}" ]]; then
-  echo "Missing required env"
-  echo "Usage: ./contracts/script/fund-callback.sh [amount]"
-  exit 1
-fi
+require_env OWNER_PRIVATE_KEY
+require_execution_env "$EXECUTION_ENV" CALLBACK_PROXY
+require_execution_env "$EXECUTION_ENV" DESTINATION_RPC_URL
+require_execution_env "$EXECUTION_ENV" WILLLEAD_WALLET
+
+CALLBACK_PROXY="$(execution_env_value "$EXECUTION_ENV" CALLBACK_PROXY)"
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
 
 cast send \
   --rpc-url "$DESTINATION_RPC_URL" \
@@ -23,3 +29,5 @@ cast send \
   "depositTo(address)" \
   "$WILLLEAD_WALLET" \
   --value "$AMOUNT"
+
+echo "execution_env=$EXECUTION_ENV"

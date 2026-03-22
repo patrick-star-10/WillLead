@@ -7,8 +7,13 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
 
-WALLET_ADDRESS="${1:-${WILLLEAD_WALLET:-}}"
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
+DEFAULT_WALLET_ADDRESS="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+WILLLEAD_SIGNAL_EMITTER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER)"
+WALLET_ADDRESS="${1:-${DEFAULT_WALLET_ADDRESS:-}}"
 EXECUTION_NONCE="${2:-}"
 CALLER_PRIVATE_KEY="${POKE_PRIVATE_KEY:-${OWNER_PRIVATE_KEY:-}}"
 
@@ -26,3 +31,4 @@ cast send \
   "$WALLET_ADDRESS" \
   "$EXECUTION_NONCE"
 
+echo "execution_env=$EXECUTION_ENV"

@@ -14,11 +14,13 @@ import {
   pauseIntent,
   pauseReactiveListener,
   readControllerAssetViewNetwork,
+  readExecutionEnvironment,
   readWalletState,
   restoreOwnerWallet,
   resumeIntent,
   resumeReactiveListener,
   topUpAutomationCredit,
+  writeExecutionEnvironment,
   writeControllerAssetViewNetwork
 } from '../lib/willlead'
 import { txExplorerLink } from '../lib/explorers'
@@ -28,6 +30,7 @@ import type {
   AutomationCreditState,
   AutomationFundingValues,
   ControllerAssetViewNetwork,
+  ExecutionEnvironment,
   ExecutionProof,
   IntentFormValues,
   IntentState,
@@ -61,6 +64,7 @@ type WillLeadStore = {
   triggerSignal: () => Promise<void>
   watchAssetToken: (tokenAddress: string) => Promise<void>
   setControllerAssetViewNetwork: (viewNetwork: ControllerAssetViewNetwork) => Promise<void>
+  setExecutionEnvironment: (executionEnvironment: ExecutionEnvironment) => Promise<void>
   syncIdleCopy: () => void
 }
 
@@ -69,6 +73,8 @@ const initialWalletState: WalletState = {
   ownerAddress: null,
   connectionSource: 'disconnected',
   connectionLabel: 'Not connected',
+  executionEnvironment: readExecutionEnvironment(),
+  executionEnvironmentLabel: 'Primary Execution',
   controllerAssetViewNetwork: readControllerAssetViewNetwork(),
   controllerAssetViewLabel: 'Execution Chain View',
   balanceContextLabel: 'Controller wallet balance',
@@ -259,7 +265,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         restored?.address ?? null,
         restored?.source ?? 'disconnected',
         restored ? 'core' : 'full',
-        controllerAssetViewNetwork
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
       )
 
       set({
@@ -272,7 +279,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
 
       if (restored?.address) {
-        void hydrateDetailedSnapshot(set, restored.address, restored.source, controllerAssetViewNetwork)
+        void hydrateDetailedSnapshot(
+          set,
+          restored.address,
+          restored.source,
+          controllerAssetViewNetwork,
+          readExecutionEnvironment()
+        )
       }
     } catch (error) {
       set({
@@ -288,7 +301,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const result = await connectOwnerWallet(providerId)
       const controllerAssetViewNetwork = readControllerAssetViewNetwork()
-      const snapshot = await readWalletState(result.address, result.source, 'core', controllerAssetViewNetwork)
+      const snapshot = await readWalletState(
+        result.address,
+        result.source,
+        'core',
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
+      )
 
       set({
         ...snapshot,
@@ -304,7 +323,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         errorMessage: null
       })
 
-      void hydrateDetailedSnapshot(set, result.address, result.source, controllerAssetViewNetwork)
+      void hydrateDetailedSnapshot(
+        set,
+        result.address,
+        result.source,
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
+      )
     } catch (error) {
       set({
         isPending: false,
@@ -320,7 +345,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const result = await createOwnerWebWallet()
       const controllerAssetViewNetwork = readControllerAssetViewNetwork()
-      const snapshot = await readWalletState(result.address, result.source, 'core', controllerAssetViewNetwork)
+      const snapshot = await readWalletState(
+        result.address,
+        result.source,
+        'core',
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
+      )
 
       set({
         ...snapshot,
@@ -329,7 +360,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         errorMessage: null
       })
 
-      void hydrateDetailedSnapshot(set, result.address, result.source, controllerAssetViewNetwork)
+      void hydrateDetailedSnapshot(
+        set,
+        result.address,
+        result.source,
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
+      )
 
       return result.mnemonic ?? ''
     } catch (error) {
@@ -347,7 +384,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const result = await importOwnerWebWallet(mnemonic)
       const controllerAssetViewNetwork = readControllerAssetViewNetwork()
-      const snapshot = await readWalletState(result.address, result.source, 'core', controllerAssetViewNetwork)
+      const snapshot = await readWalletState(
+        result.address,
+        result.source,
+        'core',
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
+      )
 
       set({
         ...snapshot,
@@ -356,7 +399,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         errorMessage: null
       })
 
-      void hydrateDetailedSnapshot(set, result.address, result.source, controllerAssetViewNetwork)
+      void hydrateDetailedSnapshot(
+        set,
+        result.address,
+        result.source,
+        controllerAssetViewNetwork,
+        readExecutionEnvironment()
+      )
     } catch (error) {
       set({
         isPending: false,
@@ -371,7 +420,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
     try {
       await disconnectOwnerWallet()
-      const snapshot = await readWalletState(null, 'disconnected')
+      const snapshot = await readWalletState(
+        null,
+        'disconnected',
+        'full',
+        readControllerAssetViewNetwork(),
+        readExecutionEnvironment()
+      )
 
       set({
         ...snapshot,
@@ -416,7 +471,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         ownerAddress,
         connectionSource,
         'core',
-        get().wallet.controllerAssetViewNetwork
+        get().wallet.controllerAssetViewNetwork,
+        get().wallet.executionEnvironment
       )
       set({
         ...snapshot,
@@ -426,7 +482,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
 
       if (ownerAddress) {
-        void hydrateDetailedSnapshot(set, ownerAddress, connectionSource, get().wallet.controllerAssetViewNetwork)
+        void hydrateDetailedSnapshot(
+          set,
+          ownerAddress,
+          connectionSource,
+          get().wallet.controllerAssetViewNetwork,
+          get().wallet.executionEnvironment
+        )
       }
     } catch (error) {
       set({
@@ -445,7 +507,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         initialState.wallet.ownerAddress,
         initialState.wallet.connectionSource,
         'core',
-        initialState.wallet.controllerAssetViewNetwork
+        initialState.wallet.controllerAssetViewNetwork,
+        initialState.wallet.executionEnvironment
       )
 
       set((state) => {
@@ -470,7 +533,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         set,
         initialState.wallet.ownerAddress,
         initialState.wallet.connectionSource,
-        initialState.wallet.controllerAssetViewNetwork
+        initialState.wallet.controllerAssetViewNetwork,
+        initialState.wallet.executionEnvironment
       )
     } catch {}
   },
@@ -610,7 +674,11 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     set({ isPending: true, errorMessage: null, statusMessage: copy().addingWatchedToken })
 
     try {
-      const action = addWatchedToken(tokenAddress, get().wallet.controllerAssetViewNetwork)
+      const action = addWatchedToken(
+        tokenAddress,
+        get().wallet.controllerAssetViewNetwork,
+        get().wallet.executionEnvironment
+      )
       await applyPostAction(set, get, action)
     } catch (error) {
       set({
@@ -627,7 +695,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const ownerAddress = get().wallet.ownerAddress
       const connectionSource = get().wallet.connectionSource
-      const snapshot = await readWalletState(ownerAddress, connectionSource, 'core', viewNetwork)
+      const snapshot = await readWalletState(
+        ownerAddress,
+        connectionSource,
+        'core',
+        viewNetwork,
+        get().wallet.executionEnvironment
+      )
       set({
         ...snapshot,
         isPending: false,
@@ -636,13 +710,58 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
 
       if (ownerAddress) {
-        void hydrateDetailedSnapshot(set, ownerAddress, connectionSource, viewNetwork)
+        void hydrateDetailedSnapshot(
+          set,
+          ownerAddress,
+          connectionSource,
+          viewNetwork,
+          get().wallet.executionEnvironment
+        )
       }
     } catch (error) {
       set({
         isPending: false,
         errorMessage: error instanceof Error ? error.message : copy().assetViewSwitchFailed,
         statusMessage: copy().assetViewSwitchFailed
+      })
+    }
+  },
+  setExecutionEnvironment: async (executionEnvironment) => {
+    writeExecutionEnvironment(executionEnvironment)
+    set({ isPending: true, errorMessage: null, statusMessage: copy().switchingExecutionEnvironment })
+
+    try {
+      const ownerAddress = get().wallet.ownerAddress
+      const connectionSource = get().wallet.connectionSource
+      const controllerAssetViewNetwork = get().wallet.controllerAssetViewNetwork
+      const snapshot = await readWalletState(
+        ownerAddress,
+        connectionSource,
+        'core',
+        controllerAssetViewNetwork,
+        executionEnvironment
+      )
+      set({
+        ...snapshot,
+        isPending: false,
+        statusMessage: copy().executionEnvironmentSwitched,
+        errorMessage: null
+      })
+
+      if (ownerAddress) {
+        void hydrateDetailedSnapshot(
+          set,
+          ownerAddress,
+          connectionSource,
+          controllerAssetViewNetwork,
+          executionEnvironment
+        )
+      }
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().executionEnvironmentSwitchFailed,
+        statusMessage: copy().executionEnvironmentSwitchFailed
       })
     }
   },
@@ -675,11 +794,13 @@ async function applyPostAction(
   const ownerAddress = get().wallet.ownerAddress
   const connectionSource = get().wallet.connectionSource
   const controllerAssetViewNetwork = get().wallet.controllerAssetViewNetwork
+  const executionEnvironment = get().wallet.executionEnvironment
   const snapshot = await readWalletState(
     ownerAddress,
     connectionSource,
     'core',
-    controllerAssetViewNetwork
+    controllerAssetViewNetwork,
+    executionEnvironment
   )
 
   set((state) => ({
@@ -705,14 +826,20 @@ async function applyPostAction(
         }).format(new Date()),
         nonceLabel: null,
         detailLabel: null,
-        href: txExplorerLink(inferProofChain(action.label), action.hash)
+        href: txExplorerLink(inferProofChain(action.label), action.hash, executionEnvironment)
       },
       ...state.executionProofs.filter((proof) => proof.reference !== action.hash)
     ]
   }))
 
   if (ownerAddress) {
-    void hydrateDetailedSnapshot(set, ownerAddress, connectionSource, controllerAssetViewNetwork)
+    void hydrateDetailedSnapshot(
+      set,
+      ownerAddress,
+      connectionSource,
+      controllerAssetViewNetwork,
+      executionEnvironment
+    )
   }
 }
 
@@ -723,9 +850,10 @@ async function hydrateDetailedSnapshot(
   ) => void,
   ownerAddress: string,
   connectionSource: WalletState['connectionSource'],
-  controllerAssetViewNetwork: WalletState['controllerAssetViewNetwork']
+  controllerAssetViewNetwork: WalletState['controllerAssetViewNetwork'],
+  executionEnvironment: WalletState['executionEnvironment']
 ) {
-  const requestKey = `${ownerAddress}:${connectionSource}:${controllerAssetViewNetwork}`
+  const requestKey = `${ownerAddress}:${connectionSource}:${controllerAssetViewNetwork}:${executionEnvironment}`
   if (detailedSnapshotInFlightKey === requestKey) {
     return
   }
@@ -737,7 +865,8 @@ async function hydrateDetailedSnapshot(
       ownerAddress,
       connectionSource,
       'full',
-      controllerAssetViewNetwork
+      controllerAssetViewNetwork,
+      executionEnvironment
     )
 
     set((state) => {
@@ -745,7 +874,8 @@ async function hydrateDetailedSnapshot(
         state.isPending ||
         state.wallet.ownerAddress !== ownerAddress ||
         state.wallet.connectionSource !== connectionSource ||
-        state.wallet.controllerAssetViewNetwork !== controllerAssetViewNetwork
+        state.wallet.controllerAssetViewNetwork !== controllerAssetViewNetwork ||
+        state.wallet.executionEnvironment !== executionEnvironment
       ) {
         return {}
       }
@@ -776,6 +906,7 @@ async function pollForSignalOutcome(
   const initialOwnerAddress = get().wallet.ownerAddress
   const initialConnectionSource = get().wallet.connectionSource
   const initialControllerAssetViewNetwork = get().wallet.controllerAssetViewNetwork
+  const initialExecutionEnvironment = get().wallet.executionEnvironment
 
   if (!initialOwnerAddress) return
 
@@ -789,6 +920,7 @@ async function pollForSignalOutcome(
       state.wallet.ownerAddress !== initialOwnerAddress ||
       state.wallet.connectionSource !== initialConnectionSource ||
       state.wallet.controllerAssetViewNetwork !== initialControllerAssetViewNetwork ||
+      state.wallet.executionEnvironment !== initialExecutionEnvironment ||
       state.isPending
     ) {
       return
@@ -799,7 +931,8 @@ async function pollForSignalOutcome(
         initialOwnerAddress,
         initialConnectionSource,
         'full',
-        initialControllerAssetViewNetwork
+        initialControllerAssetViewNetwork,
+        initialExecutionEnvironment
       )
       const settled =
         snapshot.wallet.lastExecutionNonce >= expectedNonce ||
@@ -834,6 +967,7 @@ async function pollForListenerActivation(
   const initialOwnerAddress = get().wallet.ownerAddress
   const initialConnectionSource = get().wallet.connectionSource
   const initialControllerAssetViewNetwork = get().wallet.controllerAssetViewNetwork
+  const initialExecutionEnvironment = get().wallet.executionEnvironment
 
   if (!initialOwnerAddress) return
 
@@ -852,6 +986,7 @@ async function pollForListenerActivation(
       state.wallet.ownerAddress !== initialOwnerAddress ||
       state.wallet.connectionSource !== initialConnectionSource ||
       state.wallet.controllerAssetViewNetwork !== initialControllerAssetViewNetwork ||
+      state.wallet.executionEnvironment !== initialExecutionEnvironment ||
       state.isPending
     ) {
       return
@@ -862,7 +997,8 @@ async function pollForListenerActivation(
         initialOwnerAddress,
         initialConnectionSource,
         'full',
-        initialControllerAssetViewNetwork
+        initialControllerAssetViewNetwork,
+        initialExecutionEnvironment
       )
       const listenerArmed =
         snapshot.wallet.runtimeStatus === 'active' &&

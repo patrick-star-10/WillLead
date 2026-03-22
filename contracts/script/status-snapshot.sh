@@ -7,10 +7,20 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
+
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
 
 REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+CALLBACK_PROXY="$(execution_env_value "$EXECUTION_ENV" CALLBACK_PROXY)"
+WILLLEAD_WALLET_FACTORY="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET_FACTORY)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+WILLLEAD_SIGNAL_EMITTER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER)"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 if [[ -n "${WILLLEAD_WALLET_FACTORY:-}" ]]; then
+  echo "execution_env=$EXECUTION_ENV"
   echo "== Wallet factory =="
   cast call "$WILLLEAD_WALLET_FACTORY" "walletOf(address)(address)" "$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")" --rpc-url "$DESTINATION_RPC_URL"
   cast call "$WILLLEAD_WALLET_FACTORY" "reactiveListener()(address)" --rpc-url "$DESTINATION_RPC_URL"

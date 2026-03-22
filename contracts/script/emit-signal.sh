@@ -7,13 +7,24 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
+
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
 
 TOKEN_ADDRESS="${1:-0x0000000000000000000000000000000000000000}"
 RECIPIENT_ADDRESS="${2:-}"
 AMOUNT_PER_EXECUTION="${3:-0.01ether}"
 EXECUTION_NONCE="${4:-1}"
 
-if [[ -z "${WILLLEAD_SIGNAL_EMITTER:-}" || -z "${WILLLEAD_WALLET:-}" || -z "${ORIGIN_RPC_URL:-}" || -z "${OWNER_PRIVATE_KEY:-}" || -z "$RECIPIENT_ADDRESS" ]]; then
+require_env ORIGIN_RPC_URL
+require_env OWNER_PRIVATE_KEY
+require_execution_env "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER
+require_execution_env "$EXECUTION_ENV" WILLLEAD_WALLET
+
+WILLLEAD_SIGNAL_EMITTER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+
+if [[ -z "$RECIPIENT_ADDRESS" ]]; then
   echo "Missing required env or args"
   echo "Usage: ./contracts/script/emit-signal.sh <token> <recipient> [amountPerExecution] [executionNonce]"
   exit 1
@@ -30,3 +41,4 @@ cast send \
   "$AMOUNT_PER_EXECUTION" \
   "$EXECUTION_NONCE"
 
+echo "execution_env=$EXECUTION_ENV"

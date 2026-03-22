@@ -9,16 +9,19 @@ fi
 source .env
 source contracts/script/lib/env-utils.sh
 
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
 require_env OWNER_PRIVATE_KEY
 require_env REACTIVE_RPC_URL
 require_env AUTHORIZED_RVM_ID
-require_env WILLLEAD_REACTIVE_LISTENER
+require_execution_env "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER
 
 CHECK_ONLY="${1:-}"
 REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
 REACTIVE_IGNORE="0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad"
 STRATEGY_SIGNAL_TOPIC0="0xe45289780e7528d2841b99cd319e5c8b096bbcabe47294706cae408a97267f92"
 SUBSCRIBE_EVENT_TOPIC0="0xf2856a60f496a79f2738ebb36013248bb2f4a85116d90c2a595a96ef780137d2"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -81,6 +84,7 @@ matching_subscription_count="$(
 )"
 
 if [[ "$matching_subscription_count" != "0" ]]; then
+  echo "execution_env=$EXECUTION_ENV"
   echo "listener_subscription=ok"
   echo "signal_emitter=$signal_emitter"
   echo "origin_chain_id=$origin_chain_id"
@@ -89,12 +93,14 @@ if [[ "$matching_subscription_count" != "0" ]]; then
 fi
 
 if [[ "$CHECK_ONLY" == "--check" ]]; then
+  echo "execution_env=$EXECUTION_ENV"
   echo "listener_subscription=missing"
   echo "signal_emitter=$signal_emitter"
   echo "origin_chain_id=$origin_chain_id"
   exit 1
 fi
 
+echo "execution_env=$EXECUTION_ENV"
 echo "listener_subscription=syncing"
 cast send \
   --rpc-url "$REACTIVE_RPC_URL" \

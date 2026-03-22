@@ -9,18 +9,28 @@ fi
 source .env
 source contracts/script/lib/env-utils.sh
 
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
 require_env OWNER_PRIVATE_KEY
 require_env ORIGIN_RPC_URL
-require_env DESTINATION_RPC_URL
 require_env REACTIVE_RPC_URL
 require_env ORIGIN_CHAIN_ID
-require_env DESTINATION_CHAIN_ID
-require_env CALLBACK_PROXY
 require_env AUTHORIZED_RVM_ID
-require_env WILLLEAD_SIGNAL_EMITTER
-require_env WILLLEAD_WALLET
-require_env WILLLEAD_WALLET_FACTORY
-require_env WILLLEAD_REACTIVE_LISTENER
+require_execution_env "$EXECUTION_ENV" DESTINATION_RPC_URL
+require_execution_env "$EXECUTION_ENV" DESTINATION_CHAIN_ID
+require_execution_env "$EXECUTION_ENV" CALLBACK_PROXY
+require_execution_env "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER
+require_execution_env "$EXECUTION_ENV" WILLLEAD_WALLET
+require_execution_env "$EXECUTION_ENV" WILLLEAD_WALLET_FACTORY
+require_execution_env "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER
+
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+DESTINATION_CHAIN_ID="$(execution_env_value "$EXECUTION_ENV" DESTINATION_CHAIN_ID)"
+CALLBACK_PROXY="$(execution_env_value "$EXECUTION_ENV" CALLBACK_PROXY)"
+WILLLEAD_SIGNAL_EMITTER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+WILLLEAD_WALLET_FACTORY="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET_FACTORY)"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 OWNER_ADDRESS="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
 
@@ -53,6 +63,10 @@ assert_eq() {
   fi
   echo "$label ok: $actual"
 }
+
+echo "== Execution env =="
+echo "$EXECUTION_ENV"
+echo
 
 echo "== Code presence =="
 assert_code_exists "$ORIGIN_RPC_URL" "$WILLLEAD_SIGNAL_EMITTER" "SignalEmitter"

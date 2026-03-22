@@ -9,12 +9,15 @@ fi
 source .env
 source contracts/script/lib/env-utils.sh
 
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
 require_env OWNER_PRIVATE_KEY
 require_env REACTIVE_RPC_URL
-require_env WILLLEAD_REACTIVE_LISTENER
+require_execution_env "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER
 
 REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
 BUFFER_WEI="${1:-1000000000000000}"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 numeric_value() {
   printf '%s' "$1" | awk '{print $1}'
@@ -24,6 +27,7 @@ listener_balance="$(numeric_value "$(cast balance "$WILLLEAD_REACTIVE_LISTENER" 
 listener_debt="$(numeric_value "$(cast call "$REACTIVE_SYSTEM_CONTRACT" "debt(address)(uint256)" "$WILLLEAD_REACTIVE_LISTENER" --rpc-url "$REACTIVE_RPC_URL")")"
 required_balance=$(( listener_debt + BUFFER_WEI ))
 
+echo "execution_env=$EXECUTION_ENV"
 echo "listener_balance=$listener_balance"
 echo "listener_debt=$listener_debt"
 echo "buffer_wei=$BUFFER_WEI"

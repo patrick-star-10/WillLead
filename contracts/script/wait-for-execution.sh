@@ -7,8 +7,14 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
+
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
 
 REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 numeric_value() {
   printf '%s' "$1" | awk '{print $1}'
@@ -32,6 +38,7 @@ destination_from=$(( destination_latest > 20 ? destination_latest - 20 : 0 ))
 deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
 
 echo "target_nonce=$TARGET_NONCE"
+echo "execution_env=$EXECUTION_ENV"
 echo "timeout_seconds=$TIMEOUT_SECONDS"
 echo "poll_interval=$POLL_INTERVAL"
 echo "reactive_from_block=$reactive_from"
@@ -88,5 +95,5 @@ echo "status=timeout"
 if [[ "$listener_paused" == "true" ]]; then
   echo "hint=reactive listener is paused"
 fi
-echo "hint=run ./contracts/script/status-snapshot.sh and ./contracts/script/collect-proof.sh"
+echo "hint=run EXECUTION_ENV=$EXECUTION_ENV ./contracts/script/status-snapshot.sh and EXECUTION_ENV=$EXECUTION_ENV ./contracts/script/collect-proof.sh"
 exit 1

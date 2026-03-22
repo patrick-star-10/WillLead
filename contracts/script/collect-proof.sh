@@ -7,10 +7,18 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+source contracts/script/lib/env-utils.sh
+
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
 
 REACTIVE_SYSTEM_CONTRACT="0x0000000000000000000000000000000000fffFfF"
 WINDOW="${1:-10000}"
 OWNER_ADDRESS="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+WILLLEAD_WALLET_FACTORY="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET_FACTORY)"
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+WILLLEAD_SIGNAL_EMITTER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_SIGNAL_EMITTER)"
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 origin_explorer="${VITE_ORIGIN_EXPLORER_BASE_URL:-}"
 reactive_explorer="${VITE_REACTIVE_EXPLORER_BASE_URL:-}"

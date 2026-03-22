@@ -16,14 +16,15 @@ import { mnemonicToAccount } from 'viem/accounts'
 
 import {
   destinationChain,
-  destinationChainConfig,
+  getExecutionChain,
+  getExecutionChainConfig,
   originChain,
   originChainConfig,
   reactiveChain,
   reactiveChainConfig
 } from './chains'
 import { getActiveWalletSource, getStoredWebWallet, setActiveWalletSource } from './webWallet'
-import type { InjectedWalletOption } from '../types/willlead'
+import type { ExecutionEnvironment, InjectedWalletOption } from '../types/willlead'
 
 const activeInjectedProviderKey = 'willlead.active-injected-provider'
 
@@ -167,10 +168,15 @@ export function getOriginPublicClient(): PublicClient | null {
   })
 }
 
-export function getDestinationPublicClient(): PublicClient | null {
+export function getDestinationPublicClient(
+  executionEnvironment: ExecutionEnvironment = 'primary'
+): PublicClient | null {
+  const executionChainConfig = getExecutionChainConfig(executionEnvironment)
   const rpcUrls = resolveRpcUrls(
-    import.meta.env.VITE_DESTINATION_RPC_URL,
-    destinationChainConfig.defaultRpcUrls
+    executionEnvironment === 'lasna'
+      ? import.meta.env.VITE_LASNA_EXECUTION_DESTINATION_RPC_URL
+      : import.meta.env.VITE_DESTINATION_RPC_URL,
+    executionChainConfig.defaultRpcUrls
   )
   if (rpcUrls.length === 0) return null
 
@@ -178,7 +184,7 @@ export function getDestinationPublicClient(): PublicClient | null {
     batch: {
       multicall: true
     },
-    chain: destinationChain,
+    chain: executionChainConfig.chain,
     transport: createRpcTransport(rpcUrls)
   })
 }
@@ -329,10 +335,26 @@ export async function getDestinationWalletClient(): Promise<{
   account: Address
   client: WalletClient
 }> {
+  return getExecutionWalletClient('primary')
+}
+
+export async function getExecutionWalletClient(
+  executionEnvironment: ExecutionEnvironment = 'primary'
+): Promise<{
+  account: Address
+  client: WalletClient
+}> {
+  const executionChain = getExecutionChain(executionEnvironment)
+  const executionChainConfig = getExecutionChainConfig(executionEnvironment)
+  const destinationRpc =
+    executionEnvironment === 'lasna'
+      ? import.meta.env.VITE_LASNA_EXECUTION_DESTINATION_RPC_URL
+      : import.meta.env.VITE_DESTINATION_RPC_URL
+
   if (getActiveWalletSource() === 'web') {
     return createLocalWalletClient(
-      resolveRpcUrls(import.meta.env.VITE_DESTINATION_RPC_URL, destinationChainConfig.defaultRpcUrls),
-      destinationChain
+      resolveRpcUrls(destinationRpc, executionChainConfig.defaultRpcUrls),
+      executionChain
     )
   }
 
@@ -340,11 +362,11 @@ export async function getDestinationWalletClient(): Promise<{
   const provider = resolveInjectedProvider()
   const account = await getConnectedInjectedAddress(provider)
 
-  await switchInjectedChain(provider, destinationChain)
+  await switchInjectedChain(provider, executionChain)
 
   const client = createWalletClient({
     account,
-    chain: destinationChain,
+    chain: executionChain,
     transport: custom(provider)
   })
 

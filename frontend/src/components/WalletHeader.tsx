@@ -1,4 +1,4 @@
-import type { AssetBalance, ControllerAssetViewNetwork } from '../types/willlead'
+import type { AssetBalance, ControllerAssetViewNetwork, ExecutionEnvironment } from '../types/willlead'
 import {
   translateBalanceContextLabel,
   translateConnectionLabel,
@@ -13,6 +13,8 @@ type WalletHeaderProps = {
   contractAddress: string
   ownerAddress: string | null
   connectionLabel: string
+  executionEnvironment: ExecutionEnvironment
+  executionEnvironmentLabel: string
   controllerAssetViewNetwork: ControllerAssetViewNetwork
   controllerAssetViewLabel: string
   connectedBalanceLabel: string
@@ -30,6 +32,7 @@ type WalletHeaderProps = {
   onFundWallet: (amount: string) => void
   onWatchToken: (tokenAddress: string) => void
   onSetControllerAssetViewNetwork: (viewNetwork: ControllerAssetViewNetwork) => void
+  onSetExecutionEnvironment: (executionEnvironment: ExecutionEnvironment) => void
 }
 
 function shortenAddress(value: string | null) {
@@ -94,11 +97,30 @@ export function WalletHeader(props: WalletHeaderProps) {
             </div>
             <div className="identity-chip">
               <span>{copy.executionMode}</span>
-              <strong>{copy.reactiveCallback}</strong>
+              <strong>{props.executionEnvironmentLabel}</strong>
             </div>
           </div>
         </div>
       </div>
+      <div className="action-row">
+        <button
+          className={props.executionEnvironment === 'primary' ? 'primary-button' : 'secondary-button'}
+          disabled={props.isPending}
+          onClick={() => props.onSetExecutionEnvironment('primary')}
+          type="button"
+        >
+          {copy.primaryExecutionView}
+        </button>
+        <button
+          className={props.executionEnvironment === 'lasna' ? 'primary-button' : 'secondary-button'}
+          disabled={props.isPending}
+          onClick={() => props.onSetExecutionEnvironment('lasna')}
+          type="button"
+        >
+          {copy.lasnaExecutionView}
+        </button>
+      </div>
+      <p className="wallet-footnote">{copy.executionEnvironmentNote}</p>
       <div className="action-row">
         <button
           className={props.controllerAssetViewNetwork === 'destination' ? 'primary-button' : 'secondary-button'}

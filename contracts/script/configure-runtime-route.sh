@@ -9,20 +9,26 @@ fi
 source .env
 source contracts/script/lib/env-utils.sh
 
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
 LISTENER_ADDRESS="${1:-}"
 SIGNAL_EMITTER_ADDRESS="${2:-}"
 SOURCE_CHAIN_ID="${3:-}"
-RUNTIME_DESTINATION_CHAIN_ID="${4:-${DESTINATION_CHAIN_ID:-}}"
+RUNTIME_DESTINATION_CHAIN_ID="${4:-$(execution_env_value "$EXECUTION_ENV" DESTINATION_CHAIN_ID)}"
 RUNTIME_SIGNAL_TOPIC0="${5:-}"
 
 if [[ -z "$RUNTIME_SIGNAL_TOPIC0" ]]; then
   RUNTIME_SIGNAL_TOPIC0="$(cast keccak 'StrategySignal(address,address,address,uint256,uint256,uint256)')"
 fi
 
-require_env WILLLEAD_WALLET
-require_env DESTINATION_RPC_URL
 require_env OWNER_PRIVATE_KEY
 require_env REACTIVE_RPC_URL
+require_execution_env "$EXECUTION_ENV" WILLLEAD_WALLET
+require_execution_env "$EXECUTION_ENV" DESTINATION_RPC_URL
+
+WILLLEAD_WALLET="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_WALLET)"
+DESTINATION_RPC_URL="$(execution_env_value "$EXECUTION_ENV" DESTINATION_RPC_URL)"
+DESTINATION_CHAIN_ID="$(execution_env_value "$EXECUTION_ENV" DESTINATION_CHAIN_ID)"
 
 if [[ -z "$LISTENER_ADDRESS" || -z "$SIGNAL_EMITTER_ADDRESS" || -z "$SOURCE_CHAIN_ID" || -z "$RUNTIME_DESTINATION_CHAIN_ID" ]]; then
   echo "Missing required env or args"
@@ -55,6 +61,7 @@ listener_strategy_signal_topic0="$(
 )"
 
 echo "route_check=checking"
+echo "execution_env=$EXECUTION_ENV"
 echo "listener=$LISTENER_ADDRESS"
 echo "listener_signal_emitter=$listener_signal_emitter"
 echo "listener_origin_chain_id=$listener_origin_chain_id"

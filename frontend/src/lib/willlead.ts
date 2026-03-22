@@ -13,13 +13,14 @@ import { callbackProxyAbi } from '../contracts/abi/callbackProxy'
 import { willLeadReactiveListenerAbi } from '../contracts/abi/willLeadReactiveListener'
 import { willLeadWalletFactoryAbi } from '../contracts/abi/willLeadWalletFactory'
 import { willLeadWalletAbi } from '../contracts/abi/willLeadWallet'
-import { contractAddresses } from '../contracts/addresses'
+import { getExecutionContractAddresses } from '../contracts/addresses'
 import type {
   ActionResult,
   AutomationReadiness,
   AssetBalance,
   AutomationCreditState,
   ControllerAssetViewNetwork,
+  ExecutionEnvironment,
   ExecutionProof,
   AutomationFundingValues,
   IntentFormValues,
@@ -35,15 +36,15 @@ import type {
 } from '../types/willlead'
 import {
   disconnectBrowserWalletSession,
+  getExecutionWalletClient,
   getDestinationPublicClient,
-  getDestinationWalletClient,
   getInjectedWalletOptions,
   getOriginPublicClient,
   getReactivePublicClient,
   getReactiveWalletClient,
   requestWalletAddress
 } from './clients'
-import { destinationChain, originChain, reactiveChain } from './chains'
+import { destinationChain, getExecutionChain, getExecutionChainConfig, originChain, reactiveChain } from './chains'
 import { txExplorerLink } from './explorers'
 import { getMessages, useLanguageStore } from './i18n'
 import {
@@ -69,6 +70,7 @@ const reactiveSystemAbi = parseAbi([
 const reactiveIgnore =
   '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad' as Hex
 const controllerAssetViewStorageKey = 'willlead.controller-asset-view-network'
+const executionEnvironmentStorageKey = 'willlead.execution-environment'
 
 function isConfiguredAddress(value: string) {
   return value.toLowerCase() !== emptyAddress
@@ -114,8 +116,8 @@ function formatNativeAmount(amount: bigint, symbol: string) {
   return `${formatDecimalString(formatEther(amount), 3)} ${symbol}`
 }
 
-function formatAmount(amount: bigint) {
-  return formatNativeAmount(amount, destinationChain.nativeCurrency.symbol)
+function formatAmount(amount: bigint, symbol: string = destinationChain.nativeCurrency.symbol) {
+  return formatNativeAmount(amount, symbol)
 }
 
 function formatUint256Topic(value: bigint) {
@@ -205,7 +207,7 @@ export async function connectOwnerWallet(providerId: string) {
   const { address, providerId: connectedProviderId, providerLabel } = await requestWalletAddress(
     providerId
   )
-  await getDestinationWalletClient()
+  await getExecutionWalletClient(readExecutionEnvironment())
   return {
     address,
     source: 'browser',
@@ -255,6 +257,16 @@ export function readControllerAssetViewNetwork(): ControllerAssetViewNetwork {
 export function writeControllerAssetViewNetwork(viewNetwork: ControllerAssetViewNetwork) {
   if (!canUseBrowserStorage()) return
   window.localStorage.setItem(controllerAssetViewStorageKey, viewNetwork)
+}
+
+export function readExecutionEnvironment(): ExecutionEnvironment {
+  if (!canUseBrowserStorage()) return 'primary'
+  return window.localStorage.getItem(executionEnvironmentStorageKey) === 'lasna' ? 'lasna' : 'primary'
+}
+
+export function writeExecutionEnvironment(executionEnvironment: ExecutionEnvironment) {
+  if (!canUseBrowserStorage()) return
+  window.localStorage.setItem(executionEnvironmentStorageKey, executionEnvironment)
 }
 
 function readWatchedTokenAddresses(chainId: number): Address[] {
@@ -311,10 +323,12 @@ function mergeTrackedTokenAddresses(...tokenLists: Array<Array<Address | null | 
 
 export function addWatchedToken(
   tokenInput: string,
-  viewNetwork: ControllerAssetViewNetwork = 'destination'
+  viewNetwork: ControllerAssetViewNetwork = 'destination',
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): ActionResult {
   const tokenAddress = getAddress(tokenInput)
-  const chainId = viewNetwork === 'reactive' ? reactiveChain.id : destinationChain.id
+  const executionChain = getExecutionChain(executionEnvironment)
+  const chainId = viewNetwork === 'reactive' ? reactiveChain.id : executionChain.id
   const nextTokens = mergeTrackedTokenAddresses(readWatchedTokenAddresses(chainId), [tokenAddress])
   writeWatchedTokenAddresses(chainId, nextTokens)
 
@@ -325,7 +339,12 @@ export function addWatchedToken(
   }
 }
 
-function resolveControllerAssetView(viewNetwork: ControllerAssetViewNetwork) {
+function resolveControllerAssetView(
+  viewNetwork: ControllerAssetViewNetwork,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
+) {
+  const executionChainConfig = getExecutionChainConfig(executionEnvironment)
+
   if (viewNetwork === 'reactive') {
     return {
       client: getReactivePublicClient(),
@@ -336,11 +355,15 @@ function resolveControllerAssetView(viewNetwork: ControllerAssetViewNetwork) {
   }
 
   return {
-    client: getDestinationPublicClient(),
-    label: destinationChain.name,
-    nativeSymbol: destinationChain.nativeCurrency.symbol,
-    watchedTokens: readWatchedTokenAddresses(destinationChain.id)
+    client: getDestinationPublicClient(executionEnvironment),
+    label: executionChainConfig.name,
+    nativeSymbol: executionChainConfig.nativeCurrency.symbol,
+    watchedTokens: readWatchedTokenAddresses(executionChainConfig.id)
   }
+}
+
+function executionEnvironmentLabel(executionEnvironment: ExecutionEnvironment) {
+  return executionEnvironment === 'lasna' ? copy().lasnaExecutionView : copy().primaryExecutionView
 }
 
 type WalletBindingContext = {
@@ -417,12 +440,15 @@ async function readWalletRuntimeBinding(
   }
 }
 
-async function validateRuntimeRouteInput(route: RuntimeRouteInput) {
+async function validateRuntimeRouteInputForExecution(
+  route: RuntimeRouteInput,
+  executionEnvironment: ExecutionEnvironment
+) {
   if (route.sourceChainId !== BigInt(originChain.id)) {
     throw new Error(copy().runtimeRouteOriginConfigMismatch)
   }
 
-  if (route.destinationChainId !== BigInt(destinationChain.id)) {
+  if (route.destinationChainId !== BigInt(getExecutionChainConfig(executionEnvironment).id)) {
     throw new Error(copy().runtimeRouteDestinationConfigMismatch)
   }
 
@@ -487,9 +513,13 @@ async function validateRuntimeRouteInput(route: RuntimeRouteInput) {
   }
 }
 
-async function resolveWalletBinding(ownerAddress: string | null): Promise<WalletBindingContext> {
-  const destinationClient = getDestinationPublicClient()
-  const factoryAddress = configuredAddressOrNull(contractAddresses.walletFactory)
+async function resolveWalletBinding(
+  ownerAddress: string | null,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
+): Promise<WalletBindingContext> {
+  const executionAddresses = getExecutionContractAddresses(executionEnvironment)
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
+  const factoryAddress = configuredAddressOrNull(executionAddresses.walletFactory)
 
   if (destinationClient && factoryAddress) {
     const [walletAddress, listenerAddress, signalEmitterAddress, sourceChainId, destinationChainId, signalTopic0] =
@@ -520,9 +550,9 @@ async function resolveWalletBinding(ownerAddress: string | null): Promise<Wallet
     }
   }
 
-  const walletAddress = configuredAddressOrNull(contractAddresses.wallet)
-  const listenerAddress = configuredAddressOrNull(contractAddresses.reactiveListener)
-  const signalEmitterAddress = configuredAddressOrNull(contractAddresses.signalEmitter)
+  const walletAddress = configuredAddressOrNull(executionAddresses.wallet)
+  const listenerAddress = configuredAddressOrNull(executionAddresses.reactiveListener)
+  const signalEmitterAddress = configuredAddressOrNull(executionAddresses.signalEmitter)
 
   return {
     walletAddress,
@@ -535,13 +565,16 @@ async function resolveWalletBinding(ownerAddress: string | null): Promise<Wallet
   }
 }
 
-async function resolveWalletAddressForOwner(ownerAddress: Address): Promise<BoundWalletBindingContext> {
-  const binding = await resolveWalletBinding(ownerAddress)
+async function resolveWalletAddressForOwner(
+  ownerAddress: Address,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
+): Promise<BoundWalletBindingContext> {
+  const binding = await resolveWalletBinding(ownerAddress, executionEnvironment)
   if (!binding.walletAddress) {
     throw new Error(copy().walletNotInitialized)
   }
 
-  const destinationClient = getDestinationPublicClient()
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   if (!destinationClient) {
     throw new Error(copy().walletAccessUnavailable)
   }
@@ -562,21 +595,25 @@ async function resolveWalletAddressForOwner(ownerAddress: Address): Promise<Boun
   }
 }
 
-async function resolveReactiveListenerForManager(ownerAddress: Address) {
-  const binding = await resolveWalletAddressForOwner(ownerAddress)
-  const destinationClient = getDestinationPublicClient()
+async function resolveReactiveListenerForManager(
+  ownerAddress: Address,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
+) {
+  const binding = await resolveWalletAddressForOwner(ownerAddress, executionEnvironment)
+  const executionAddresses = getExecutionContractAddresses(executionEnvironment)
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   const runtimeBinding =
     destinationClient ? await readWalletRuntimeBinding(destinationClient, binding.walletAddress) : null
   const reactiveListenerAddress =
     runtimeBinding?.listener ??
     binding.listenerAddress ??
-    configuredAddressOrNull(contractAddresses.reactiveListener)
+    configuredAddressOrNull(executionAddresses.reactiveListener)
 
   if (!reactiveListenerAddress) {
     throw new Error(copy().reactiveListenerMissing)
   }
 
-  const listenerState = await readReactiveListenerState(reactiveListenerAddress)
+  const listenerState = await readReactiveListenerState(reactiveListenerAddress, executionEnvironment)
   if (!listenerState.canManageListener(ownerAddress)) {
     throw new Error(copy().listenerManagedByOperator)
   }
@@ -587,6 +624,7 @@ async function resolveReactiveListenerForManager(ownerAddress: Address) {
 function buildUnboundSnapshot(params: {
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
+  executionEnvironment: ExecutionEnvironment
   controllerAssetViewNetwork: ControllerAssetViewNetwork
   controllerAssetViewLabel: string
   connectedBalanceLabel: string
@@ -597,6 +635,7 @@ function buildUnboundSnapshot(params: {
   const {
     ownerAddress,
     connectionSource,
+    executionEnvironment,
     controllerAssetViewNetwork,
     controllerAssetViewLabel,
     connectedBalanceLabel,
@@ -608,9 +647,11 @@ function buildUnboundSnapshot(params: {
   return {
     wallet: {
       contractAddress: 'Unavailable',
-        ownerAddress,
-        connectionSource,
-        connectionLabel: formatConnectionLabel(connectionSource),
+      ownerAddress,
+      connectionSource,
+      connectionLabel: formatConnectionLabel(connectionSource),
+      executionEnvironment,
+      executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
       controllerAssetViewNetwork,
       controllerAssetViewLabel,
       balanceContextLabel: 'Autonomous wallet contract balance',
@@ -674,7 +715,10 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
   }
 
   try {
-    const response = await fetch(`/runtime/operator-status.json?ts=${Date.now()}`, {
+    const executionEnvironment = readExecutionEnvironment()
+    const runtimeStatusFile =
+      executionEnvironment === 'lasna' ? 'operator-status-lasna.json' : 'operator-status.json'
+    const response = await fetch(`/runtime/${runtimeStatusFile}?ts=${Date.now()}`, {
       cache: 'no-store'
     })
 
@@ -727,9 +771,11 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
         timeZoneName: 'short'
       }),
       listenerBalance: payload.listenerBalanceWei
-        ? formatAmount(BigInt(payload.listenerBalanceWei))
+        ? formatAmount(BigInt(payload.listenerBalanceWei), reactiveChain.nativeCurrency.symbol)
         : 'Unavailable',
-      listenerDebt: payload.listenerDebtWei ? formatAmount(BigInt(payload.listenerDebtWei)) : 'Unavailable',
+      listenerDebt: payload.listenerDebtWei
+        ? formatAmount(BigInt(payload.listenerDebtWei), reactiveChain.nativeCurrency.symbol)
+        : 'Unavailable',
       lastFundingResult: payload.lastFundingResult ?? 'Unknown',
       apiUrl: payload.apiUrl ?? null,
       walletAddress:
@@ -804,19 +850,22 @@ export async function readWalletState(
   ownerAddress: string | null,
   connectionSource: WalletConnectionSource = 'disconnected',
   detailLevel: 'core' | 'full' = 'full',
-  controllerAssetViewNetwork: ControllerAssetViewNetwork = readControllerAssetViewNetwork()
+  controllerAssetViewNetwork: ControllerAssetViewNetwork = readControllerAssetViewNetwork(),
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): Promise<{
   wallet: WalletState
   intent: IntentState
   automation: AutomationCreditState
   executionProofs: ExecutionProof[]
 }> {
-  const destinationClient = getDestinationPublicClient()
+  const executionChainConfig = getExecutionChainConfig(executionEnvironment)
+  const executionAddresses = getExecutionContractAddresses(executionEnvironment)
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   const originClient = detailLevel === 'full' ? getOriginPublicClient() : null
   const reactiveClient = detailLevel === 'full' ? getReactivePublicClient() : null
-  const controllerAssetView = resolveControllerAssetView(controllerAssetViewNetwork)
+  const controllerAssetView = resolveControllerAssetView(controllerAssetViewNetwork, executionEnvironment)
   const operatorRuntime = await readOperatorRuntime()
-  const destinationWatchedTokens = readWatchedTokenAddresses(destinationChain.id)
+  const destinationWatchedTokens = readWatchedTokenAddresses(executionChainConfig.id)
   let connectedBalance = 0n
   if (controllerAssetView.client && ownerAddress !== null) {
     try {
@@ -842,6 +891,7 @@ export async function readWalletState(
     return buildUnboundSnapshot({
       ownerAddress,
       connectionSource,
+      executionEnvironment,
       controllerAssetViewNetwork,
       controllerAssetViewLabel: controllerAssetView.label,
       connectedBalanceLabel,
@@ -856,11 +906,12 @@ export async function readWalletState(
         controllerAssetView.client,
         getAddress(ownerAddress),
         connectedBalance,
-        controllerAssetView.watchedTokens
+        controllerAssetView.watchedTokens,
+        controllerAssetView.nativeSymbol
       )
     }
 
-    const binding = await resolveWalletBinding(ownerAddress)
+    const binding = await resolveWalletBinding(ownerAddress, executionEnvironment)
     const bindingRuntimeRoute = {
       listenerAddress: binding.listenerAddress ?? 'Unavailable',
       signalEmitterAddress: binding.signalEmitterAddress ?? 'Unavailable',
@@ -875,6 +926,7 @@ export async function readWalletState(
       return buildUnboundSnapshot({
         ownerAddress,
         connectionSource,
+        executionEnvironment,
         controllerAssetViewNetwork,
         controllerAssetViewLabel: controllerAssetView.label,
         connectedBalanceLabel,
@@ -899,6 +951,7 @@ export async function readWalletState(
       return buildUnboundSnapshot({
         ownerAddress,
         connectionSource,
+        executionEnvironment,
         controllerAssetViewNetwork,
         controllerAssetViewLabel: controllerAssetView.label,
         connectedBalanceLabel,
@@ -942,20 +995,22 @@ export async function readWalletState(
       destinationClient,
       walletAddress,
       balance,
-      trackedWalletTokens
+      trackedWalletTokens,
+      executionChainConfig.nativeCurrency.symbol
     )
     if (ownerAddress !== null && controllerAssetView.client) {
       connectedAssetBalances = await readTrackedAssets(
         controllerAssetView.client,
         getAddress(ownerAddress),
         connectedBalance,
-        trackedControllerTokens
+        trackedControllerTokens,
+        controllerAssetView.nativeSymbol
       )
     }
     const runtimeStatus = formatRuntimeStatus(status)
     const scopedOperatorRuntime = scopeOperatorRuntime(operatorRuntime, walletAddress)
     if (detailLevel === 'core') {
-      const automation = await readAutomationCredit(walletAddress, automationFloor)
+      const automation = await readAutomationCredit(walletAddress, automationFloor, executionEnvironment)
 
       return {
         wallet: {
@@ -963,10 +1018,12 @@ export async function readWalletState(
           ownerAddress,
           connectionSource,
           connectionLabel: formatConnectionLabel(connectionSource),
+          executionEnvironment,
+          executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
           controllerAssetViewNetwork,
           controllerAssetViewLabel: controllerAssetView.label,
           balanceContextLabel: 'Autonomous wallet contract balance',
-          balanceLabel: formatAmount(balance),
+          balanceLabel: formatAmount(balance, executionChainConfig.nativeCurrency.symbol),
           assetBalances,
           connectedBalanceLabel,
           connectedAssetBalances,
@@ -977,7 +1034,10 @@ export async function readWalletState(
           lastExecutionNonce: Number(lastExecutionNonce),
           lastExecutedAt: formatTimestamp(lastExecutedAt),
           lastSignalHash,
-          destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
+          destinationBalanceDelta:
+            executedCount > 0n
+              ? `-${formatAmount(amountPerExecution, executionChainConfig.nativeCurrency.symbol)}`
+              : `0 ${executionChainConfig.nativeCurrency.symbol}`,
           runtimeRoute: {
             listenerAddress: runtimeBinding?.listener ?? reactiveListenerAddress,
             signalEmitterAddress:
@@ -1015,18 +1075,20 @@ export async function readWalletState(
     }
 
     const listenerState = await readReactiveListenerState(
-      runtimeBinding?.listener ?? reactiveListenerAddress
+      runtimeBinding?.listener ?? reactiveListenerAddress,
+      executionEnvironment
     )
     const runtimeListenerAddress = runtimeBinding?.listener ?? reactiveListenerAddress
     const runtimeSignalEmitter = runtimeBinding?.signalEmitter ?? listenerState.signalEmitter
-    const automation = await readAutomationCredit(walletAddress, automationFloor)
+    const automation = await readAutomationCredit(walletAddress, automationFloor, executionEnvironment)
     const proofs = await readExecutionProofs(
       walletAddress,
       runtimeListenerAddress,
       runtimeSignalEmitter,
       originClient,
       reactiveClient,
-      destinationClient
+      destinationClient,
+      executionEnvironment
     )
     const automationReadiness = computeAutomationReadiness({
       runtimeStatus,
@@ -1040,10 +1102,12 @@ export async function readWalletState(
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
+        executionEnvironment,
+        executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
         controllerAssetViewNetwork,
         controllerAssetViewLabel: controllerAssetView.label,
         balanceContextLabel: 'Autonomous wallet contract balance',
-        balanceLabel: formatAmount(balance),
+        balanceLabel: formatAmount(balance, executionChainConfig.nativeCurrency.symbol),
         assetBalances,
         connectedBalanceLabel,
         connectedAssetBalances,
@@ -1054,7 +1118,10 @@ export async function readWalletState(
         lastExecutionNonce: Number(lastExecutionNonce),
         lastExecutedAt: formatTimestamp(lastExecutedAt),
         lastSignalHash,
-        destinationBalanceDelta: executedCount > 0n ? `-${formatAmount(amountPerExecution)}` : '0 ETH',
+        destinationBalanceDelta:
+          executedCount > 0n
+            ? `-${formatAmount(amountPerExecution, executionChainConfig.nativeCurrency.symbol)}`
+            : `0 ${executionChainConfig.nativeCurrency.symbol}`,
         runtimeRoute: {
           listenerAddress: runtimeListenerAddress,
           signalEmitterAddress: runtimeSignalEmitter,
@@ -1100,14 +1167,15 @@ export async function readWalletState(
     return buildUnboundSnapshot({
       ownerAddress,
       connectionSource,
+      executionEnvironment,
       controllerAssetViewNetwork,
       controllerAssetViewLabel: controllerAssetView.label,
       connectedBalanceLabel,
       connectedAssetBalances,
       walletAccessState: 'unavailable',
       runtimeRoute: {
-        listenerAddress: contractAddresses.reactiveListener,
-        signalEmitterAddress: contractAddresses.signalEmitter
+        listenerAddress: executionAddresses.reactiveListener,
+        signalEmitterAddress: executionAddresses.signalEmitter
       }
     })
   }
@@ -1117,12 +1185,13 @@ async function readTrackedAssets(
   destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>,
   holderAddress: Address,
   nativeBalance: bigint,
-  trackedTokens: Address[]
+  trackedTokens: Address[],
+  nativeSymbol: string
 ): Promise<AssetBalance[]> {
   const balances: AssetBalance[] = [
     {
-      symbol: 'ETH',
-      balanceLabel: formatAmount(nativeBalance),
+      symbol: nativeSymbol,
+      balanceLabel: formatAmount(nativeBalance, nativeSymbol),
       kind: 'native'
     }
   ]
@@ -1167,7 +1236,10 @@ async function readTrackedAssets(
   return balances
 }
 
-async function readReactiveListenerState(reactiveListenerAddress: Address) {
+async function readReactiveListenerState(
+  reactiveListenerAddress: Address,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
+) {
   type ListenerRuntime = {
     listenerPaused: boolean | null
     callbackGasLimit: string
@@ -1267,7 +1339,7 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
         .toString(16)
         .padStart(64, '0')
         .toLowerCase()
-      const expectedAuthorizedRvmId = contractAddresses.authorizedRvmId
+      const expectedAuthorizedRvmId = getExecutionContractAddresses(executionEnvironment).authorizedRvmId
         .toLowerCase()
         .replace('0x', '')
         .padStart(40, '0')
@@ -1304,19 +1376,22 @@ async function readReactiveListenerState(reactiveListenerAddress: Address) {
 
 async function readAutomationCredit(
   walletAddress: Address,
-  automationFloor: bigint
+  automationFloor: bigint,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): Promise<AutomationCreditState> {
-  const destinationClient = getDestinationPublicClient()
+  const executionAddresses = getExecutionContractAddresses(executionEnvironment)
+  const executionChainConfig = getExecutionChainConfig(executionEnvironment)
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
 
-  if (!destinationClient || !isConfiguredAddress(contractAddresses.callbackProxy)) {
+  if (!destinationClient || !isConfiguredAddress(executionAddresses.callbackProxy)) {
     return {
       creditLabel: 'Unknown',
       availableBalance: 'Unknown',
-      minRequiredBalance: formatAmount(automationFloor)
+      minRequiredBalance: formatAmount(automationFloor, executionChainConfig.nativeCurrency.symbol)
     }
   }
 
-  const callbackProxy = getAddress(contractAddresses.callbackProxy)
+  const callbackProxy = getAddress(executionAddresses.callbackProxy)
   try {
     const [reserves, debts] = await Promise.all([
       destinationClient.readContract({
@@ -1338,14 +1413,14 @@ async function readAutomationCredit(
 
     return {
       creditLabel,
-      availableBalance: formatAmount(net),
-      minRequiredBalance: formatAmount(automationFloor)
+      availableBalance: formatAmount(net, executionChainConfig.nativeCurrency.symbol),
+      minRequiredBalance: formatAmount(automationFloor, executionChainConfig.nativeCurrency.symbol)
     }
   } catch {
     return {
       creditLabel: 'Unknown',
       availableBalance: 'Unknown',
-      minRequiredBalance: formatAmount(automationFloor)
+      minRequiredBalance: formatAmount(automationFloor, executionChainConfig.nativeCurrency.symbol)
     }
   }
 }
@@ -1356,7 +1431,8 @@ async function readExecutionProofs(
   signalEmitterAddress: Address,
   originClient: ReturnType<typeof getOriginPublicClient>,
   reactiveClient: ReturnType<typeof getReactivePublicClient>,
-  destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>
+  destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): Promise<ExecutionProof[]> {
   type HistoryItem = ExecutionProof & {
     blockNumber: bigint
@@ -1387,7 +1463,7 @@ async function readExecutionProofs(
         timestampLabel: formatTimestamp(block.timestamp),
         nonceLabel: null,
         detailLabel: null,
-        href: txExplorerLink('destination', runtimeBindingLog.transactionHash),
+        href: txExplorerLink('destination', runtimeBindingLog.transactionHash, executionEnvironment),
         blockNumber: runtimeBindingLog.blockNumber ?? 0n,
         logIndex: Number(runtimeBindingLog.logIndex ?? 0)
       })
@@ -1416,7 +1492,7 @@ async function readExecutionProofs(
         timestampLabel: formatTimestamp(block.timestamp),
         nonceLabel: executionLog.args.executionNonce?.toString() ?? null,
         detailLabel: null,
-        href: txExplorerLink('destination', executionLog.transactionHash),
+        href: txExplorerLink('destination', executionLog.transactionHash, executionEnvironment),
         blockNumber: executionLog.blockNumber ?? 0n,
         logIndex: Number(executionLog.logIndex ?? 0)
       })
@@ -1445,7 +1521,7 @@ async function readExecutionProofs(
         timestampLabel: formatTimestamp(block.timestamp),
         nonceLabel: skippedLog.args.executionNonce?.toString() ?? null,
         detailLabel: typeof skippedLog.args.reason === 'string' ? skippedLog.args.reason : null,
-        href: txExplorerLink('destination', skippedLog.transactionHash),
+        href: txExplorerLink('destination', skippedLog.transactionHash, executionEnvironment),
         blockNumber: skippedLog.blockNumber ?? 0n,
         logIndex: Number(skippedLog.logIndex ?? 0)
       })
@@ -1527,9 +1603,11 @@ async function readExecutionProofs(
 }
 
 export async function configureIntent(values: IntentFormValues): Promise<ActionResult> {
-  const { account, client } = await getDestinationWalletClient()
-  const { walletAddress } = await resolveWalletAddressForOwner(account)
-  const destinationClient = getDestinationPublicClient()
+  const executionEnvironment = readExecutionEnvironment()
+  const executionChain = getExecutionChain(executionEnvironment)
+  const { account, client } = await getExecutionWalletClient(executionEnvironment)
+  const { walletAddress } = await resolveWalletAddressForOwner(account, executionEnvironment)
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   const currentRuntimeBinding =
     destinationClient ? await readWalletRuntimeBinding(destinationClient, walletAddress) : null
   const runtimeRoute = resolveRuntimeRouteInput(values)
@@ -1546,13 +1624,13 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
   }
 
   if (!runtimeRouteMatches(currentRuntimeBinding, runtimeRoute)) {
-    await validateRuntimeRouteInput(runtimeRoute)
+    await validateRuntimeRouteInputForExecution(runtimeRoute, executionEnvironment)
 
     const runtimeHash = await client.writeContract({
       account,
       address: walletAddress,
       abi: willLeadWalletAbi,
-      chain: destinationChain,
+      chain: executionChain,
       functionName: 'configureRuntimeRoute',
       args: [
         runtimeRoute.listener,
@@ -1573,7 +1651,7 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
     account,
     address: walletAddress,
     abi: willLeadWalletAbi,
-    chain: destinationChain,
+    chain: executionChain,
     functionName: 'configureIntent',
     args: [token, recipient, amountPerExecution, BigInt(values.maxExecutions), automationFloor],
     gas: 300_000n
@@ -1591,9 +1669,10 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
 }
 
 export async function ensureReactiveListenerArmed(): Promise<ActionResult | null> {
+  const executionEnvironment = readExecutionEnvironment()
   const { account, client } = await getReactiveWalletClient()
-  const reactiveListenerAddress = await resolveReactiveListenerForManager(account)
-  const listenerState = await readReactiveListenerState(reactiveListenerAddress)
+  const reactiveListenerAddress = await resolveReactiveListenerForManager(account, executionEnvironment)
+  const listenerState = await readReactiveListenerState(reactiveListenerAddress, executionEnvironment)
 
   if (listenerState.listenerPaused === false && listenerState.subscriptionStatus === 'armed') {
     return null
@@ -1641,17 +1720,19 @@ export async function ensureReactiveListenerArmed(): Promise<ActionResult | null
 }
 
 export async function pauseIntent(): Promise<ActionResult> {
-  const { account, client } = await getDestinationWalletClient()
-  const { walletAddress } = await resolveWalletAddressForOwner(account)
+  const executionEnvironment = readExecutionEnvironment()
+  const executionChain = getExecutionChain(executionEnvironment)
+  const { account, client } = await getExecutionWalletClient(executionEnvironment)
+  const { walletAddress } = await resolveWalletAddressForOwner(account, executionEnvironment)
   const hash = await client.writeContract({
     account,
     address: walletAddress,
     abi: willLeadWalletAbi,
-    chain: destinationChain,
+    chain: executionChain,
     functionName: 'pauseIntent'
   })
 
-  const destinationClient = getDestinationPublicClient()
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   if (destinationClient) {
     await destinationClient.waitForTransactionReceipt({ hash })
   }
@@ -1664,17 +1745,19 @@ export async function pauseIntent(): Promise<ActionResult> {
 }
 
 export async function resumeIntent(): Promise<ActionResult> {
-  const { account, client } = await getDestinationWalletClient()
-  const { walletAddress } = await resolveWalletAddressForOwner(account)
+  const executionEnvironment = readExecutionEnvironment()
+  const executionChain = getExecutionChain(executionEnvironment)
+  const { account, client } = await getExecutionWalletClient(executionEnvironment)
+  const { walletAddress } = await resolveWalletAddressForOwner(account, executionEnvironment)
   const hash = await client.writeContract({
     account,
     address: walletAddress,
     abi: willLeadWalletAbi,
-    chain: destinationChain,
+    chain: executionChain,
     functionName: 'resumeIntent'
   })
 
-  const destinationClient = getDestinationPublicClient()
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   if (destinationClient) {
     await destinationClient.waitForTransactionReceipt({ hash })
   }
@@ -1692,8 +1775,9 @@ export async function emitSignal(_values: {
   amountPerExecution: string
   nextNonce: number
 }): Promise<ActionResult> {
-  const { account: destinationAccount } = await getDestinationWalletClient()
-  const { walletAddress } = await resolveWalletAddressForOwner(destinationAccount)
+  const executionEnvironment = readExecutionEnvironment()
+  const { account: destinationAccount } = await getExecutionWalletClient(executionEnvironment)
+  const { walletAddress } = await resolveWalletAddressForOwner(destinationAccount, executionEnvironment)
   const operatorRuntime = scopeOperatorRuntime(await readOperatorRuntime(), walletAddress)
 
   if (operatorRuntime.serviceStatus !== 'online' || !operatorRuntime.apiUrl) {
@@ -1740,24 +1824,26 @@ export async function emitSignal(_values: {
 export async function topUpAutomationCredit(
   values: AutomationFundingValues
 ): Promise<ActionResult> {
-  const callbackProxyAddress = getAddress(contractAddresses.callbackProxy)
+  const executionEnvironment = readExecutionEnvironment()
+  const executionChain = getExecutionChain(executionEnvironment)
+  const callbackProxyAddress = getAddress(getExecutionContractAddresses(executionEnvironment).callbackProxy)
   if (!isConfiguredAddress(callbackProxyAddress)) {
     throw new Error(copy().callbackProxyOrWalletMissing)
   }
 
-  const { account, client } = await getDestinationWalletClient()
-  const { walletAddress } = await resolveWalletAddressForOwner(account)
+  const { account, client } = await getExecutionWalletClient(executionEnvironment)
+  const { walletAddress } = await resolveWalletAddressForOwner(account, executionEnvironment)
   const hash = await client.writeContract({
     account,
     address: callbackProxyAddress,
     abi: callbackProxyAbi,
-    chain: destinationChain,
+    chain: executionChain,
     functionName: 'depositTo',
     args: [walletAddress],
     value: parseEther(values.amount)
   })
 
-  const destinationClient = getDestinationPublicClient()
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   if (destinationClient) {
     await destinationClient.waitForTransactionReceipt({ hash })
   }
@@ -1772,16 +1858,18 @@ export async function topUpAutomationCredit(
 export async function fundAutonomousWallet(
   values: WalletFundingValues
 ): Promise<ActionResult> {
-  const { account, client } = await getDestinationWalletClient()
-  const { walletAddress } = await resolveWalletAddressForOwner(account)
+  const executionEnvironment = readExecutionEnvironment()
+  const executionChain = getExecutionChain(executionEnvironment)
+  const { account, client } = await getExecutionWalletClient(executionEnvironment)
+  const { walletAddress } = await resolveWalletAddressForOwner(account, executionEnvironment)
   const hash = await client.sendTransaction({
     account,
-    chain: destinationChain,
+    chain: executionChain,
     to: walletAddress,
     value: parseEther(values.amount)
   })
 
-  const destinationClient = getDestinationPublicClient()
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   if (destinationClient) {
     await destinationClient.waitForTransactionReceipt({ hash })
   }
@@ -1794,21 +1882,25 @@ export async function fundAutonomousWallet(
 }
 
 export async function initializeAutonomousWallet(): Promise<ActionResult> {
-  const factoryAddress = configuredAddressOrNull(contractAddresses.walletFactory)
+  const executionEnvironment = readExecutionEnvironment()
+  const executionChain = getExecutionChain(executionEnvironment)
+  const factoryAddress = configuredAddressOrNull(
+    getExecutionContractAddresses(executionEnvironment).walletFactory
+  )
   if (!factoryAddress) {
     throw new Error(copy().walletFactoryMissing)
   }
 
-  const { account, client } = await getDestinationWalletClient()
+  const { account, client } = await getExecutionWalletClient(executionEnvironment)
   const hash = await client.writeContract({
     account,
     address: factoryAddress,
     abi: willLeadWalletFactoryAbi,
-    chain: destinationChain,
+    chain: executionChain,
     functionName: 'createWallet'
   })
 
-  const destinationClient = getDestinationPublicClient()
+  const destinationClient = getDestinationPublicClient(executionEnvironment)
   if (destinationClient) {
     await destinationClient.waitForTransactionReceipt({ hash })
   }

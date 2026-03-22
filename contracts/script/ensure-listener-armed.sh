@@ -9,9 +9,13 @@ fi
 source .env
 source contracts/script/lib/env-utils.sh
 
+EXECUTION_ENV="${EXECUTION_ENV:-primary}"
+
 require_env OWNER_PRIVATE_KEY
 require_env REACTIVE_RPC_URL
-require_env WILLLEAD_REACTIVE_LISTENER
+require_execution_env "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER
+
+WILLLEAD_REACTIVE_LISTENER="$(execution_env_value "$EXECUTION_ENV" WILLLEAD_REACTIVE_LISTENER)"
 
 listener_owner="$(
   cast call "$WILLLEAD_REACTIVE_LISTENER" "ownerAddress()(address)" --rpc-url "$REACTIVE_RPC_URL" | awk '{print $1}'
@@ -19,11 +23,12 @@ listener_owner="$(
 listener_paused="$(cast call "$WILLLEAD_REACTIVE_LISTENER" "isPaused()(bool)" --rpc-url "$REACTIVE_RPC_URL")"
 operator_address="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
 
+echo "execution_env=$EXECUTION_ENV"
 echo "listener_arm=checking"
 echo "listener_owner=$listener_owner"
 echo "operator_address=$operator_address"
 
-./contracts/script/sync-listener-subscription.sh >/dev/null
+EXECUTION_ENV="$EXECUTION_ENV" ./contracts/script/sync-listener-subscription.sh >/dev/null
 echo "listener_subscription=armed"
 
 if [[ "$listener_paused" == "true" ]]; then
@@ -40,7 +45,7 @@ else
   echo "listener_resume=not_needed"
 fi
 
-./contracts/script/sync-listener-subscription.sh --check >/dev/null
+EXECUTION_ENV="$EXECUTION_ENV" ./contracts/script/sync-listener-subscription.sh --check >/dev/null
 
 echo "listener_arm=ok"
 echo "listener_paused=$listener_paused"

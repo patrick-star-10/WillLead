@@ -41,6 +41,7 @@ export function App() {
   const triggerSignal = useWalletStore((state) => state.triggerSignal)
   const watchAssetToken = useWalletStore((state) => state.watchAssetToken)
   const setControllerAssetViewNetwork = useWalletStore((state) => state.setControllerAssetViewNetwork)
+  const setExecutionEnvironment = useWalletStore((state) => state.setExecutionEnvironment)
   const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
   const isActionPending = useWalletStore((state) => state.isPending)
   const statusMessage = useWalletStore((state) => state.statusMessage)
@@ -226,6 +227,8 @@ export function App() {
               contractAddress={wallet.contractAddress}
               ownerAddress={wallet.ownerAddress}
               connectionLabel={wallet.connectionLabel}
+              executionEnvironment={wallet.executionEnvironment}
+              executionEnvironmentLabel={wallet.executionEnvironmentLabel}
               controllerAssetViewNetwork={wallet.controllerAssetViewNetwork}
               controllerAssetViewLabel={wallet.controllerAssetViewLabel}
               connectedBalanceLabel={wallet.connectedBalanceLabel}
@@ -242,6 +245,9 @@ export function App() {
               walletAccessState={wallet.walletAccessState}
               onFundWallet={(amount) => void fundWallet({ amount })}
               onWatchToken={(tokenAddress) => void watchAssetToken(tokenAddress)}
+              onSetExecutionEnvironment={(executionEnvironment) =>
+                void setExecutionEnvironment(executionEnvironment)
+              }
               onSetControllerAssetViewNetwork={(viewNetwork) =>
                 void setControllerAssetViewNetwork(viewNetwork)
               }

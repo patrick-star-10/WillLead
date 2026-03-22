@@ -1,5 +1,6 @@
 export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
 export type ControllerAssetViewNetwork = 'destination' | 'reactive'
+export type ExecutionEnvironment = 'primary' | 'lasna'
 export type ListenerSubscriptionStatus = 'armed' | 'missing' | 'unavailable'
 export type WalletAccessState = 'needs_connection' | 'needs_wallet' | 'bound' | 'mismatch' | 'unavailable'
 export type OperatorServiceStatus = 'online' | 'offline' | 'unknown'
@@ -31,6 +32,8 @@ export type WalletState = {
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
   connectionLabel: string
+  executionEnvironment: ExecutionEnvironment
+  executionEnvironmentLabel: string
   controllerAssetViewNetwork: ControllerAssetViewNetwork
   controllerAssetViewLabel: string
   balanceContextLabel: string
