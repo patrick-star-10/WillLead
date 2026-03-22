@@ -1575,6 +1575,7 @@ async function readExecutionProofs(
   executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): Promise<ExecutionProof[]> {
   type HistoryItem = ExecutionProof & {
+    observedAt: bigint
     blockNumber: bigint
     logIndex: number
   }
@@ -1604,6 +1605,7 @@ async function readExecutionProofs(
         nonceLabel: null,
         detailLabel: null,
         href: txExplorerLink('destination', runtimeBindingLog.transactionHash, executionEnvironment),
+        observedAt: block.timestamp,
         blockNumber: runtimeBindingLog.blockNumber ?? 0n,
         logIndex: Number(runtimeBindingLog.logIndex ?? 0)
       })
@@ -1633,6 +1635,7 @@ async function readExecutionProofs(
         nonceLabel: executionLog.args.executionNonce?.toString() ?? null,
         detailLabel: null,
         href: txExplorerLink('destination', executionLog.transactionHash, executionEnvironment),
+        observedAt: block.timestamp,
         blockNumber: executionLog.blockNumber ?? 0n,
         logIndex: Number(executionLog.logIndex ?? 0)
       })
@@ -1662,6 +1665,7 @@ async function readExecutionProofs(
         nonceLabel: skippedLog.args.executionNonce?.toString() ?? null,
         detailLabel: typeof skippedLog.args.reason === 'string' ? skippedLog.args.reason : null,
         href: txExplorerLink('destination', skippedLog.transactionHash, executionEnvironment),
+        observedAt: block.timestamp,
         blockNumber: skippedLog.blockNumber ?? 0n,
         logIndex: Number(skippedLog.logIndex ?? 0)
       })
@@ -1692,6 +1696,7 @@ async function readExecutionProofs(
           nonceLabel: signalLog.args.executionNonce?.toString() ?? null,
           detailLabel: null,
           href: txExplorerLink('origin', signalLog.transactionHash),
+          observedAt: block.timestamp,
           blockNumber: signalLog.blockNumber ?? 0n,
           logIndex: Number(signalLog.logIndex ?? 0)
         })
@@ -1701,13 +1706,30 @@ async function readExecutionProofs(
 
   return proofs
     .sort((left, right) => {
+      if (left.observedAt === right.observedAt) {
+        if (left.blockNumber === right.blockNumber) {
+          return right.logIndex - left.logIndex
+        }
+
+        return left.blockNumber > right.blockNumber ? -1 : 1
+      }
+
+      if (left.observedAt > right.observedAt) {
+        return -1
+      }
+
+      if (left.observedAt < right.observedAt) {
+        return 1
+      }
+
       if (left.blockNumber === right.blockNumber) {
         return right.logIndex - left.logIndex
       }
+
       return left.blockNumber > right.blockNumber ? -1 : 1
     })
     .slice(0, 12)
-    .map(({ blockNumber: _blockNumber, logIndex: _logIndex, ...proof }) => proof)
+    .map(({ observedAt: _observedAt, blockNumber: _blockNumber, logIndex: _logIndex, ...proof }) => proof)
 }
 
 export async function configureIntent(
