@@ -390,6 +390,7 @@ const unknownOperatorRuntime: OperatorRuntime = {
   apiUrl: null,
   walletAddress: null
 }
+const operatorRuntimeCache = new Map<ExecutionEnvironment, OperatorRuntime>()
 
 function formatOperatorHeartbeat(heartbeatAt: string) {
   return new Date(heartbeatAt).toLocaleString('en-US', {
@@ -437,6 +438,29 @@ async function probeOperatorHealth(apiUrl: string): Promise<{
   } finally {
     window.clearTimeout(timeout)
   }
+}
+
+async function hydrateCachedOperatorRuntime(
+  executionEnvironment: ExecutionEnvironment,
+  runtime: OperatorRuntime
+): Promise<OperatorRuntime | null> {
+  if (!runtime.apiUrl) return null
+
+  const health = await probeOperatorHealth(runtime.apiUrl)
+  if (!health) {
+    operatorRuntimeCache.set(executionEnvironment, runtime)
+    return runtime
+  }
+
+  const hydratedRuntime = {
+    ...runtime,
+    serviceStatus: health.serviceStatus,
+    lastHeartbeat: health.heartbeatAt ? formatOperatorHeartbeat(health.heartbeatAt) : runtime.lastHeartbeat,
+    apiUrl: health.apiUrl ?? runtime.apiUrl
+  } satisfies OperatorRuntime
+
+  operatorRuntimeCache.set(executionEnvironment, hydratedRuntime)
+  return hydratedRuntime
 }
 
 async function readWalletRuntimeBinding(
@@ -733,8 +757,10 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
     return unknownOperatorRuntime
   }
 
+  const executionEnvironment = readExecutionEnvironment()
+  const cachedRuntime = operatorRuntimeCache.get(executionEnvironment) ?? null
+
   try {
-    const executionEnvironment = readExecutionEnvironment()
     const runtimeStatusFile =
       executionEnvironment === 'lasna' ? 'operator-status-lasna.json' : 'operator-status.json'
     const response = await fetch(`/runtime/${runtimeStatusFile}?ts=${Date.now()}`, {
@@ -742,6 +768,13 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
     })
 
     if (!response.ok) {
+      const hydratedCachedRuntime = cachedRuntime
+        ? await hydrateCachedOperatorRuntime(executionEnvironment, cachedRuntime)
+        : null
+      if (hydratedCachedRuntime) {
+        return hydratedCachedRuntime
+      }
+
       return {
         serviceStatus: 'offline',
         lastHeartbeat: 'Never',
@@ -765,6 +798,13 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
       walletAddress?: string
     }
     if (!payload.heartbeatAt) {
+      const hydratedCachedRuntime = cachedRuntime
+        ? await hydrateCachedOperatorRuntime(executionEnvironment, cachedRuntime)
+        : null
+      if (hydratedCachedRuntime) {
+        return hydratedCachedRuntime
+      }
+
       return {
         serviceStatus: 'unknown',
         lastHeartbeat: 'Never',
@@ -795,7 +835,7 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
       }
     }
 
-    return {
+    const runtime = {
       serviceStatus: serviceStatus === 'online' && fresh ? 'online' : 'offline',
       lastHeartbeat: formatOperatorHeartbeat(effectiveHeartbeatAt),
       listenerBalance: payload.listenerBalanceWei
@@ -816,8 +856,18 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
         payload.walletAddress && isConfiguredAddress(payload.walletAddress)
           ? getAddress(payload.walletAddress)
           : null
-    }
+    } satisfies OperatorRuntime
+
+    operatorRuntimeCache.set(executionEnvironment, runtime)
+    return runtime
   } catch {
+    const hydratedCachedRuntime = cachedRuntime
+      ? await hydrateCachedOperatorRuntime(executionEnvironment, cachedRuntime)
+      : null
+    if (hydratedCachedRuntime) {
+      return hydratedCachedRuntime
+    }
+
     return {
       serviceStatus: 'offline',
       lastHeartbeat: 'Never',
@@ -839,7 +889,7 @@ function scopeOperatorRuntime(
     return unknownOperatorRuntime
   }
 
-  if (operatorRuntime.serviceStatus === 'online' && operatorRuntime.apiUrl) {
+  if (operatorRuntime.apiUrl) {
     return {
       ...operatorRuntime,
       // The operator API can target the current wallet dynamically. Keep wallet-specific

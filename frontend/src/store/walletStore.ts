@@ -672,6 +672,10 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     }
   },
   triggerSignal: async () => {
+    if (get().isPending) {
+      return
+    }
+
     set({ isPending: true, errorMessage: null, statusMessage: copy().emittingSourceSignal })
 
     try {
