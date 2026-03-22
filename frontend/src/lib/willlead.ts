@@ -19,7 +19,6 @@ import type {
   AutomationReadiness,
   AssetBalance,
   AutomationCreditState,
-  ControllerAssetViewNetwork,
   ExecutionEnvironment,
   ExecutionProof,
   AutomationFundingValues,
@@ -69,7 +68,6 @@ const reactiveSystemAbi = parseAbi([
 ])
 const reactiveIgnore =
   '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad' as Hex
-const controllerAssetViewStorageKey = 'willlead.controller-asset-view-network'
 const executionEnvironmentStorageKey = 'willlead.execution-environment'
 
 function isConfiguredAddress(value: string) {
@@ -247,18 +245,6 @@ function watchedTokensStorageKeyForChainId(chainId: number) {
   return `willlead.watched-erc20.v1:${chainId}`
 }
 
-export function readControllerAssetViewNetwork(): ControllerAssetViewNetwork {
-  if (!canUseBrowserStorage()) return 'destination'
-  return window.localStorage.getItem(controllerAssetViewStorageKey) === 'reactive'
-    ? 'reactive'
-    : 'destination'
-}
-
-export function writeControllerAssetViewNetwork(viewNetwork: ControllerAssetViewNetwork) {
-  if (!canUseBrowserStorage()) return
-  window.localStorage.setItem(controllerAssetViewStorageKey, viewNetwork)
-}
-
 export function readExecutionEnvironment(): ExecutionEnvironment {
   if (!canUseBrowserStorage()) return 'primary'
   return window.localStorage.getItem(executionEnvironmentStorageKey) === 'lasna' ? 'lasna' : 'primary'
@@ -323,14 +309,12 @@ function mergeTrackedTokenAddresses(...tokenLists: Array<Array<Address | null | 
 
 export function addWatchedToken(
   tokenInput: string,
-  viewNetwork: ControllerAssetViewNetwork = 'destination',
   executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): ActionResult {
   const tokenAddress = getAddress(tokenInput)
   const executionChain = getExecutionChain(executionEnvironment)
-  const chainId = viewNetwork === 'reactive' ? reactiveChain.id : executionChain.id
-  const nextTokens = mergeTrackedTokenAddresses(readWatchedTokenAddresses(chainId), [tokenAddress])
-  writeWatchedTokenAddresses(chainId, nextTokens)
+  const nextTokens = mergeTrackedTokenAddresses(readWatchedTokenAddresses(executionChain.id), [tokenAddress])
+  writeWatchedTokenAddresses(executionChain.id, nextTokens)
 
   return {
     hash: tokenAddress,
@@ -339,20 +323,8 @@ export function addWatchedToken(
   }
 }
 
-function resolveControllerAssetView(
-  viewNetwork: ControllerAssetViewNetwork,
-  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
-) {
+function resolveControllerAssetView(executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()) {
   const executionChainConfig = getExecutionChainConfig(executionEnvironment)
-
-  if (viewNetwork === 'reactive') {
-    return {
-      client: getReactivePublicClient(),
-      label: reactiveChain.name,
-      nativeSymbol: reactiveChain.nativeCurrency.symbol,
-      watchedTokens: readWatchedTokenAddresses(reactiveChain.id)
-    }
-  }
 
   return {
     client: getDestinationPublicClient(executionEnvironment),
@@ -625,8 +597,6 @@ function buildUnboundSnapshot(params: {
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
   executionEnvironment: ExecutionEnvironment
-  controllerAssetViewNetwork: ControllerAssetViewNetwork
-  controllerAssetViewLabel: string
   connectedBalanceLabel: string
   connectedAssetBalances: AssetBalance[]
   walletAccessState: WalletAccessState
@@ -636,8 +606,6 @@ function buildUnboundSnapshot(params: {
     ownerAddress,
     connectionSource,
     executionEnvironment,
-    controllerAssetViewNetwork,
-    controllerAssetViewLabel,
     connectedBalanceLabel,
     connectedAssetBalances,
     walletAccessState,
@@ -652,8 +620,6 @@ function buildUnboundSnapshot(params: {
       connectionLabel: formatConnectionLabel(connectionSource),
       executionEnvironment,
       executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
-      controllerAssetViewNetwork,
-      controllerAssetViewLabel,
       balanceContextLabel: 'Autonomous wallet contract balance',
       balanceLabel: 'Unavailable',
       assetBalances: [],
@@ -850,7 +816,6 @@ export async function readWalletState(
   ownerAddress: string | null,
   connectionSource: WalletConnectionSource = 'disconnected',
   detailLevel: 'core' | 'full' = 'full',
-  controllerAssetViewNetwork: ControllerAssetViewNetwork = readControllerAssetViewNetwork(),
   executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): Promise<{
   wallet: WalletState
@@ -863,7 +828,7 @@ export async function readWalletState(
   const destinationClient = getDestinationPublicClient(executionEnvironment)
   const originClient = detailLevel === 'full' ? getOriginPublicClient() : null
   const reactiveClient = detailLevel === 'full' ? getReactivePublicClient() : null
-  const controllerAssetView = resolveControllerAssetView(controllerAssetViewNetwork, executionEnvironment)
+  const controllerAssetView = resolveControllerAssetView(executionEnvironment)
   const operatorRuntime = await readOperatorRuntime()
   const destinationWatchedTokens = readWatchedTokenAddresses(executionChainConfig.id)
   let connectedBalance = 0n
@@ -892,8 +857,6 @@ export async function readWalletState(
       ownerAddress,
       connectionSource,
       executionEnvironment,
-      controllerAssetViewNetwork,
-      controllerAssetViewLabel: controllerAssetView.label,
       connectedBalanceLabel,
       connectedAssetBalances,
       walletAccessState: 'unavailable'
@@ -927,8 +890,6 @@ export async function readWalletState(
         ownerAddress,
         connectionSource,
         executionEnvironment,
-        controllerAssetViewNetwork,
-        controllerAssetViewLabel: controllerAssetView.label,
         connectedBalanceLabel,
         connectedAssetBalances,
         walletAccessState:
@@ -952,8 +913,6 @@ export async function readWalletState(
         ownerAddress,
         connectionSource,
         executionEnvironment,
-        controllerAssetViewNetwork,
-        controllerAssetViewLabel: controllerAssetView.label,
         connectedBalanceLabel,
         connectedAssetBalances,
         walletAccessState: 'mismatch',
@@ -1014,17 +973,15 @@ export async function readWalletState(
 
       return {
         wallet: {
-          contractAddress: walletAddress,
-          ownerAddress,
-          connectionSource,
-          connectionLabel: formatConnectionLabel(connectionSource),
-          executionEnvironment,
-          executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
-          controllerAssetViewNetwork,
-          controllerAssetViewLabel: controllerAssetView.label,
-          balanceContextLabel: 'Autonomous wallet contract balance',
-          balanceLabel: formatAmount(balance, executionChainConfig.nativeCurrency.symbol),
-          assetBalances,
+        contractAddress: walletAddress,
+        ownerAddress,
+        connectionSource,
+        connectionLabel: formatConnectionLabel(connectionSource),
+        executionEnvironment,
+        executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
+        balanceContextLabel: 'Autonomous wallet contract balance',
+        balanceLabel: formatAmount(balance, executionChainConfig.nativeCurrency.symbol),
+        assetBalances,
           connectedBalanceLabel,
           connectedAssetBalances,
           walletAccessState: 'bound',
@@ -1104,8 +1061,6 @@ export async function readWalletState(
         connectionLabel: formatConnectionLabel(connectionSource),
         executionEnvironment,
         executionEnvironmentLabel: executionEnvironmentLabel(executionEnvironment),
-        controllerAssetViewNetwork,
-        controllerAssetViewLabel: controllerAssetView.label,
         balanceContextLabel: 'Autonomous wallet contract balance',
         balanceLabel: formatAmount(balance, executionChainConfig.nativeCurrency.symbol),
         assetBalances,
@@ -1168,8 +1123,6 @@ export async function readWalletState(
       ownerAddress,
       connectionSource,
       executionEnvironment,
-      controllerAssetViewNetwork,
-      controllerAssetViewLabel: controllerAssetView.label,
       connectedBalanceLabel,
       connectedAssetBalances,
       walletAccessState: 'unavailable',

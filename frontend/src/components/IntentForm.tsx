@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 
+import { getExecutionChainConfig } from '../lib/chains'
 import { translateDisplayValue, useCopy } from '../lib/i18n'
 import { buildRuntimeRouteChainOptions, formatRuntimeRouteChainLabel } from '../lib/runtimeRouteOptions'
-import type { IntentFormValues, WalletAccessState } from '../types/willlead'
+import type { ExecutionEnvironment, IntentFormValues, WalletAccessState } from '../types/willlead'
 
 type IntentFormProps = {
   token: string
@@ -16,6 +17,7 @@ type IntentFormProps = {
   sourceChainId: string
   destinationChainId: string
   signalTopic0: string
+  executionEnvironment: ExecutionEnvironment
   enabled: boolean
   isPending: boolean
   isEditable: boolean
@@ -76,6 +78,7 @@ export function IntentForm(props: IntentFormProps) {
     props.sourceChainId,
     props.destinationChainId
   ])
+  const executionNativeSymbol = getExecutionChainConfig(props.executionEnvironment).nativeCurrency.symbol
   const destinationChainLabel = formatRuntimeRouteChainLabel(form.destinationChainId)
   const formIsValid =
     hasValidTokenConfig &&
@@ -168,6 +171,7 @@ export function IntentForm(props: IntentFormProps) {
               onChange={(event) =>
                 setForm((state) => ({ ...state, amountPerExecution: event.target.value }))
               }
+              placeholder={`0.01 ${executionNativeSymbol}`}
               value={form.amountPerExecution}
             />
           </dd>
@@ -203,12 +207,16 @@ export function IntentForm(props: IntentFormProps) {
               onChange={(event) =>
                 setForm((state) => ({ ...state, minAutomationBalance: event.target.value }))
               }
+              placeholder={`0.005 ${executionNativeSymbol}`}
               value={form.minAutomationBalance}
             />
           </dd>
         </div>
       </dl>
       <p className="wallet-footnote">{copy.tokenFieldNote}</p>
+      <p className="wallet-footnote">
+        {copy.destinationAmountNote} {executionNativeSymbol}.
+      </p>
       <div className="panel-header">
         <div>
           <p className="panel-kicker">{copy.listenerRoutingKicker}</p>

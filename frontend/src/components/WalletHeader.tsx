@@ -1,4 +1,4 @@
-import type { AssetBalance, ControllerAssetViewNetwork, ExecutionEnvironment } from '../types/willlead'
+import type { AssetBalance, ExecutionEnvironment } from '../types/willlead'
 import {
   translateBalanceContextLabel,
   translateConnectionLabel,
@@ -6,6 +6,7 @@ import {
   translateRuntimeStatus,
   useCopy
 } from '../lib/i18n'
+import { getExecutionChainConfig } from '../lib/chains'
 import type { WalletAccessState } from '../types/willlead'
 import { useState } from 'react'
 
@@ -15,8 +16,6 @@ type WalletHeaderProps = {
   connectionLabel: string
   executionEnvironment: ExecutionEnvironment
   executionEnvironmentLabel: string
-  controllerAssetViewNetwork: ControllerAssetViewNetwork
-  controllerAssetViewLabel: string
   connectedBalanceLabel: string
   connectedAssetBalances: AssetBalance[]
   balanceContextLabel: string
@@ -31,7 +30,6 @@ type WalletHeaderProps = {
   walletAccessState: WalletAccessState
   onFundWallet: (amount: string) => void
   onWatchToken: (tokenAddress: string) => void
-  onSetControllerAssetViewNetwork: (viewNetwork: ControllerAssetViewNetwork) => void
   onSetExecutionEnvironment: (executionEnvironment: ExecutionEnvironment) => void
 }
 
@@ -47,11 +45,12 @@ export function WalletHeader(props: WalletHeaderProps) {
   const { copy, locale } = useCopy()
   const [fundAmount, setFundAmount] = useState('0.05')
   const [watchedToken, setWatchedToken] = useState('')
+  const executionNativeSymbol = getExecutionChainConfig(props.executionEnvironment).nativeCurrency.symbol
   const remainingExecutions = Math.max(props.maxExecutions - props.executedCount, 0)
   const hasBoundWallet = props.walletAccessState === 'bound'
   const fundingHelper =
     props.walletAccessState === 'bound'
-      ? copy.autonomousWalletFundingNote
+      ? `${copy.autonomousWalletFundingNote} ${executionNativeSymbol}.`
       : props.walletAccessState === 'needs_wallet'
         ? copy.initializeWalletToContinue
         : props.walletAccessState === 'mismatch'
@@ -69,9 +68,7 @@ export function WalletHeader(props: WalletHeaderProps) {
       <div className="wallet-balance-grid">
         <div className="wallet-balance-row">
           <div>
-            <p className="section-note">
-              {copy.controllerWalletBalance} · {props.controllerAssetViewLabel}
-            </p>
+            <p className="section-note">{copy.controllerWalletBalance}</p>
             <p className="wallet-balance">{translateDisplayValue(props.connectedBalanceLabel, locale)}</p>
           </div>
           <div className="identity-stack">
@@ -122,29 +119,11 @@ export function WalletHeader(props: WalletHeaderProps) {
       </div>
       <p className="wallet-footnote">{copy.executionEnvironmentNote}</p>
       <div className="action-row">
-        <button
-          className={props.controllerAssetViewNetwork === 'destination' ? 'primary-button' : 'secondary-button'}
-          disabled={props.isPending}
-          onClick={() => props.onSetControllerAssetViewNetwork('destination')}
-          type="button"
-        >
-          {copy.executionChainView}
-        </button>
-        <button
-          className={props.controllerAssetViewNetwork === 'reactive' ? 'primary-button' : 'secondary-button'}
-          disabled={props.isPending}
-          onClick={() => props.onSetControllerAssetViewNetwork('reactive')}
-          type="button"
-        >
-          {copy.reactiveNetworkView}
-        </button>
-      </div>
-      <p className="wallet-footnote">{copy.assetViewNote}</p>
-      <div className="action-row">
         <input
           className="field compact-field"
           disabled={!hasBoundWallet || props.isPending}
           onChange={(event) => setFundAmount(event.target.value)}
+          placeholder={`0.05 ${executionNativeSymbol}`}
           value={fundAmount}
         />
         <button
@@ -153,7 +132,9 @@ export function WalletHeader(props: WalletHeaderProps) {
           onClick={() => props.onFundWallet(fundAmount)}
           type="button"
         >
-          {props.isPending ? copy.fundingAutonomousWalletShort : copy.fundAutonomousWallet}
+          {props.isPending
+            ? copy.fundingAutonomousWalletShort
+            : `${copy.fundAutonomousWallet} (${executionNativeSymbol})`}
         </button>
       </div>
       <p className="wallet-footnote">{fundingHelper}</p>

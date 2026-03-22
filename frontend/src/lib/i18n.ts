@@ -39,8 +39,6 @@ const messages = {
     lasnaExecutionView: 'Lasna Execution',
     executionEnvironmentNote:
       'This switch changes which autonomous execution wallet and destination chain the app manages. Runtime actions and proofs follow the selected execution environment.',
-    executionChainView: 'Execution Chain View',
-    reactiveNetworkView: 'Reactive Network View',
     controller: 'Controller',
     signingSource: 'Signing source',
     autonomousWalletBalance: 'Autonomous wallet contract balance',
@@ -60,8 +58,6 @@ const messages = {
     watchTokenPlaceholder: 'ERC20 token address',
     watchTokenNote:
       'Token discovery is manual in this MVP. Add an ERC20 address to load balances for both the controller wallet and the autonomous wallet.',
-    assetViewNote:
-      'This switch only changes which network the controller wallet assets are read from. Autonomous execution still lands on the fixed destination chain.',
     connection: 'Connection',
     walletConnected: 'Wallet connected',
     connectWalletShort: 'Connect wallet',
@@ -142,6 +138,8 @@ const messages = {
     erc20TokenAddress: 'ERC20 token address',
     tokenFieldNote:
       'Choose Native Asset to transfer the destination-chain gas asset, or ERC20 Token to transfer a token held by the autonomous wallet.',
+    destinationAmountNote:
+      'Amount per execution and minimum automation balance are denominated in the current execution chain native asset',
     recipient: 'Recipient',
     amountPerExecution: 'Amount / Execution',
     maxExecutions: 'Max Executions',
@@ -149,11 +147,8 @@ const messages = {
     minAutomationBalance: 'Min Automation Balance',
     saving: 'Saving...',
     saveTransferPlan: 'Save Transfer Plan',
-    switchingAssetView: 'Switching asset view...',
     switchingExecutionEnvironment: 'Switching execution environment...',
-    assetViewSwitched: 'Asset view switched.',
     executionEnvironmentSwitched: 'Execution environment switched.',
-    assetViewSwitchFailed: 'Asset view switch failed.',
     executionEnvironmentSwitchFailed: 'Execution environment switch failed.',
     addingWatchedToken: 'Adding watched token...',
     addWatchedTokenFailed: 'Add watched token failed.',
@@ -393,8 +388,6 @@ const messages = {
     lasnaExecutionView: 'Lasna 执行层',
     executionEnvironmentNote:
       '这里切换的是当前管理的 autonomous execution wallet 和目标执行链。运行时动作和证明都会跟着当前执行环境走。',
-    executionChainView: '执行链资产视图',
-    reactiveNetworkView: 'Reactive 网络视图',
     controller: '控制钱包',
     signingSource: '签名来源',
     autonomousWalletBalance: '自主执行钱包合约余额',
@@ -413,8 +406,6 @@ const messages = {
     watchTokenPlaceholder: 'ERC20 代币地址',
     watchTokenNote:
       '当前 MVP 不会自动发现全部代币。手动添加 ERC20 地址后，controller wallet 和 autonomous wallet 两边都会读取它的余额。',
-    assetViewNote:
-      '这个切换只会改变 controller wallet 资产从哪条网络读取。autonomous execution 的实际落地目标链仍然固定不变。',
     connection: '连接状态',
     walletConnected: '钱包已连接',
     connectWalletShort: '连接钱包',
@@ -492,6 +483,7 @@ const messages = {
     erc20TokenAddress: 'ERC20 代币地址',
     tokenFieldNote:
       '选择“原生资产”时，转的是目标链 gas 资产；选择“ERC20 代币”时，转的是这只 autonomous wallet 当前持有的目标链代币。',
+    destinationAmountNote: '每次执行金额和自动执行最低额度都以当前执行环境的原生币计价',
     recipient: '收款地址',
     amountPerExecution: '每次执行金额',
     maxExecutions: '最大执行次数',
@@ -499,11 +491,8 @@ const messages = {
     minAutomationBalance: '自动执行最低额度',
     saving: '保存中...',
     saveTransferPlan: '保存转账计划',
-    switchingAssetView: '正在切换资产视图...',
     switchingExecutionEnvironment: '正在切换执行环境...',
-    assetViewSwitched: '资产视图已切换。',
     executionEnvironmentSwitched: '执行环境已切换。',
-    assetViewSwitchFailed: '资产视图切换失败。',
     executionEnvironmentSwitchFailed: '执行环境切换失败。',
     addingWatchedToken: '正在添加观察代币...',
     addWatchedTokenFailed: '添加观察代币失败。',
@@ -866,11 +855,8 @@ export function translateStatusBanner(value: string, locale: Locale) {
     ['automationStillPending', copy.automationStillPending],
     ['signalEmissionFailed', copy.signalEmissionFailed],
     ['failedEmitSourceSignal', copy.failedEmitSourceSignal],
-    ['switchingAssetView', copy.switchingAssetView],
     ['switchingExecutionEnvironment', copy.switchingExecutionEnvironment],
-    ['assetViewSwitched', copy.assetViewSwitched],
     ['executionEnvironmentSwitched', copy.executionEnvironmentSwitched],
-    ['assetViewSwitchFailed', copy.assetViewSwitchFailed],
     ['executionEnvironmentSwitchFailed', copy.executionEnvironmentSwitchFailed],
     ['connectedWalletMismatch', copy.connectedWalletMismatch],
     ['initializeWalletToContinue', copy.initializeWalletToContinue],

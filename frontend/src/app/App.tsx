@@ -40,7 +40,6 @@ export function App() {
   const resumeListener = useWalletStore((state) => state.resumeListener)
   const triggerSignal = useWalletStore((state) => state.triggerSignal)
   const watchAssetToken = useWalletStore((state) => state.watchAssetToken)
-  const setControllerAssetViewNetwork = useWalletStore((state) => state.setControllerAssetViewNetwork)
   const setExecutionEnvironment = useWalletStore((state) => state.setExecutionEnvironment)
   const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
   const isActionPending = useWalletStore((state) => state.isPending)
@@ -229,8 +228,6 @@ export function App() {
               connectionLabel={wallet.connectionLabel}
               executionEnvironment={wallet.executionEnvironment}
               executionEnvironmentLabel={wallet.executionEnvironmentLabel}
-              controllerAssetViewNetwork={wallet.controllerAssetViewNetwork}
-              controllerAssetViewLabel={wallet.controllerAssetViewLabel}
               connectedBalanceLabel={wallet.connectedBalanceLabel}
               connectedAssetBalances={wallet.connectedAssetBalances}
               balanceContextLabel={wallet.balanceContextLabel}
@@ -247,9 +244,6 @@ export function App() {
               onWatchToken={(tokenAddress) => void watchAssetToken(tokenAddress)}
               onSetExecutionEnvironment={(executionEnvironment) =>
                 void setExecutionEnvironment(executionEnvironment)
-              }
-              onSetControllerAssetViewNetwork={(viewNetwork) =>
-                void setControllerAssetViewNetwork(viewNetwork)
               }
             />
           ) : null}
@@ -295,6 +289,7 @@ export function App() {
               sourceChainId={wallet.runtimeRoute.sourceChainId}
               destinationChainId={wallet.runtimeRoute.destinationChainId}
               signalTopic0={wallet.runtimeRoute.signalTopic0}
+              executionEnvironment={wallet.executionEnvironment}
               enabled={intent.enabled}
               isEditable={hasBoundWallet}
               isPending={isActionPending}
