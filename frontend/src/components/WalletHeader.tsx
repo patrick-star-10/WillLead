@@ -1,4 +1,4 @@
-import type { AssetBalance } from '../types/willlead'
+import type { AssetBalance, ControllerAssetViewNetwork } from '../types/willlead'
 import {
   translateBalanceContextLabel,
   translateConnectionLabel,
@@ -13,6 +13,8 @@ type WalletHeaderProps = {
   contractAddress: string
   ownerAddress: string | null
   connectionLabel: string
+  controllerAssetViewNetwork: ControllerAssetViewNetwork
+  controllerAssetViewLabel: string
   connectedBalanceLabel: string
   connectedAssetBalances: AssetBalance[]
   balanceContextLabel: string
@@ -27,6 +29,7 @@ type WalletHeaderProps = {
   walletAccessState: WalletAccessState
   onFundWallet: (amount: string) => void
   onWatchToken: (tokenAddress: string) => void
+  onSetControllerAssetViewNetwork: (viewNetwork: ControllerAssetViewNetwork) => void
 }
 
 function shortenAddress(value: string | null) {
@@ -63,7 +66,9 @@ export function WalletHeader(props: WalletHeaderProps) {
       <div className="wallet-balance-grid">
         <div className="wallet-balance-row">
           <div>
-            <p className="section-note">{copy.controllerWalletBalance}</p>
+            <p className="section-note">
+              {copy.controllerWalletBalance} · {props.controllerAssetViewLabel}
+            </p>
             <p className="wallet-balance">{translateDisplayValue(props.connectedBalanceLabel, locale)}</p>
           </div>
           <div className="identity-stack">
@@ -94,6 +99,25 @@ export function WalletHeader(props: WalletHeaderProps) {
           </div>
         </div>
       </div>
+      <div className="action-row">
+        <button
+          className={props.controllerAssetViewNetwork === 'destination' ? 'primary-button' : 'secondary-button'}
+          disabled={props.isPending}
+          onClick={() => props.onSetControllerAssetViewNetwork('destination')}
+          type="button"
+        >
+          {copy.executionChainView}
+        </button>
+        <button
+          className={props.controllerAssetViewNetwork === 'reactive' ? 'primary-button' : 'secondary-button'}
+          disabled={props.isPending}
+          onClick={() => props.onSetControllerAssetViewNetwork('reactive')}
+          type="button"
+        >
+          {copy.reactiveNetworkView}
+        </button>
+      </div>
+      <p className="wallet-footnote">{copy.assetViewNote}</p>
       <div className="action-row">
         <input
           className="field compact-field"

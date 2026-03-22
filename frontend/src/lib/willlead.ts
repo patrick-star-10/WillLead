@@ -19,6 +19,7 @@ import type {
   AutomationReadiness,
   AssetBalance,
   AutomationCreditState,
+  ControllerAssetViewNetwork,
   ExecutionProof,
   AutomationFundingValues,
   IntentFormValues,
@@ -67,7 +68,7 @@ const reactiveSystemAbi = parseAbi([
 ])
 const reactiveIgnore =
   '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad' as Hex
-const watchedTokensStorageKey = `willlead.watched-erc20.v1:${destinationChain.id}`
+const controllerAssetViewStorageKey = 'willlead.controller-asset-view-network'
 
 function isConfiguredAddress(value: string) {
   return value.toLowerCase() !== emptyAddress
@@ -109,8 +110,12 @@ function formatRuntimeStatus(status: number) {
   }
 }
 
+function formatNativeAmount(amount: bigint, symbol: string) {
+  return `${formatDecimalString(formatEther(amount), 3)} ${symbol}`
+}
+
 function formatAmount(amount: bigint) {
-  return `${formatDecimalString(formatEther(amount), 3)} ETH`
+  return formatNativeAmount(amount, destinationChain.nativeCurrency.symbol)
 }
 
 function formatUint256Topic(value: bigint) {
@@ -236,11 +241,27 @@ function canUseBrowserStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 }
 
-function readWatchedTokenAddresses(): Address[] {
+function watchedTokensStorageKeyForChainId(chainId: number) {
+  return `willlead.watched-erc20.v1:${chainId}`
+}
+
+export function readControllerAssetViewNetwork(): ControllerAssetViewNetwork {
+  if (!canUseBrowserStorage()) return 'destination'
+  return window.localStorage.getItem(controllerAssetViewStorageKey) === 'reactive'
+    ? 'reactive'
+    : 'destination'
+}
+
+export function writeControllerAssetViewNetwork(viewNetwork: ControllerAssetViewNetwork) {
+  if (!canUseBrowserStorage()) return
+  window.localStorage.setItem(controllerAssetViewStorageKey, viewNetwork)
+}
+
+function readWatchedTokenAddresses(chainId: number): Address[] {
   if (!canUseBrowserStorage()) return []
 
   try {
-    const raw = window.localStorage.getItem(watchedTokensStorageKey)
+    const raw = window.localStorage.getItem(watchedTokensStorageKeyForChainId(chainId))
     if (!raw) return []
 
     const parsed = JSON.parse(raw) as unknown
@@ -265,9 +286,9 @@ function readWatchedTokenAddresses(): Address[] {
   }
 }
 
-function writeWatchedTokenAddresses(tokens: Address[]) {
+function writeWatchedTokenAddresses(chainId: number, tokens: Address[]) {
   if (!canUseBrowserStorage()) return
-  window.localStorage.setItem(watchedTokensStorageKey, JSON.stringify(tokens))
+  window.localStorage.setItem(watchedTokensStorageKeyForChainId(chainId), JSON.stringify(tokens))
 }
 
 function mergeTrackedTokenAddresses(...tokenLists: Array<Array<Address | null | undefined>>): Address[] {
@@ -288,15 +309,37 @@ function mergeTrackedTokenAddresses(...tokenLists: Array<Array<Address | null | 
   return merged
 }
 
-export function addWatchedToken(tokenInput: string): ActionResult {
+export function addWatchedToken(
+  tokenInput: string,
+  viewNetwork: ControllerAssetViewNetwork = 'destination'
+): ActionResult {
   const tokenAddress = getAddress(tokenInput)
-  const nextTokens = mergeTrackedTokenAddresses(readWatchedTokenAddresses(), [tokenAddress])
-  writeWatchedTokenAddresses(nextTokens)
+  const chainId = viewNetwork === 'reactive' ? reactiveChain.id : destinationChain.id
+  const nextTokens = mergeTrackedTokenAddresses(readWatchedTokenAddresses(chainId), [tokenAddress])
+  writeWatchedTokenAddresses(chainId, nextTokens)
 
   return {
     hash: tokenAddress,
     label: copy().watchedTokenAddedAction,
     description: `${copy().watchedTokenAddedDesc} ${tokenAddress}`
+  }
+}
+
+function resolveControllerAssetView(viewNetwork: ControllerAssetViewNetwork) {
+  if (viewNetwork === 'reactive') {
+    return {
+      client: getReactivePublicClient(),
+      label: reactiveChain.name,
+      nativeSymbol: reactiveChain.nativeCurrency.symbol,
+      watchedTokens: readWatchedTokenAddresses(reactiveChain.id)
+    }
+  }
+
+  return {
+    client: getDestinationPublicClient(),
+    label: destinationChain.name,
+    nativeSymbol: destinationChain.nativeCurrency.symbol,
+    watchedTokens: readWatchedTokenAddresses(destinationChain.id)
   }
 }
 
@@ -544,6 +587,8 @@ async function resolveReactiveListenerForManager(ownerAddress: Address) {
 function buildUnboundSnapshot(params: {
   ownerAddress: string | null
   connectionSource: WalletConnectionSource
+  controllerAssetViewNetwork: ControllerAssetViewNetwork
+  controllerAssetViewLabel: string
   connectedBalanceLabel: string
   connectedAssetBalances: AssetBalance[]
   walletAccessState: WalletAccessState
@@ -552,6 +597,8 @@ function buildUnboundSnapshot(params: {
   const {
     ownerAddress,
     connectionSource,
+    controllerAssetViewNetwork,
+    controllerAssetViewLabel,
     connectedBalanceLabel,
     connectedAssetBalances,
     walletAccessState,
@@ -564,6 +611,8 @@ function buildUnboundSnapshot(params: {
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
+      controllerAssetViewNetwork,
+      controllerAssetViewLabel,
       balanceContextLabel: 'Autonomous wallet contract balance',
       balanceLabel: 'Unavailable',
       assetBalances: [],
@@ -754,7 +803,8 @@ function computeSingleSignatureReadiness(params: {
 export async function readWalletState(
   ownerAddress: string | null,
   connectionSource: WalletConnectionSource = 'disconnected',
-  detailLevel: 'core' | 'full' = 'full'
+  detailLevel: 'core' | 'full' = 'full',
+  controllerAssetViewNetwork: ControllerAssetViewNetwork = readControllerAssetViewNetwork()
 ): Promise<{
   wallet: WalletState
   intent: IntentState
@@ -764,20 +814,24 @@ export async function readWalletState(
   const destinationClient = getDestinationPublicClient()
   const originClient = detailLevel === 'full' ? getOriginPublicClient() : null
   const reactiveClient = detailLevel === 'full' ? getReactivePublicClient() : null
+  const controllerAssetView = resolveControllerAssetView(controllerAssetViewNetwork)
   const operatorRuntime = await readOperatorRuntime()
-  const watchedTokens = readWatchedTokenAddresses()
+  const destinationWatchedTokens = readWatchedTokenAddresses(destinationChain.id)
   let connectedBalance = 0n
-  if (destinationClient && ownerAddress !== null) {
+  if (controllerAssetView.client && ownerAddress !== null) {
     try {
-      connectedBalance = await destinationClient.getBalance({ address: getAddress(ownerAddress) })
+      connectedBalance = await controllerAssetView.client.getBalance({ address: getAddress(ownerAddress) })
     } catch {}
   }
-  const connectedBalanceLabel = ownerAddress !== null ? formatAmount(connectedBalance) : 'Unavailable'
+  const connectedBalanceLabel =
+    ownerAddress !== null && controllerAssetView.client
+      ? formatNativeAmount(connectedBalance, controllerAssetView.nativeSymbol)
+      : 'Unavailable'
   let connectedAssetBalances: AssetBalance[] =
-    ownerAddress !== null
+    ownerAddress !== null && controllerAssetView.client
       ? [
           {
-            symbol: 'ETH',
+            symbol: controllerAssetView.nativeSymbol,
             balanceLabel: connectedBalanceLabel,
             kind: 'native' as const
           }
@@ -788,6 +842,8 @@ export async function readWalletState(
     return buildUnboundSnapshot({
       ownerAddress,
       connectionSource,
+      controllerAssetViewNetwork,
+      controllerAssetViewLabel: controllerAssetView.label,
       connectedBalanceLabel,
       connectedAssetBalances,
       walletAccessState: 'unavailable'
@@ -795,12 +851,12 @@ export async function readWalletState(
   }
 
   try {
-    if (ownerAddress !== null) {
+    if (ownerAddress !== null && controllerAssetView.client) {
       connectedAssetBalances = await readTrackedAssets(
-        destinationClient,
+        controllerAssetView.client,
         getAddress(ownerAddress),
         connectedBalance,
-        watchedTokens
+        controllerAssetView.watchedTokens
       )
     }
 
@@ -819,6 +875,8 @@ export async function readWalletState(
       return buildUnboundSnapshot({
         ownerAddress,
         connectionSource,
+        controllerAssetViewNetwork,
+        controllerAssetViewLabel: controllerAssetView.label,
         connectedBalanceLabel,
         connectedAssetBalances,
         walletAccessState:
@@ -841,6 +899,8 @@ export async function readWalletState(
       return buildUnboundSnapshot({
         ownerAddress,
         connectionSource,
+        controllerAssetViewNetwork,
+        controllerAssetViewLabel: controllerAssetView.label,
         connectedBalanceLabel,
         connectedAssetBalances,
         walletAccessState: 'mismatch',
@@ -876,17 +936,17 @@ export async function readWalletState(
 
     const [status, token, recipient, amountPerExecution, maxExecutions, executedCount, automationFloor] =
       summary
-    const trackedWalletTokens = mergeTrackedTokenAddresses(watchedTokens, [token])
-    const trackedControllerTokens = mergeTrackedTokenAddresses(watchedTokens, [token])
+    const trackedWalletTokens = mergeTrackedTokenAddresses(destinationWatchedTokens, [token])
+    const trackedControllerTokens = mergeTrackedTokenAddresses(controllerAssetView.watchedTokens, [token])
     const assetBalances = await readTrackedAssets(
       destinationClient,
       walletAddress,
       balance,
       trackedWalletTokens
     )
-    if (ownerAddress !== null) {
+    if (ownerAddress !== null && controllerAssetView.client) {
       connectedAssetBalances = await readTrackedAssets(
-        destinationClient,
+        controllerAssetView.client,
         getAddress(ownerAddress),
         connectedBalance,
         trackedControllerTokens
@@ -903,6 +963,8 @@ export async function readWalletState(
           ownerAddress,
           connectionSource,
           connectionLabel: formatConnectionLabel(connectionSource),
+          controllerAssetViewNetwork,
+          controllerAssetViewLabel: controllerAssetView.label,
           balanceContextLabel: 'Autonomous wallet contract balance',
           balanceLabel: formatAmount(balance),
           assetBalances,
@@ -978,6 +1040,8 @@ export async function readWalletState(
         ownerAddress,
         connectionSource,
         connectionLabel: formatConnectionLabel(connectionSource),
+        controllerAssetViewNetwork,
+        controllerAssetViewLabel: controllerAssetView.label,
         balanceContextLabel: 'Autonomous wallet contract balance',
         balanceLabel: formatAmount(balance),
         assetBalances,
@@ -1036,6 +1100,8 @@ export async function readWalletState(
     return buildUnboundSnapshot({
       ownerAddress,
       connectionSource,
+      controllerAssetViewNetwork,
+      controllerAssetViewLabel: controllerAssetView.label,
       connectedBalanceLabel,
       connectedAssetBalances,
       walletAccessState: 'unavailable',
