@@ -126,6 +126,8 @@ const initialProofs: ExecutionProof[] = []
 const signalOutcomePollIntervalMs = 3000
 const signalOutcomeMaxAttempts = 20
 let detailedSnapshotInFlightKey: string | null = null
+let activeSignalPollId = 0
+let activeListenerPollId = 0
 
 function copy() {
   return getMessages(useLanguageStore.getState().locale)
@@ -576,7 +578,8 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
           }
         } catch {}
       }
-      void pollForListenerActivation(set, get)
+      const listenerPollId = ++activeListenerPollId
+      void pollForListenerActivation(set, get, listenerPollId)
     } catch (error) {
       set({
         isPending: false,
@@ -676,10 +679,12 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       return
     }
 
+    activeListenerPollId += 1
     set({ isPending: true, errorMessage: null, statusMessage: copy().emittingSourceSignal })
 
     try {
       const state = get()
+      const signalPollId = ++activeSignalPollId
       const expectedNonce = state.wallet.lastExecutionNonce + 1
       const initialLastExecutionNonce = state.wallet.lastExecutionNonce
       const initialExecutedCount = state.intent.executedCount
@@ -691,10 +696,25 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         nextNonce: expectedNonce
       })
       await applyPostAction(set, get, action)
-      set({ statusMessage: copy().awaitingAutomationResult })
+      const latestState = get()
+      const destinationAdvanced =
+        latestState.wallet.lastExecutionNonce > initialLastExecutionNonce ||
+        latestState.intent.executedCount > initialExecutedCount
+
+      if (!destinationAdvanced) {
+        set((currentState) => {
+          if (signalPollId !== activeSignalPollId || currentState.isPending) {
+            return {}
+          }
+
+          return { statusMessage: copy().awaitingAutomationResult }
+        })
+      }
+
       void pollForSignalOutcome(
         set,
         get,
+        signalPollId,
         expectedNonce,
         initialLastExecutionNonce,
         initialExecutedCount,
@@ -891,6 +911,7 @@ async function pollForSignalOutcome(
     | ((state: WillLeadStore) => Partial<WillLeadStore>)
   ) => void,
   get: () => WillLeadStore,
+  signalPollId: number,
   expectedNonce: number,
   initialLastExecutionNonce: number,
   initialExecutedCount: number,
@@ -905,6 +926,10 @@ async function pollForSignalOutcome(
   for (let attempt = 0; attempt < signalOutcomeMaxAttempts; attempt += 1) {
     if (attempt > 0) {
       await sleep(signalOutcomePollIntervalMs)
+    }
+
+    if (signalPollId !== activeSignalPollId) {
+      return
     }
 
     const state = get()
@@ -930,11 +955,19 @@ async function pollForSignalOutcome(
 
       if (coreSnapshot.wallet.lastExecutionNonce >= expectedNonce && destinationAdvanced) {
         set((state) => ({
-          ...mergeCoreSnapshotIntoState(state, coreSnapshot),
-          isPending: false,
-          statusMessage: copy().destinationExecutionDetected,
-          errorMessage: null
+          ...(signalPollId !== activeSignalPollId ? {} : mergeCoreSnapshotIntoState(state, coreSnapshot)),
+          ...(signalPollId !== activeSignalPollId
+            ? {}
+            : {
+                isPending: false,
+                statusMessage: copy().destinationExecutionDetected,
+                errorMessage: null
+              })
         }))
+
+        if (signalPollId !== activeSignalPollId) {
+          return
+        }
 
         void hydrateDetailedSnapshot(
           set,
@@ -958,13 +991,31 @@ async function pollForSignalOutcome(
       )
       const settled = proofOutcome !== null
 
-      set({
-        ...fullSnapshot,
-        isPending: false,
-        statusMessage: settled
-          ? statusMessageForDestinationOutcome(proofOutcome)
-          : copy().awaitingAutomationResult,
-        errorMessage: null
+      set((state) => {
+        if (signalPollId !== activeSignalPollId) {
+          return {}
+        }
+
+        const destinationAlreadyAdvanced =
+          state.wallet.lastExecutionNonce > initialLastExecutionNonce ||
+          state.intent.executedCount > initialExecutedCount
+
+        if (!settled && destinationAlreadyAdvanced) {
+          return {
+            isPending: false,
+            statusMessage: copy().destinationExecutionDetected,
+            errorMessage: null
+          }
+        }
+
+        return {
+          ...fullSnapshot,
+          isPending: false,
+          statusMessage: settled
+            ? statusMessageForDestinationOutcome(proofOutcome)
+            : copy().awaitingAutomationResult,
+          errorMessage: null
+        }
       })
 
       if (settled) {
@@ -973,9 +1024,31 @@ async function pollForSignalOutcome(
     } catch {}
   }
 
-  set({
-    isPending: false,
-    statusMessage: copy().automationStillPending
+  if (signalPollId !== activeSignalPollId) {
+    return
+  }
+
+  set((state) => {
+    if (signalPollId !== activeSignalPollId) {
+      return {}
+    }
+
+    const destinationAlreadyAdvanced =
+      state.wallet.lastExecutionNonce > initialLastExecutionNonce ||
+      state.intent.executedCount > initialExecutedCount
+
+    if (destinationAlreadyAdvanced) {
+      return {
+        isPending: false,
+        statusMessage: copy().destinationExecutionDetected,
+        errorMessage: null
+      }
+    }
+
+    return {
+      isPending: false,
+      statusMessage: copy().automationStillPending
+    }
   })
 }
 
@@ -984,7 +1057,8 @@ async function pollForListenerActivation(
     | Partial<WillLeadStore>
     | ((state: WillLeadStore) => Partial<WillLeadStore>)
   ) => void,
-  get: () => WillLeadStore
+  get: () => WillLeadStore,
+  listenerPollId: number
 ) {
   const initialOwnerAddress = get().wallet.ownerAddress
   const initialConnectionSource = get().wallet.connectionSource
@@ -992,14 +1066,24 @@ async function pollForListenerActivation(
 
   if (!initialOwnerAddress) return
 
-  set({
-    statusMessage: copy().awaitingListenerArming,
-    errorMessage: null
+  set((state) => {
+    if (listenerPollId !== activeListenerPollId || state.isPending) {
+      return {}
+    }
+
+    return {
+      statusMessage: copy().awaitingListenerArming,
+      errorMessage: null
+    }
   })
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     if (attempt > 0) {
       await sleep(signalOutcomePollIntervalMs)
+    }
+
+    if (listenerPollId !== activeListenerPollId) {
+      return
     }
 
     const state = get()
@@ -1024,11 +1108,17 @@ async function pollForListenerActivation(
         snapshot.wallet.runtimeRoute.listenerPaused === false &&
         snapshot.wallet.runtimeRoute.subscriptionStatus === 'armed'
 
-      set({
-        ...snapshot,
-        isPending: false,
-        statusMessage: listenerArmed ? copy().listenerArmedForIntent : copy().awaitingListenerArming,
-        errorMessage: null
+      set(() => {
+        if (listenerPollId !== activeListenerPollId) {
+          return {}
+        }
+
+        return {
+          ...snapshot,
+          isPending: false,
+          statusMessage: listenerArmed ? copy().listenerArmedForIntent : copy().awaitingListenerArming,
+          errorMessage: null
+        }
       })
 
       if (listenerArmed) {
