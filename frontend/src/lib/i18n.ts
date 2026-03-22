@@ -88,7 +88,7 @@ const messages = {
     singleSignatureReadyNote:
       'The operator runtime is online, so saving the plan once is enough to arm the listener and wait for the next external signal.',
     singleSignatureRequiresOperatorNote:
-      'The operator runtime is offline. Saving the plan may still need an extra Reactive-side management step before automation starts waiting for signals.',
+      'The operator runtime is offline. Single-signature testing stays disabled until the operator comes back online for this wallet.',
     listenerRuntimeHealthyNote:
       'Listener runtime balance is above current debt, so Reactive dispatch can continue without manual funding.',
     automationReadinessLabel: 'Automation readiness',
@@ -169,7 +169,7 @@ const messages = {
     externalSignalNote:
       'In the normal flow, source events are triggered by an external operator or upstream protocol, not by the user wallet.',
     testSourceEventNote:
-      'Use the test button only for demo validation. It relays the origin-chain trigger through the operator service so the user does not sign a second time.',
+      'Use the test button only for demo validation. It only goes through the operator relay so the user wallet does not need to sign a second source-chain transaction.',
     activityKicker: 'Activity Ledger',
     activityNote:
       'A rolling execution history that shows what the wallet observed, executed, or skipped while you were away.',
@@ -296,6 +296,8 @@ const messages = {
     emittingSourceSignal: 'Emitting source signal...',
     awaitingAutomationResult: 'Waiting for destination execution...',
     automationResultDetected: 'Destination execution detected.',
+    destinationExecutionDetected: 'Destination execution confirmed.',
+    destinationSkippedDetected: 'Destination callback was skipped:',
     automationStillPending:
       'Source signal was sent, but destination execution is still pending. Refresh again if it takes longer.',
     signalEmissionFailed: 'Signal emission failed.',
@@ -321,6 +323,15 @@ const messages = {
       'The requested runtime route is pointing at a different destination chain than the app is currently configured for.',
     operatorServiceRequiredForTestSignal:
       'To emit a test source signal without asking the user wallet to sign again, the operator service for this wallet must be online.',
+    testSignalBlockedExhausted:
+      'This intent is already exhausted. Save a new plan before sending another source signal.',
+    testSignalBlockedPaused: 'This intent is paused. Resume it before sending another source signal.',
+    testSignalBlockedInactive:
+      'This wallet runtime is not active yet. Save or resume a plan before sending another source signal.',
+    testSignalBlockedMirrorInactive:
+      'The operator has not mirrored the active intent to the source emitter yet.',
+    testSignalMirrorPending:
+      'The operator is still syncing the latest plan to the source emitter. Test-signal requests will resync before sending.',
     intentConfiguredAction: 'Transfer Plan Saved',
     intentConfiguredDesc:
       'Saved the wallet intent onchain. The shared listener remains armed by the operator for future external triggers.',
@@ -436,7 +447,7 @@ const messages = {
     singleSignatureReadyNote:
       '当前 operator runtime 在线，所以用户保存计划只签一次就够，系统会自动把 listener 准备到等待外部 signal 的状态。',
     singleSignatureRequiresOperatorNote:
-      '当前 operator runtime 不在线。保存计划后可能还需要额外的 Reactive 侧管理动作，自动执行不会稳定进入等待状态。',
+      '当前 operator runtime 不在线。单签名测试会保持禁用，直到这只钱包对应的 operator 恢复在线。',
     listenerRuntimeHealthyNote:
       '当前 listener 的运行余额高于欠费，Reactive dispatch 不需要再手动补资就能继续运行。',
     automationReadinessLabel: '自动化就绪状态',
@@ -513,7 +524,7 @@ const messages = {
     externalSignalNote:
       '正常流程里，源事件应由外部 operator 或上游协议触发，而不是由用户钱包自己触发。',
     testSourceEventNote:
-      '下面这个按钮只用于 demo 验证。它会通过 operator service 代发源链触发，所以不会要求用户再签第二次。',
+      '下面这个按钮只用于 demo 验证。它只会走 operator relay，这样用户钱包不需要为源链测试再签第二笔交易。',
     activityKicker: '链上记录',
     activityNote: '这里会持续展示钱包离线期间观察到、完成或跳过的执行历史。',
     chainEvidence: '链上证据',
@@ -636,6 +647,8 @@ const messages = {
     emittingSourceSignal: '正在发送源链信号...',
     awaitingAutomationResult: '正在等待目标链执行结果...',
     automationResultDetected: '已检测到目标链执行结果。',
+    destinationExecutionDetected: '已确认目标链执行。',
+    destinationSkippedDetected: '目标链回调已跳过：',
     automationStillPending: '源链信号已经发出，但目标链执行还在等待中。如果更久还没变化，请再手动刷新一次。',
     signalEmissionFailed: '源链信号发送失败。',
     failedEmitSourceSignal: '发送源链信号失败',
@@ -654,6 +667,13 @@ const messages = {
       '当前填写的 runtime route 指向的 destination chain 与应用当前配置的 destination chain 不一致。',
     operatorServiceRequiredForTestSignal:
       '要想在不让用户再次签名的情况下触发测试源事件，这只钱包对应的 operator service 必须先在线。',
+    testSignalBlockedExhausted: '这条计划已经耗尽。请先保存一条新的计划，再发送源链信号。',
+    testSignalBlockedPaused: '这条计划当前已暂停。请先恢复计划，再发送源链信号。',
+    testSignalBlockedInactive: '这只钱包当前还没有活跃 runtime。请先保存或恢复计划，再发送源链信号。',
+    testSignalBlockedMirrorInactive:
+      'operator 还没有把当前活跃 intent 镜像到源链 emitter。',
+    testSignalMirrorPending:
+      'operator 正在把最新计划同步到源链 emitter。测试源事件在发送前会先补做一次同步。',
     intentConfiguredAction: '转账计划已保存',
     intentConfiguredDesc: '已经把钱包 intent 写入链上。共享 listener 仍由 operator 保持 armed，后续外部事件可直接触发执行。',
     awaitingListenerArming: '转账计划已保存，正在等待共享 listener 进入 armed 状态...',

@@ -16,6 +16,8 @@ type RuntimePanelProps = {
   subscriptionTopic0: string
   callbackGasLimit: string
   operatorServiceStatus: string
+  operatorRelayAvailable: boolean
+  operatorMirroredIntentActive: boolean | null
   canManageListener: boolean
   isPending: boolean
   walletAccessState: WalletAccessState
@@ -35,12 +37,32 @@ export function RuntimePanel(props: RuntimePanelProps) {
   const { copy, locale } = useCopy()
   const listenerUnavailable = props.listenerPaused === null
   const hasBoundWallet = props.walletAccessState === 'bound'
-  const canTriggerTestSignal =
-    hasBoundWallet &&
-    props.runtimeStatus === 'active' &&
-    props.operatorServiceStatus === 'online' &&
-    props.signalEmitterAddress !== 'Unavailable' &&
-    !props.signalEmitterAddress.startsWith('0x0000000000000000000000000000000000000000')
+  const triggerBlockedReason =
+    !hasBoundWallet
+      ? props.walletAccessState === 'needs_wallet'
+        ? copy.initializeWalletToContinue
+        : props.walletAccessState === 'mismatch'
+          ? copy.connectedWalletMismatch
+          : props.walletAccessState === 'unavailable'
+            ? copy.walletAccessUnavailable
+            : copy.connectWalletToLoadRuntime
+      : !props.operatorRelayAvailable
+        ? copy.operatorServiceRequiredForTestSignal
+      : props.runtimeStatus === 'exhausted'
+        ? copy.testSignalBlockedExhausted
+        : props.runtimeStatus === 'paused'
+          ? copy.testSignalBlockedPaused
+          : props.runtimeStatus !== 'active'
+            ? copy.testSignalBlockedInactive
+            : props.signalEmitterAddress === 'Unavailable' ||
+                  props.signalEmitterAddress.startsWith('0x0000000000000000000000000000000000000000')
+                ? copy.sourceSignalUnavailable
+                : null
+  const canTriggerTestSignal = triggerBlockedReason === null
+  const triggerReadinessNote =
+    triggerBlockedReason === null && props.operatorMirroredIntentActive === false
+      ? copy.testSignalMirrorPending
+      : null
   const listenerStatusLabel = listenerUnavailable
     ? props.walletAccessState === 'mismatch'
       ? copy.connectedWalletMismatch
@@ -140,6 +162,12 @@ export function RuntimePanel(props: RuntimePanelProps) {
       </div>
       <p className="wallet-footnote">{copy.externalSignalNote}</p>
       <p className="wallet-footnote">{copy.testSourceEventNote}</p>
+      {triggerBlockedReason ? (
+        <p className="wallet-footnote">{triggerBlockedReason}</p>
+      ) : null}
+      {triggerReadinessNote ? (
+        <p className="wallet-footnote">{triggerReadinessNote}</p>
+      ) : null}
       {hasBoundWallet && !props.canManageListener ? (
         <p className="wallet-footnote">{copy.listenerManagedByOperator}</p>
       ) : null}

@@ -4,10 +4,12 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "node ./node_modules/vite/bin/vite.js",
+    "dev": "node ./scripts/dev-with-operators.mjs",
+    "dev:ui": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
-    "operator": "node ./scripts/operator-auto-arm.mjs"
+    "operator": "node ./scripts/operator-auto-arm.mjs",
+    "retry-execution": "node ./scripts/retry-reactive-execution.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",

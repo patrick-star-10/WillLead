@@ -64,7 +64,8 @@ const erc20Abi = parseAbi([
   'function symbol() view returns (string)'
 ])
 const reactiveSystemAbi = parseAbi([
-  'function subscribeContract(address contractAddress,uint256 chainId,address sourceContract,uint256 topic0,uint256 topic1,uint256 topic2,uint256 topic3)'
+  'function subscribeContract(address contractAddress,uint256 chainId,address sourceContract,uint256 topic0,uint256 topic1,uint256 topic2,uint256 topic3)',
+  'function debt(address _contract) view returns (uint256)'
 ])
 const reactiveIgnore =
   '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad' as Hex
@@ -374,6 +375,7 @@ type OperatorRuntime = {
   listenerBalance: string
   listenerDebt: string
   lastFundingResult: string
+  mirroredIntentActive: boolean | null
   apiUrl: string | null
   walletAddress: Address | null
 }
@@ -384,8 +386,57 @@ const unknownOperatorRuntime: OperatorRuntime = {
   listenerBalance: 'Unavailable',
   listenerDebt: 'Unavailable',
   lastFundingResult: 'Unknown',
+  mirroredIntentActive: null,
   apiUrl: null,
   walletAddress: null
+}
+
+function formatOperatorHeartbeat(heartbeatAt: string) {
+  return new Date(heartbeatAt).toLocaleString('en-US', {
+    hour12: false,
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short'
+  })
+}
+
+async function probeOperatorHealth(apiUrl: string): Promise<{
+  serviceStatus: 'online' | 'offline'
+  heartbeatAt: string | null
+  apiUrl: string | null
+} | null> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 1_500)
+
+  try {
+    const response = await fetch(`${apiUrl}/health?ts=${Date.now()}`, {
+      cache: 'no-store',
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      return null
+    }
+
+    const payload = await response.json() as {
+      serviceStatus?: string
+      heartbeatAt?: string
+      apiUrl?: string
+    }
+
+    return {
+      serviceStatus: payload.serviceStatus === 'online' ? 'online' : 'offline',
+      heartbeatAt: payload.heartbeatAt ?? null,
+      apiUrl: payload.apiUrl ?? apiUrl
+    }
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timeout)
+  }
 }
 
 async function readWalletRuntimeBinding(
@@ -645,10 +696,12 @@ function buildUnboundSnapshot(params: {
         canManageListener: runtimeRoute?.canManageListener ?? false
         },
       operatorServiceStatus: 'unknown' as const,
+      operatorRelayAvailable: false,
       operatorLastHeartbeat: 'Never',
         operatorListenerBalance: 'Unavailable',
       operatorListenerDebt: 'Unavailable',
       operatorLastFundingResult: 'Unknown',
+      operatorMirroredIntentActive: null,
       automationReadiness: 'unavailable' as const,
       singleSignatureReadiness: 'unavailable' as const
     },
@@ -695,6 +748,7 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
         listenerBalance: 'Unavailable',
         listenerDebt: 'Unavailable',
         lastFundingResult: 'Unknown',
+        mirroredIntentActive: null,
         apiUrl: null,
         walletAddress: null
       }
@@ -706,6 +760,7 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
       listenerBalanceWei?: string
       listenerDebtWei?: string
       lastFundingResult?: string
+      mirroredIntentActive?: string
       apiUrl?: string
       walletAddress?: string
     }
@@ -716,26 +771,33 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
         listenerBalance: 'Unavailable',
         listenerDebt: 'Unavailable',
         lastFundingResult: 'Unknown',
+        mirroredIntentActive: null,
         apiUrl: null,
         walletAddress: null
       }
     }
 
     const heartbeatDate = new Date(payload.heartbeatAt)
-    const fresh = Date.now() - heartbeatDate.getTime() <= 15_000
+    let effectiveHeartbeatAt = payload.heartbeatAt
+    let serviceStatus = payload.serviceStatus === 'online' ? 'online' : 'offline'
+    let apiUrl = payload.apiUrl ?? null
+    let fresh = Date.now() - heartbeatDate.getTime() <= 15_000
+
+    if (!fresh && serviceStatus === 'online' && apiUrl) {
+      const health = await probeOperatorHealth(apiUrl)
+      if (health) {
+        serviceStatus = health.serviceStatus
+        apiUrl = health.apiUrl
+        if (health.heartbeatAt) {
+          effectiveHeartbeatAt = health.heartbeatAt
+          fresh = Date.now() - new Date(health.heartbeatAt).getTime() <= 15_000
+        }
+      }
+    }
 
     return {
-      serviceStatus: payload.serviceStatus === 'online' && fresh ? 'online' : 'offline',
-      lastHeartbeat: heartbeatDate.toLocaleString('en-US', {
-        hour12: false,
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZoneName: 'short'
-      }),
+      serviceStatus: serviceStatus === 'online' && fresh ? 'online' : 'offline',
+      lastHeartbeat: formatOperatorHeartbeat(effectiveHeartbeatAt),
       listenerBalance: payload.listenerBalanceWei
         ? formatAmount(BigInt(payload.listenerBalanceWei), reactiveChain.nativeCurrency.symbol)
         : 'Unavailable',
@@ -743,7 +805,13 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
         ? formatAmount(BigInt(payload.listenerDebtWei), reactiveChain.nativeCurrency.symbol)
         : 'Unavailable',
       lastFundingResult: payload.lastFundingResult ?? 'Unknown',
-      apiUrl: payload.apiUrl ?? null,
+      mirroredIntentActive:
+        payload.mirroredIntentActive === 'true'
+          ? true
+          : payload.mirroredIntentActive === 'false'
+            ? false
+            : null,
+      apiUrl,
       walletAddress:
         payload.walletAddress && isConfiguredAddress(payload.walletAddress)
           ? getAddress(payload.walletAddress)
@@ -756,6 +824,7 @@ async function readOperatorRuntime(): Promise<OperatorRuntime> {
       listenerBalance: 'Unavailable',
       listenerDebt: 'Unavailable',
       lastFundingResult: 'Unknown',
+      mirroredIntentActive: null,
       apiUrl: null,
       walletAddress: null
     }
@@ -770,12 +839,17 @@ function scopeOperatorRuntime(
     return unknownOperatorRuntime
   }
 
-  if (
-    operatorRuntime.serviceStatus === 'online' &&
-    operatorRuntime.walletAddress &&
-    isSameAddress(operatorRuntime.walletAddress, walletAddress)
-  ) {
-    return operatorRuntime
+  if (operatorRuntime.serviceStatus === 'online' && operatorRuntime.apiUrl) {
+    return {
+      ...operatorRuntime,
+      // The operator API can target the current wallet dynamically. Keep wallet-specific
+      // mirror state only when the runtime file was produced for the same wallet.
+      mirroredIntentActive:
+        operatorRuntime.walletAddress && isSameAddress(operatorRuntime.walletAddress, walletAddress)
+          ? operatorRuntime.mirroredIntentActive
+          : null,
+      walletAddress
+    }
   }
 
   return {
@@ -784,6 +858,7 @@ function scopeOperatorRuntime(
     listenerBalance: 'Unavailable',
     listenerDebt: 'Unavailable',
     lastFundingResult: 'Unknown',
+    mirroredIntentActive: null,
     apiUrl: null,
     walletAddress
   }
@@ -804,11 +879,11 @@ function computeAutomationReadiness(params: {
 }
 
 function computeSingleSignatureReadiness(params: {
-  operatorServiceStatus: WalletState['operatorServiceStatus']
+  operatorRelayAvailable: boolean
   automationReadiness: AutomationReadiness
 }): SingleSignatureReadiness {
   if (params.automationReadiness === 'unavailable') return 'unavailable'
-  if (params.operatorServiceStatus !== 'online') return 'requires_operator'
+  if (!params.operatorRelayAvailable) return 'requires_operator'
   return 'ready'
 }
 
@@ -827,7 +902,6 @@ export async function readWalletState(
   const executionAddresses = getExecutionContractAddresses(executionEnvironment)
   const destinationClient = getDestinationPublicClient(executionEnvironment)
   const originClient = detailLevel === 'full' ? getOriginPublicClient() : null
-  const reactiveClient = detailLevel === 'full' ? getReactivePublicClient() : null
   const controllerAssetView = resolveControllerAssetView(executionEnvironment)
   const operatorRuntime = await readOperatorRuntime()
   const destinationWatchedTokens = readWatchedTokenAddresses(executionChainConfig.id)
@@ -1010,10 +1084,12 @@ export async function readWalletState(
             subscriptionStatus: 'unavailable'
           },
           operatorServiceStatus: scopedOperatorRuntime.serviceStatus,
+          operatorRelayAvailable: scopedOperatorRuntime.apiUrl !== null,
           operatorLastHeartbeat: scopedOperatorRuntime.lastHeartbeat,
           operatorListenerBalance: scopedOperatorRuntime.listenerBalance,
           operatorListenerDebt: scopedOperatorRuntime.listenerDebt,
           operatorLastFundingResult: scopedOperatorRuntime.lastFundingResult,
+          operatorMirroredIntentActive: scopedOperatorRuntime.mirroredIntentActive,
           automationReadiness: 'unavailable',
           singleSignatureReadiness: 'unavailable'
         },
@@ -1040,10 +1116,8 @@ export async function readWalletState(
     const automation = await readAutomationCredit(walletAddress, automationFloor, executionEnvironment)
     const proofs = await readExecutionProofs(
       walletAddress,
-      runtimeListenerAddress,
       runtimeSignalEmitter,
       originClient,
-      reactiveClient,
       destinationClient,
       executionEnvironment
     )
@@ -1096,13 +1170,15 @@ export async function readWalletState(
           subscriptionStatus: listenerState.subscriptionStatus
         },
         operatorServiceStatus: scopedOperatorRuntime.serviceStatus,
+        operatorRelayAvailable: scopedOperatorRuntime.apiUrl !== null,
         operatorLastHeartbeat: scopedOperatorRuntime.lastHeartbeat,
         operatorListenerBalance: scopedOperatorRuntime.listenerBalance,
         operatorListenerDebt: scopedOperatorRuntime.listenerDebt,
         operatorLastFundingResult: scopedOperatorRuntime.lastFundingResult,
+        operatorMirroredIntentActive: scopedOperatorRuntime.mirroredIntentActive,
         automationReadiness,
         singleSignatureReadiness: computeSingleSignatureReadiness({
-          operatorServiceStatus: scopedOperatorRuntime.serviceStatus,
+          operatorRelayAvailable: scopedOperatorRuntime.apiUrl !== null,
           automationReadiness
         })
       },
@@ -1327,6 +1403,69 @@ async function readReactiveListenerState(
   }
 }
 
+async function ensureReactiveListenerArmedWithClient(params: {
+  account: Address
+  client: Awaited<ReturnType<typeof getReactiveWalletClient>>['client']
+  reactiveListenerAddress: Address
+  executionEnvironment: ExecutionEnvironment
+}): Promise<ActionResult | null> {
+  const listenerState = await readReactiveListenerState(
+    params.reactiveListenerAddress,
+    params.executionEnvironment
+  )
+
+  if (
+    listenerState.originChainId === 'Unavailable' ||
+    !isConfiguredAddress(listenerState.signalEmitter)
+  ) {
+    throw new Error(copy().reactiveRouteVerificationUnavailable)
+  }
+
+  if (listenerState.listenerPaused === false && listenerState.subscriptionStatus === 'armed') {
+    return null
+  }
+
+  let hash: Hex
+
+  if (listenerState.listenerPaused) {
+    hash = await params.client.writeContract({
+      account: params.account,
+      address: params.reactiveListenerAddress,
+      abi: willLeadReactiveListenerAbi,
+      chain: reactiveChain,
+      functionName: 'resume'
+    })
+  } else {
+    hash = await params.client.writeContract({
+      account: params.account,
+      address: reactiveSystemContract as Address,
+      abi: reactiveSystemAbi,
+      chain: reactiveChain,
+      functionName: 'subscribeContract',
+      args: [
+        params.reactiveListenerAddress,
+        BigInt(listenerState.originChainId),
+        listenerState.signalEmitter,
+        BigInt(listenerState.strategySignalTopic0),
+        BigInt(reactiveIgnore),
+        BigInt(reactiveIgnore),
+        BigInt(reactiveIgnore)
+      ]
+    })
+  }
+
+  const reactiveClient = getReactivePublicClient()
+  if (reactiveClient) {
+    await reactiveClient.waitForTransactionReceipt({ hash })
+  }
+
+  return {
+    hash,
+    label: copy().reactiveListenerArmedAction,
+    description: copy().reactiveListenerArmedDesc
+  }
+}
+
 async function readAutomationCredit(
   walletAddress: Address,
   automationFloor: bigint,
@@ -1380,10 +1519,8 @@ async function readAutomationCredit(
 
 async function readExecutionProofs(
   walletAddress: Address,
-  reactiveListenerAddress: Address,
   signalEmitterAddress: Address,
   originClient: ReturnType<typeof getOriginPublicClient>,
-  reactiveClient: ReturnType<typeof getReactivePublicClient>,
   destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>,
   executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
 ): Promise<ExecutionProof[]> {
@@ -1482,38 +1619,6 @@ async function readExecutionProofs(
   } catch {}
 
   try {
-    if (reactiveClient && isConfiguredAddress(reactiveListenerAddress)) {
-      const callbackLogs = await reactiveClient.getLogs({
-        address: reactiveSystemContract as Address,
-        event: parseAbiItem('event WhitelistContract(address indexed contractAddress)'),
-        args: {
-          contractAddress: reactiveListenerAddress
-        },
-        fromBlock: 0n,
-        strict: true
-      })
-
-      for (const callbackLog of callbackLogs) {
-        const block = await reactiveClient.getBlock({ blockNumber: callbackLog.blockNumber! })
-        proofs.push({
-          id: `callback-${callbackLog.transactionHash}-${callbackLog.logIndex}`,
-          label: 'Reactive Dispatch',
-          description: 'Reactive system accepted the listener job and dispatched the destination callback.',
-          status: 'observed',
-          reference: callbackLog.transactionHash ?? 'unknown',
-          chain: 'reactive',
-          timestampLabel: formatTimestamp(block.timestamp),
-          nonceLabel: null,
-          detailLabel: null,
-          href: txExplorerLink('reactive', callbackLog.transactionHash),
-          blockNumber: callbackLog.blockNumber ?? 0n,
-          logIndex: Number(callbackLog.logIndex ?? 0)
-        })
-      }
-    }
-  } catch {}
-
-  try {
     if (originClient && isConfiguredAddress(signalEmitterAddress)) {
       const signalLogs = await originClient.getLogs({
         address: signalEmitterAddress,
@@ -1555,7 +1660,12 @@ async function readExecutionProofs(
     .map(({ blockNumber: _blockNumber, logIndex: _logIndex, ...proof }) => proof)
 }
 
-export async function configureIntent(values: IntentFormValues): Promise<ActionResult> {
+export async function configureIntent(
+  values: IntentFormValues,
+  options?: {
+    skipRuntimeRouteSync?: boolean
+  }
+): Promise<ActionResult> {
   const executionEnvironment = readExecutionEnvironment()
   const executionChain = getExecutionChain(executionEnvironment)
   const { account, client } = await getExecutionWalletClient(executionEnvironment)
@@ -1576,7 +1686,7 @@ export async function configureIntent(values: IntentFormValues): Promise<ActionR
     throw new Error('Max executions must be greater than 0.')
   }
 
-  if (!runtimeRouteMatches(currentRuntimeBinding, runtimeRoute)) {
+  if (!options?.skipRuntimeRouteSync && !runtimeRouteMatches(currentRuntimeBinding, runtimeRoute)) {
     await validateRuntimeRouteInputForExecution(runtimeRoute, executionEnvironment)
 
     const runtimeHash = await client.writeContract({
@@ -1625,51 +1735,12 @@ export async function ensureReactiveListenerArmed(): Promise<ActionResult | null
   const executionEnvironment = readExecutionEnvironment()
   const { account, client } = await getReactiveWalletClient()
   const reactiveListenerAddress = await resolveReactiveListenerForManager(account, executionEnvironment)
-  const listenerState = await readReactiveListenerState(reactiveListenerAddress, executionEnvironment)
-
-  if (listenerState.listenerPaused === false && listenerState.subscriptionStatus === 'armed') {
-    return null
-  }
-
-  let hash: Hex
-
-  if (listenerState.listenerPaused) {
-    hash = await client.writeContract({
-      account,
-      address: reactiveListenerAddress,
-      abi: willLeadReactiveListenerAbi,
-      chain: reactiveChain,
-      functionName: 'resume'
-    })
-  } else {
-    hash = await client.writeContract({
-      account,
-      address: reactiveSystemContract as Address,
-      abi: reactiveSystemAbi,
-      chain: reactiveChain,
-      functionName: 'subscribeContract',
-      args: [
-        reactiveListenerAddress,
-        BigInt(listenerState.originChainId),
-        listenerState.signalEmitter,
-        BigInt(listenerState.strategySignalTopic0),
-        BigInt(reactiveIgnore),
-        BigInt(reactiveIgnore),
-        BigInt(reactiveIgnore)
-      ]
-    })
-  }
-
-  const reactiveClient = getReactivePublicClient()
-  if (reactiveClient) {
-    await reactiveClient.waitForTransactionReceipt({ hash })
-  }
-
-  return {
-    hash,
-    label: copy().reactiveListenerArmedAction,
-    description: copy().reactiveListenerArmedDesc
-  }
+  return ensureReactiveListenerArmedWithClient({
+    account,
+    client,
+    reactiveListenerAddress,
+    executionEnvironment
+  })
 }
 
 export async function pauseIntent(): Promise<ActionResult> {
@@ -1730,48 +1801,49 @@ export async function emitSignal(_values: {
 }): Promise<ActionResult> {
   const executionEnvironment = readExecutionEnvironment()
   const { account: destinationAccount } = await getExecutionWalletClient(executionEnvironment)
-  const { walletAddress } = await resolveWalletAddressForOwner(destinationAccount, executionEnvironment)
+  const binding = await resolveWalletAddressForOwner(destinationAccount, executionEnvironment)
+  const { walletAddress } = binding
   const operatorRuntime = scopeOperatorRuntime(await readOperatorRuntime(), walletAddress)
 
-  if (operatorRuntime.serviceStatus !== 'online' || !operatorRuntime.apiUrl) {
-    throw new Error(copy().operatorServiceRequiredForTestSignal)
-  }
-
-  const response = await fetch(`${operatorRuntime.apiUrl}/test-signal`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      walletAddress,
-      expectedNonce: _values.nextNonce
+  if (operatorRuntime.apiUrl) {
+    const response = await fetch(`${operatorRuntime.apiUrl}/test-signal`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        walletAddress,
+        expectedNonce: _values.nextNonce
+      })
     })
-  })
 
-  if (!response.ok) {
-    let message: string = copy().failedEmitSourceSignal
-    try {
-      const payload = await response.json() as { error?: string }
-      if (payload.error) {
-        message = payload.error
-      }
-    } catch {}
+    if (!response.ok) {
+      let message: string = copy().failedEmitSourceSignal
+      try {
+        const payload = await response.json() as { error?: string }
+        if (payload.error) {
+          message = payload.error
+        }
+      } catch {}
 
-    throw new Error(message)
+      throw new Error(message)
+    }
+
+    const payload = await response.json() as { hash?: string }
+    const hash = payload.hash
+
+    if (!hash) {
+      throw new Error(copy().failedEmitSourceSignal)
+    }
+
+    return {
+      hash,
+      label: copy().sourceSignalEmittedAction,
+      description: copy().sourceSignalEmittedDesc
+    }
   }
 
-  const payload = await response.json() as { hash?: string }
-  const hash = payload.hash
-
-  if (!hash) {
-    throw new Error(copy().failedEmitSourceSignal)
-  }
-
-  return {
-    hash,
-    label: copy().sourceSignalEmittedAction,
-    description: copy().sourceSignalEmittedDesc
-  }
+  throw new Error(copy().operatorServiceRequiredForTestSignal)
 }
 
 export async function topUpAutomationCredit(

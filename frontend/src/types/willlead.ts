@@ -48,10 +48,12 @@ export type WalletState = {
   destinationBalanceDelta: string
   runtimeRoute: RuntimeRouteState
   operatorServiceStatus: OperatorServiceStatus
+  operatorRelayAvailable: boolean
   operatorLastHeartbeat: string
   operatorListenerBalance: string
   operatorListenerDebt: string
   operatorLastFundingResult: string
+  operatorMirroredIntentActive: boolean | null
   automationReadiness: AutomationReadiness
   singleSignatureReadiness: SingleSignatureReadiness
 }

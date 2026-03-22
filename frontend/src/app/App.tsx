@@ -317,6 +317,8 @@ export function App() {
               subscriptionTopic0={wallet.runtimeRoute.signalTopic0}
               callbackGasLimit={wallet.runtimeRoute.callbackGasLimit}
               operatorServiceStatus={wallet.operatorServiceStatus}
+              operatorRelayAvailable={wallet.operatorRelayAvailable}
+              operatorMirroredIntentActive={wallet.operatorMirroredIntentActive}
               canManageListener={wallet.runtimeRoute.canManageListener}
               isPending={isActionPending}
               walletAccessState={wallet.walletAccessState}

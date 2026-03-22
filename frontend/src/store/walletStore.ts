@@ -96,10 +96,12 @@ const initialWalletState: WalletState = {
     canManageListener: false
   },
   operatorServiceStatus: 'unknown',
+  operatorRelayAvailable: false,
   operatorLastHeartbeat: 'Never',
   operatorListenerBalance: 'Unavailable',
   operatorListenerDebt: 'Unavailable',
   operatorLastFundingResult: 'Unknown',
+  operatorMirroredIntentActive: null,
   automationReadiness: 'unavailable',
   singleSignatureReadiness: 'unavailable'
 }
@@ -133,11 +135,52 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-function hasDestinationOutcome(proofs: ExecutionProof[], expectedNonce: number) {
-  return proofs.some((proof) => {
-    if (!proof.nonceLabel || Number(proof.nonceLabel) !== expectedNonce) return false
-    return proof.label === 'Destination Execution' || proof.label === 'Destination Skipped'
-  })
+function normalizeRuntimeRouteValue(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function runtimeRouteMatchesForm(
+  walletRoute: WalletState['runtimeRoute'],
+  values: IntentFormValues
+) {
+  return (
+    normalizeRuntimeRouteValue(walletRoute.listenerAddress) ===
+      normalizeRuntimeRouteValue(values.listenerAddress) &&
+    normalizeRuntimeRouteValue(walletRoute.signalEmitterAddress) ===
+      normalizeRuntimeRouteValue(values.signalEmitterAddress) &&
+    walletRoute.sourceChainId.trim() === values.sourceChainId.trim() &&
+    walletRoute.destinationChainId.trim() === values.destinationChainId.trim() &&
+    normalizeRuntimeRouteValue(walletRoute.signalTopic0) ===
+      normalizeRuntimeRouteValue(values.signalTopic0)
+  )
+}
+
+function findDestinationOutcome(
+  proofs: ExecutionProof[],
+  expectedNonce: number,
+  existingProofReferences: Set<string>
+) {
+  return (
+    proofs.find((proof) => {
+      if (!proof.nonceLabel || Number(proof.nonceLabel) !== expectedNonce) return false
+      if (existingProofReferences.has(proof.reference)) return false
+      return proof.label === 'Destination Execution' || proof.label === 'Destination Skipped'
+    }) ?? null
+  )
+}
+
+function statusMessageForDestinationOutcome(proof: ExecutionProof | null) {
+  if (!proof) {
+    return copy().automationResultDetected
+  }
+
+  if (proof.label === 'Destination Skipped') {
+    return proof.detailLabel
+      ? `${copy().destinationSkippedDetected} ${proof.detailLabel}`
+      : copy().destinationSkippedDetected
+  }
+
+  return copy().destinationExecutionDetected
 }
 
 function statusMessageForSnapshot(snapshot: {
@@ -209,6 +252,8 @@ function mergeCoreSnapshotIntoState(
         snapshot.wallet.operatorServiceStatus === 'unknown'
           ? state.wallet.operatorServiceStatus
           : snapshot.wallet.operatorServiceStatus,
+      operatorRelayAvailable:
+        snapshot.wallet.operatorRelayAvailable || state.wallet.operatorRelayAvailable,
       operatorLastHeartbeat:
         snapshot.wallet.operatorLastHeartbeat === 'Never'
           ? state.wallet.operatorLastHeartbeat
@@ -519,7 +564,9 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     set({ isPending: true, errorMessage: null, statusMessage: copy().submittingIntentTransaction })
 
     try {
-      const action = await configureIntent(values)
+      const action = await configureIntent(values, {
+        skipRuntimeRouteSync: runtimeRouteMatchesForm(get().wallet.runtimeRoute, values)
+      })
       await applyPostAction(set, get, action)
       if (get().wallet.operatorServiceStatus !== 'online') {
         try {
@@ -630,6 +677,9 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const state = get()
       const expectedNonce = state.wallet.lastExecutionNonce + 1
+      const initialLastExecutionNonce = state.wallet.lastExecutionNonce
+      const initialExecutedCount = state.intent.executedCount
+      const existingProofReferences = new Set(state.executionProofs.map((proof) => proof.reference))
       const action = await emitSignal({
         token: state.intent.token,
         recipient: state.intent.recipient,
@@ -638,7 +688,14 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
       await applyPostAction(set, get, action)
       set({ statusMessage: copy().awaitingAutomationResult })
-      void pollForSignalOutcome(set, get, expectedNonce)
+      void pollForSignalOutcome(
+        set,
+        get,
+        expectedNonce,
+        initialLastExecutionNonce,
+        initialExecutedCount,
+        existingProofReferences
+      )
     } catch (error) {
       set({
         isPending: false,
@@ -830,7 +887,10 @@ async function pollForSignalOutcome(
     | ((state: WillLeadStore) => Partial<WillLeadStore>)
   ) => void,
   get: () => WillLeadStore,
-  expectedNonce: number
+  expectedNonce: number,
+  initialLastExecutionNonce: number,
+  initialExecutedCount: number,
+  existingProofReferences: Set<string>
 ) {
   const initialOwnerAddress = get().wallet.ownerAddress
   const initialConnectionSource = get().wallet.connectionSource
@@ -854,20 +914,52 @@ async function pollForSignalOutcome(
     }
 
     try {
-      const snapshot = await readWalletState(
+      const coreSnapshot = await readWalletState(
+        initialOwnerAddress,
+        initialConnectionSource,
+        'core',
+        initialExecutionEnvironment
+      )
+      const destinationAdvanced =
+        coreSnapshot.wallet.lastExecutionNonce > initialLastExecutionNonce ||
+        coreSnapshot.intent.executedCount > initialExecutedCount
+
+      if (coreSnapshot.wallet.lastExecutionNonce >= expectedNonce && destinationAdvanced) {
+        set((state) => ({
+          ...mergeCoreSnapshotIntoState(state, coreSnapshot),
+          isPending: false,
+          statusMessage: copy().destinationExecutionDetected,
+          errorMessage: null
+        }))
+
+        void hydrateDetailedSnapshot(
+          set,
+          initialOwnerAddress,
+          initialConnectionSource,
+          initialExecutionEnvironment
+        )
+        return
+      }
+
+      const fullSnapshot = await readWalletState(
         initialOwnerAddress,
         initialConnectionSource,
         'full',
         initialExecutionEnvironment
       )
-      const settled =
-        snapshot.wallet.lastExecutionNonce >= expectedNonce ||
-        hasDestinationOutcome(snapshot.executionProofs, expectedNonce)
+      const proofOutcome = findDestinationOutcome(
+        fullSnapshot.executionProofs,
+        expectedNonce,
+        existingProofReferences
+      )
+      const settled = proofOutcome !== null
 
       set({
-        ...snapshot,
+        ...fullSnapshot,
         isPending: false,
-        statusMessage: settled ? copy().automationResultDetected : copy().awaitingAutomationResult,
+        statusMessage: settled
+          ? statusMessageForDestinationOutcome(proofOutcome)
+          : copy().awaitingAutomationResult,
         errorMessage: null
       })
 

@@ -132,7 +132,7 @@ function createRpcTransport(urls) {
   const transports = urls.map((url) =>
     http(url, {
       retryCount: 0,
-      timeout: 8_000
+      timeout: 20_000
     })
   )
 
@@ -666,11 +666,37 @@ function writeJsonResponse(response, statusCode, payload) {
   response.end(`${JSON.stringify(payload)}\n`)
 }
 
+function readJsonBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+
+    request.on('data', (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    })
+
+    request.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8').trim()
+      if (!raw) {
+        resolve({})
+        return
+      }
+
+      try {
+        resolve(JSON.parse(raw))
+      } catch {
+        reject(new Error('Invalid JSON request body.'))
+      }
+    })
+
+    request.on('error', reject)
+  })
+}
+
 function startOperatorApi({
   host,
   port,
   runtimeState,
-  emitTestSignalHandler
+  serviceContext
 }) {
   let inFlight = null
 
@@ -701,18 +727,43 @@ function startOperatorApi({
       }
 
       inFlight = (async () => {
+        const body = await readJsonBody(request)
+        const requestedWalletAddress = body.walletAddress
+          ? getAddress(body.walletAddress)
+          : serviceContext.defaultWalletAddress
+        const expectedNonce =
+          body.expectedNonce !== undefined && body.expectedNonce !== null
+            ? BigInt(body.expectedNonce)
+            : null
+
+        runtimeState.walletAddress = requestedWalletAddress
         await prepareListenerForTestSignal({
-          destinationClient: emitTestSignalHandler.destinationClient,
-          reactiveClient: emitTestSignalHandler.reactiveClient,
-          reactiveWalletClient: emitTestSignalHandler.reactiveWalletClient,
-          operatorAccount: emitTestSignalHandler.operatorAccount,
-          walletAddress: emitTestSignalHandler.walletAddress,
-          fallbackListenerAddress: emitTestSignalHandler.fallbackListenerAddress,
-          authorizedRvmId: emitTestSignalHandler.authorizedRvmId,
-          fundingBufferWei: emitTestSignalHandler.fundingBufferWei,
+          destinationClient: serviceContext.destinationClient,
+          reactiveClient: serviceContext.reactiveClient,
+          reactiveWalletClient: serviceContext.reactiveWalletClient,
+          operatorAccount: serviceContext.operatorAccount,
+          walletAddress: requestedWalletAddress,
+          fallbackListenerAddress: serviceContext.fallbackListenerAddress,
+          authorizedRvmId: serviceContext.authorizedRvmId,
+          fundingBufferWei: serviceContext.fundingBufferWei,
           runtimeState
         })
-        const result = await emitTestSignalHandler()
+        const result = await emitTestSignal({
+          destinationClient: serviceContext.destinationClient,
+          originClient: serviceContext.originClient,
+          originWalletClient: serviceContext.originWalletClient,
+          operatorAccount: serviceContext.operatorAccount,
+          walletAddress: requestedWalletAddress,
+          fallbackListenerAddress: serviceContext.fallbackListenerAddress,
+          runtimeState
+        })
+
+        if (expectedNonce !== null && result.nextNonce !== expectedNonce) {
+          throw new Error(
+            `Unexpected nonce for wallet ${requestedWalletAddress}. Expected ${expectedNonce.toString()}, got ${result.nextNonce.toString()}.`
+          )
+        }
+
         runtimeState.lastTestSignalTx = result.hash
         runtimeState.lastTestSignalNonce = result.nextNonce.toString()
         runtimeState.lastError = null
@@ -810,34 +861,22 @@ async function main() {
 
   let apiServer = null
   if (!once) {
-    const emitTestSignalHandler = Object.assign(
-      () =>
-        emitTestSignal({
-          destinationClient,
-          originClient,
-          originWalletClient,
-          operatorAccount,
-          walletAddress: config.walletAddress,
-          fallbackListenerAddress: config.listenerAddress,
-          runtimeState
-        }),
-      {
-        destinationClient,
-        reactiveClient,
-        reactiveWalletClient,
-        operatorAccount,
-        walletAddress: config.walletAddress,
-        fallbackListenerAddress: config.listenerAddress,
-        authorizedRvmId: config.authorizedRvmId,
-        fundingBufferWei: config.listenerFundingBufferWei
-      }
-    )
-
     apiServer = startOperatorApi({
       host: config.operatorApiHost,
       port: config.operatorApiPort,
       runtimeState,
-      emitTestSignalHandler
+      serviceContext: {
+        destinationClient,
+        originClient,
+        reactiveClient,
+        reactiveWalletClient,
+        originWalletClient,
+        operatorAccount,
+        defaultWalletAddress: config.walletAddress,
+        fallbackListenerAddress: config.listenerAddress,
+        authorizedRvmId: config.authorizedRvmId,
+        fundingBufferWei: config.listenerFundingBufferWei
+      }
     })
     console.log(`operator_api=${runtimeState.apiUrl}`)
   }
@@ -882,110 +921,120 @@ async function main() {
   }
 
   while (true) {
-    const latestBlock = await destinationClient.getBlockNumber()
-    if (lastSeenBlock > 0n && latestBlock <= lastSeenBlock) {
-      runtimeState.heartbeatAt = new Date().toISOString()
-      writeRuntimeStatus(runtimeState)
+    try {
+      const latestBlock = await destinationClient.getBlockNumber()
+      if (lastSeenBlock > 0n && latestBlock <= lastSeenBlock) {
+        runtimeState.lastError = null
+        runtimeState.heartbeatAt = new Date().toISOString()
+        writeRuntimeStatus(runtimeState)
 
-      if (once) {
-        break
+        if (once) {
+          break
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+        continue
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
-      continue
-    }
+      const fromBlock =
+        lastSeenBlock > 0n ? lastSeenBlock + 1n : latestBlock > lookbackBlocks ? latestBlock - lookbackBlocks : 0n
 
-    const fromBlock =
-      lastSeenBlock > 0n ? lastSeenBlock + 1n : latestBlock > lookbackBlocks ? latestBlock - lookbackBlocks : 0n
-
-    const logs = await destinationClient.getLogs({
-      address: config.walletAddress,
-      event: intentConfiguredEvent,
-      fromBlock,
-      toBlock: latestBlock,
-      strict: true
-    })
-
-    for (const log of logs) {
-      const logKey = `${log.blockNumber}-${log.logIndex}-${log.transactionHash}`
-      if (logKey === lastSeenKey) continue
-
-      lastSeenKey = logKey
-      console.log(`intent_detected=${log.transactionHash}`)
-      runtimeState.lastIntentTx = log.transactionHash
-      const runtimeBinding = await readWalletBinding({
-        destinationClient,
-        walletAddress: config.walletAddress,
-        fallbackListenerAddress: config.listenerAddress
+      const logs = await destinationClient.getLogs({
+        address: config.walletAddress,
+        event: intentConfiguredEvent,
+        fromBlock,
+        toBlock: latestBlock,
+        strict: true
       })
-      runtimeState.listenerAddress = runtimeBinding.listenerAddress
-      const mirrorResult = await syncMirroredIntent({
-        destinationClient,
-        originClient,
-        originWalletClient,
-        operatorAccount,
-        walletAddress: config.walletAddress,
-        signalEmitter: runtimeBinding.signalEmitter,
-        runtimeState
-      })
-      console.log(`mirror_intent=${mirrorResult.status}`)
-      await maintainActiveRuntime({
-        destinationClient,
-        reactiveClient,
-        reactiveWalletClient,
-        operatorAccount,
-        walletAddress: config.walletAddress,
-        fallbackListenerAddress: config.listenerAddress,
-        authorizedRvmId: config.authorizedRvmId,
-        fundingBufferWei: config.listenerFundingBufferWei,
-        walletRuntime: mirrorResult.walletRuntime,
-        runtimeState
-      })
-      console.log(`listener_funding=${runtimeState.lastFundingResult}`)
-      console.log(`listener_arm=${runtimeState.lastArmResult}`)
+
+      for (const log of logs) {
+        const logKey = `${log.blockNumber}-${log.logIndex}-${log.transactionHash}`
+        if (logKey === lastSeenKey) continue
+
+        lastSeenKey = logKey
+        console.log(`intent_detected=${log.transactionHash}`)
+        runtimeState.lastIntentTx = log.transactionHash
+        const runtimeBinding = await readWalletBinding({
+          destinationClient,
+          walletAddress: config.walletAddress,
+          fallbackListenerAddress: config.listenerAddress
+        })
+        runtimeState.listenerAddress = runtimeBinding.listenerAddress
+        const mirrorResult = await syncMirroredIntent({
+          destinationClient,
+          originClient,
+          originWalletClient,
+          operatorAccount,
+          walletAddress: config.walletAddress,
+          signalEmitter: runtimeBinding.signalEmitter,
+          runtimeState
+        })
+        console.log(`mirror_intent=${mirrorResult.status}`)
+        await maintainActiveRuntime({
+          destinationClient,
+          reactiveClient,
+          reactiveWalletClient,
+          operatorAccount,
+          walletAddress: config.walletAddress,
+          fallbackListenerAddress: config.listenerAddress,
+          authorizedRvmId: config.authorizedRvmId,
+          fundingBufferWei: config.listenerFundingBufferWei,
+          walletRuntime: mirrorResult.walletRuntime,
+          runtimeState
+        })
+        console.log(`listener_funding=${runtimeState.lastFundingResult}`)
+        console.log(`listener_arm=${runtimeState.lastArmResult}`)
+        runtimeState.lastError = null
+        runtimeState.heartbeatAt = new Date().toISOString()
+        writeRuntimeStatus(runtimeState)
+      }
+
+      lastSeenBlock = latestBlock
+      try {
+        const runtimeBinding = await readWalletBinding({
+          destinationClient,
+          walletAddress: config.walletAddress,
+          fallbackListenerAddress: config.listenerAddress
+        })
+        runtimeState.listenerAddress = runtimeBinding.listenerAddress
+        const mirrorResult = await syncMirroredIntent({
+          destinationClient,
+          originClient,
+          originWalletClient,
+          operatorAccount,
+          walletAddress: config.walletAddress,
+          signalEmitter: runtimeBinding.signalEmitter,
+          runtimeState
+        })
+        await maintainActiveRuntime({
+          destinationClient,
+          reactiveClient,
+          reactiveWalletClient,
+          operatorAccount,
+          walletAddress: config.walletAddress,
+          fallbackListenerAddress: config.listenerAddress,
+          authorizedRvmId: config.authorizedRvmId,
+          fundingBufferWei: config.listenerFundingBufferWei,
+          walletRuntime: mirrorResult.walletRuntime,
+          runtimeState
+        })
+        const fundingState = await readListenerFundingState({
+          reactiveClient,
+          listenerAddress: runtimeBinding.listenerAddress
+        })
+        runtimeState.listenerBalanceWei = fundingState.listenerBalance.toString()
+        runtimeState.listenerDebtWei = fundingState.listenerDebt.toString()
+      } catch {}
+
       runtimeState.lastError = null
       runtimeState.heartbeatAt = new Date().toISOString()
       writeRuntimeStatus(runtimeState)
+    } catch (error) {
+      runtimeState.lastError = error instanceof Error ? error.message : String(error)
+      runtimeState.heartbeatAt = new Date().toISOString()
+      writeRuntimeStatus(runtimeState)
+      console.error(`operator_loop_error=${runtimeState.lastError}`)
     }
-
-    lastSeenBlock = latestBlock
-    try {
-      const runtimeBinding = await readWalletBinding({
-        destinationClient,
-        walletAddress: config.walletAddress,
-        fallbackListenerAddress: config.listenerAddress
-      })
-      runtimeState.listenerAddress = runtimeBinding.listenerAddress
-      const mirrorResult = await syncMirroredIntent({
-        destinationClient,
-        originClient,
-        originWalletClient,
-        operatorAccount,
-        walletAddress: config.walletAddress,
-        signalEmitter: runtimeBinding.signalEmitter,
-        runtimeState
-      })
-      await maintainActiveRuntime({
-        destinationClient,
-        reactiveClient,
-        reactiveWalletClient,
-        operatorAccount,
-        walletAddress: config.walletAddress,
-        fallbackListenerAddress: config.listenerAddress,
-        authorizedRvmId: config.authorizedRvmId,
-        fundingBufferWei: config.listenerFundingBufferWei,
-        walletRuntime: mirrorResult.walletRuntime,
-        runtimeState
-      })
-      const fundingState = await readListenerFundingState({
-        reactiveClient,
-        listenerAddress: runtimeBinding.listenerAddress
-      })
-      runtimeState.listenerBalanceWei = fundingState.listenerBalance.toString()
-      runtimeState.listenerDebtWei = fundingState.listenerDebt.toString()
-    } catch {}
-    runtimeState.heartbeatAt = new Date().toISOString()
-    writeRuntimeStatus(runtimeState)
 
     if (once) {
       break
