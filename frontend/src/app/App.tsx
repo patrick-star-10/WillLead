@@ -3,16 +3,22 @@ import { startTransition, useDeferredValue, useEffect, useState, useTransition }
 import willLeadLogo from '../assets/willlead-logo.jpg'
 import { AutomationCapabilityPanel } from '../components/AutomationCapabilityPanel'
 import { IntentForm } from '../components/IntentForm'
+import { IntentPicker } from '../components/IntentPicker'
 import { ProofPanel } from '../components/ProofPanel'
 import { RuntimePanel } from '../components/RuntimePanel'
+import { SwapIntentPlanPanel } from '../components/SwapIntentPlanPanel'
+import { SwapIntentRuntimePanel } from '../components/SwapIntentRuntimePanel'
 import { WalletConnectModal } from '../components/WalletConnectModal'
 import { WalletHeader } from '../components/WalletHeader'
 import { useAutomationCredit } from '../hooks/useAutomationCredit'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
 import { useIntentState } from '../hooks/useIntentState'
+import { useSwapIntentState } from '../hooks/useSwapIntentState'
 import { useWalletState } from '../hooks/useWalletState'
 import { useCopy, useLocaleActions, translateConnectionLabel, translateStatusBanner } from '../lib/i18n'
+import { defaultDisplayIntentKind } from '../lib/intentCatalog'
 import { useWalletStore } from '../store/walletStore'
+import type { DisplayIntentKind } from '../types/willlead'
 import { getBrowserWalletOptions } from '../lib/willlead'
 
 export function App() {
@@ -20,6 +26,7 @@ export function App() {
   const setLocale = useLocaleActions()
   const wallet = useWalletState()
   const intent = useIntentState()
+  const swapIntent = useSwapIntentState()
   const automation = useAutomationCredit()
   const executionEvents = useExecutionEvents()
   const deferredEvents = useDeferredValue(executionEvents)
@@ -32,13 +39,18 @@ export function App() {
   const refreshChainState = useWalletStore((state) => state.refreshChainState)
   const backgroundRefreshChainState = useWalletStore((state) => state.backgroundRefreshChainState)
   const submitIntent = useWalletStore((state) => state.submitIntent)
+  const submitSwapIntent = useWalletStore((state) => state.submitSwapIntent)
   const fundAutomation = useWalletStore((state) => state.fundAutomation)
+  const fundSwapIntentAutomation = useWalletStore((state) => state.fundSwapIntentAutomation)
   const fundWallet = useWalletStore((state) => state.fundWallet)
   const pauseWalletIntent = useWalletStore((state) => state.pauseWalletIntent)
   const resumeWalletIntent = useWalletStore((state) => state.resumeWalletIntent)
+  const pauseSwapIntent = useWalletStore((state) => state.pauseSwapIntent)
+  const resumeSwapIntent = useWalletStore((state) => state.resumeSwapIntent)
   const pauseListener = useWalletStore((state) => state.pauseListener)
   const resumeListener = useWalletStore((state) => state.resumeListener)
   const triggerSignal = useWalletStore((state) => state.triggerSignal)
+  const refreshSwapIntentState = useWalletStore((state) => state.refreshSwapIntentState)
   const watchAssetToken = useWalletStore((state) => state.watchAssetToken)
   const setExecutionEnvironment = useWalletStore((state) => state.setExecutionEnvironment)
   const syncIdleCopy = useWalletStore((state) => state.syncIdleCopy)
@@ -47,6 +59,7 @@ export function App() {
   const errorMessage = useWalletStore((state) => state.errorMessage)
   const [, startUiTransition] = useTransition()
   const [activeSection, setActiveSection] = useState<'overview' | 'plan' | 'automation' | 'activity'>('overview')
+  const [activeIntentKind, setActiveIntentKind] = useState<DisplayIntentKind>(defaultDisplayIntentKind)
   const [isWalletModalOpen, setWalletModalOpen] = useState(false)
   const activeRuntimePolling =
     wallet.walletAccessState === 'bound' && wallet.runtimeStatus === 'active'
@@ -103,6 +116,11 @@ export function App() {
   }, [locale, syncIdleCopy])
 
   useEffect(() => {
+    if (activeIntentKind !== 'swap_faucet') return
+    void refreshSwapIntentState()
+  }, [activeIntentKind, refreshSwapIntentState, wallet.ownerAddress, wallet.executionEnvironment])
+
+  useEffect(() => {
     if (!activeRuntimePolling) return
 
     const poll = () => {
@@ -128,6 +146,25 @@ export function App() {
     wallet.ownerAddress,
     wallet.lastExecutionNonce
   ])
+
+  useEffect(() => {
+    if (activeIntentKind !== 'swap_faucet' || wallet.executionEnvironment !== 'primary' || !wallet.ownerAddress) {
+      return
+    }
+
+    const poll = () => {
+      if (document.visibilityState !== 'visible') return
+      void refreshSwapIntentState()
+    }
+
+    poll()
+    document.addEventListener('visibilitychange', poll)
+    const timer = window.setInterval(poll, 4000)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', poll)
+    }
+  }, [activeIntentKind, refreshSwapIntentState, wallet.executionEnvironment, wallet.ownerAddress])
 
   const handleRefresh = () => {
     startUiTransition(() => {
@@ -221,6 +258,10 @@ export function App() {
         </div>
 
         <section className="section-stage">
+          {activeSection === 'plan' || activeSection === 'automation' ? (
+            <IntentPicker onChange={setActiveIntentKind} value={activeIntentKind} />
+          ) : null}
+
           {activeSection === 'overview' ? (
             <WalletHeader
               contractAddress={wallet.contractAddress}
@@ -276,7 +317,7 @@ export function App() {
             />
           ) : null}
 
-          {activeSection === 'plan' ? (
+          {activeSection === 'plan' && activeIntentKind === 'transfer' ? (
             <IntentForm
               token={intent.token}
               recipient={intent.recipient}
@@ -301,7 +342,20 @@ export function App() {
             />
           ) : null}
 
-          {activeSection === 'automation' ? (
+          {activeSection === 'plan' && activeIntentKind === 'swap_faucet' ? (
+            <SwapIntentPlanPanel
+              executionEnvironment={wallet.executionEnvironment}
+              isPending={isActionPending}
+              onFundAutomation={(amount) => void fundSwapIntentAutomation(amount)}
+              onPause={() => void pauseSwapIntent()}
+              onResume={() => void resumeSwapIntent()}
+              onSubmit={(values) => void submitSwapIntent(values)}
+              swapIntent={swapIntent}
+              walletAccessState={wallet.walletAccessState}
+            />
+          ) : null}
+
+          {activeSection === 'automation' && activeIntentKind === 'transfer' ? (
             <RuntimePanel
               runtimeStatus={wallet.runtimeStatus}
               lastExecutionNonce={wallet.lastExecutionNonce}
@@ -325,6 +379,15 @@ export function App() {
               onPauseListener={() => void pauseListener()}
               onResumeListener={() => void resumeListener()}
               onTriggerSignal={() => void triggerSignal()}
+            />
+          ) : null}
+
+          {activeSection === 'automation' && activeIntentKind === 'swap_faucet' ? (
+            <SwapIntentRuntimePanel
+              executionEnvironment={wallet.executionEnvironment}
+              isPending={isActionPending}
+              onFundAutomation={(amount) => void fundSwapIntentAutomation(amount)}
+              swapIntent={swapIntent}
             />
           ) : null}
 

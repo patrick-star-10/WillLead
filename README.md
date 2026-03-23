@@ -50,9 +50,12 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 - source swap: `0xec408d555a87a07db58d5de6e72dbb3a86b3b71394fd53198ff1aea7d0d0302a`
 - destination faucet request: `0xa38a1ec5571ae27d3aa813e3ae6f1c41f3d2bd056eb9b4d254ca283580606ff9`
 
-这条链路当前监听的是一只已经被实际成交验证过的 `Sepolia USDC / WETH` 池：
+这条链路当前监听的是 4 只已经在 Uniswap v3 Sepolia 上存在的 `Circle USDC / WETH` fee tier 池：
 
-- watched pool: `0x6418EEC70f50913ff0d756B48d32Ce7C02b47C47`
+- fee 100: `0xFeEd501c2B21D315F04946F85fC6416B640240b5`
+- fee 500: `0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1`
+- fee 3000: `0x6Ce0896eAE6D4BD668fDe41BB784548fb8F59b50`
+- fee 10000: `0x6418EEC70f50913ff0d756B48d32Ce7C02b47C47`
 - Circle Sepolia USDC: `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
 - Sepolia WETH: `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14`
 
@@ -141,17 +144,17 @@ frontend/
   第二个 intent 的执行合约；收到 callback 后调用官方 faucet，把 `Sepolia ETH` 请求成 `lREACT`
 - `WillLeadUniswapV4SwapListener`
   第二个 intent 最早的 v4 `Swap` 事件 listener，用于监听指定 `PoolManager + poolId`
-- `WillLeadPoolSwapListener`
-  当前实际使用的真实成交池 listener，直接监听一只已验证可成交的 `Sepolia USDC / WETH` 池
+- `WillLeadMultiSourceSwapListener`
+  当前实际使用的 swap listener，会同时监听 4 个已验证存在的 `Sepolia USDC / WETH` v3 fee tier 池
 
 说明：
 
 - `WillLeadReactiveListener` 现在已经切到本地 vendor 的官方 `reactive-lib` 最小依赖和 `AbstractPausableReactive` 抽象类
 - callback payload 的第一个 `address` 参数按官方模式保留为 `address(0)` 占位，实际回调时由 Reactive 基础设施覆写成 RVM ID
-- `automation credit` 的产品语义已经进入前端和钱包配置，但实际 callback 资金准备仍然要通过官方 `depositTo(wallet)` 路径完成
+- `automation credit` 的产品语义已经进入前端和钱包配置，但实际 callback 资金准备仍然要通过官方 `depositTo(target)` 路径完成；wallet intent 和 swap intent 需要分别充值
 - `WillLeadSignalEmitter` 现在不再只是一只 demo event emitter；operator 会把 destination wallet 的当前 intent 镜像到 origin emitter，之后任意 keeper 都可以通过 `poke(wallet, nonce)` 触发 source signal，而不需要用户再次签名
 - `WillLeadReactiveFaucetIntent` 当前复用了现有 callback 验证模型，但执行目标从“固定金额转账”切到“官方 faucet `request(address)`”，更适合证明真实上游协议事件已经可以驱动第二个 intent
-- `WillLeadPoolSwapListener` 当前监听的是一只实际成交验证过的 `Sepolia USDC / WETH` 池，而不是只依赖前端是否给某个 v4 小池报价
+- `WillLeadMultiSourceSwapListener` 当前监听的是 4 只 `Sepolia USDC / WETH` v3 fee tier 池，不再局限于单池 route
 
 ## 前端范围
 
@@ -189,6 +192,7 @@ cp .env.example .env
 ./contracts/script/create-wallet.sh
 ./contracts/script/verify-deployments.sh
 ./contracts/script/sync-listener-subscription.sh
+./contracts/script/sync-swap-listener-subscription.sh
 ./contracts/script/fund-reactive-listener.sh
 ./contracts/script/fund-callback.sh
 ./contracts/script/configure-intent.sh <token> <recipient>
@@ -212,7 +216,9 @@ cp .env.example .env
 - `create-wallet.sh` 可以在任意时刻为当前 `OWNER_PRIVATE_KEY` 对应的 owner 创建或恢复 autonomous wallet，并把 `.env` / 前端地址同步到这只 wallet
 - listener 本身不再把该值写进 callback payload，payload 里使用 `address(0)` 让 Reactive 在真实 callback 时填充 RVM ID
 - `sync-listener-subscription.sh` 会直接检查当前 ReactVM 上是否真的订阅了当前 `signalEmitter + topic0`；如果订阅缺失，它会通过 Reactive system contract 补一次 `subscribeContract(...)`
+- `sync-swap-listener-subscription.sh` 会检查 swap listener 是否真的把 `watchedPool/source + topic0` 订阅到了 Reactive system；缺失时会调用 listener 自身的 `repairSubscriptions()`
 - `fund-reactive-listener.sh` 会给 Reactive listener 补运行资金，并调用 `coverDebt()` 清掉当前 vendor debt；这一步和 destination callback proxy 充值不是一回事
+- `fund-callback.sh` 现在支持把 callback credit 充值到任意目标合约地址；不给第二个 intent 单独充值的话，wallet 有 credit 也不会替它执行 faucet callback
 
 如果要继续往下做，当前更合理的方向是：
 
@@ -249,7 +255,9 @@ cp .env.example .env
 - [demo-readiness.sh](/Users/wx/Desktop/WillLead/contracts/script/demo-readiness.sh)
 - [wait-for-execution.sh](/Users/wx/Desktop/WillLead/contracts/script/wait-for-execution.sh)
 - [fund-callback.sh](/Users/wx/Desktop/WillLead/contracts/script/fund-callback.sh)
+- [fund-swap-intent-callback.sh](/Users/wx/Desktop/WillLead/contracts/script/fund-swap-intent-callback.sh)
 - [sync-listener-subscription.sh](/Users/wx/Desktop/WillLead/contracts/script/sync-listener-subscription.sh)
+- [sync-swap-listener-subscription.sh](/Users/wx/Desktop/WillLead/contracts/script/sync-swap-listener-subscription.sh)
 - [pause-listener.sh](/Users/wx/Desktop/WillLead/contracts/script/pause-listener.sh)
 - [resume-listener.sh](/Users/wx/Desktop/WillLead/contracts/script/resume-listener.sh)
 - [set-callback-gas.sh](/Users/wx/Desktop/WillLead/contracts/script/set-callback-gas.sh)

@@ -41,6 +41,12 @@ SWAP_TOPIC0="$(cast call "$LISTENER_ADDRESS" "swapTopic0()(uint256)" --rpc-url "
 WATCHED_POOL_ID="$(cast call "$LISTENER_ADDRESS" "watchedPoolId()(bytes32)" --rpc-url "$REACTIVE_RPC_URL")"
 
 cast send \
+  --rpc-url "$REACTIVE_RPC_URL" \
+  --private-key "$OWNER_PRIVATE_KEY" \
+  "$LISTENER_ADDRESS" \
+  "repairSubscriptions()" >/dev/null
+
+cast send \
   --rpc-url "$DESTINATION_RPC_URL" \
   --private-key "$OWNER_PRIVATE_KEY" \
   "$TARGET_INTENT" \

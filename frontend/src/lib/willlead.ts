@@ -2261,13 +2261,17 @@ export async function topUpAutomationCredit(
 
   const { account, client } = await getExecutionWalletClient(executionEnvironment)
   const { walletAddress } = await resolveWalletAddressForOwner(account, executionEnvironment)
+  const targetAddress =
+    values.targetAddress && /^0x[a-fA-F0-9]{40}$/.test(values.targetAddress)
+      ? getAddress(values.targetAddress)
+      : walletAddress
   const hash = await client.writeContract({
     account,
     address: callbackProxyAddress,
     abi: callbackProxyAbi,
     chain: executionChain,
     functionName: 'depositTo',
-    args: [walletAddress],
+    args: [targetAddress],
     value: parseEther(values.amount)
   })
 

@@ -21,6 +21,13 @@ import {
   topUpAutomationCredit,
   writeExecutionEnvironment
 } from '../lib/willlead'
+import {
+  configureSwapIntent,
+  pauseSwapIntent as pauseSwapIntentTx,
+  readSwapIntentState,
+  resumeSwapIntent as resumeSwapIntentTx,
+  topUpSwapIntentAutomationCredit
+} from '../lib/swapIntent'
 import { txExplorerLink } from '../lib/explorers'
 import { getMessages, useLanguageStore } from '../lib/i18n'
 import type {
@@ -31,6 +38,8 @@ import type {
   ExecutionProof,
   IntentFormValues,
   IntentState,
+  SwapIntentFormValues,
+  SwapIntentState,
   WalletFundingValues,
   WalletState
 } from '../types/willlead'
@@ -38,6 +47,7 @@ import type {
 type WillLeadStore = {
   wallet: WalletState
   intent: IntentState
+  swapIntent: SwapIntentState
   automation: AutomationCreditState
   executionProofs: ExecutionProof[]
   isPending: boolean
@@ -51,11 +61,16 @@ type WillLeadStore = {
   createAutonomousWallet: () => Promise<void>
   refreshChainState: () => Promise<void>
   backgroundRefreshChainState: () => Promise<void>
+  refreshSwapIntentState: () => Promise<void>
   submitIntent: (values: IntentFormValues) => Promise<void>
+  submitSwapIntent: (values: SwapIntentFormValues) => Promise<void>
   fundAutomation: (values: AutomationFundingValues) => Promise<void>
+  fundSwapIntentAutomation: (amount: string) => Promise<void>
   fundWallet: (values: WalletFundingValues) => Promise<void>
   pauseWalletIntent: () => Promise<void>
   resumeWalletIntent: () => Promise<void>
+  pauseSwapIntent: () => Promise<void>
+  resumeSwapIntent: () => Promise<void>
   pauseListener: () => Promise<void>
   resumeListener: () => Promise<void>
   triggerSignal: () => Promise<void>
@@ -122,6 +137,27 @@ const initialAutomationState: AutomationCreditState = {
   creditLabel: 'Unavailable',
   availableBalance: 'Unavailable',
   minRequiredBalance: 'Unavailable'
+}
+
+const initialSwapIntentState: SwapIntentState = {
+  supported: true,
+  canManage: false,
+  runtimeStatus: 'inactive',
+  faucetAddress: 'Unavailable',
+  recipient: 'Not configured',
+  requestValue: '0',
+  maxExecutions: 0,
+  executedCount: 0,
+  callbackReserve: 'Unavailable',
+  callbackDebt: 'Unavailable',
+  listenerAddress: 'Unavailable',
+  poolManagerAddress: 'Unavailable',
+  watchedPoolId: 'Unavailable',
+  sourceChainId: 'Unavailable',
+  destinationChainId: 'Unavailable',
+  swapTopic0: 'Unavailable',
+  lastExecutedAt: 'Never',
+  lastOriginTxHash: 'Unavailable'
 }
 
 const initialProofs: ExecutionProof[] = []
@@ -288,6 +324,7 @@ function mergeCoreSnapshotIntoState(
 export const useWalletStore = create<WillLeadStore>((set, get) => ({
   wallet: initialWalletState,
   intent: initialIntentState,
+  swapIntent: initialSwapIntentState,
   automation: initialAutomationState,
   executionProofs: initialProofs,
   isPending: false,
@@ -585,6 +622,24 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       )
     } catch {}
   },
+  refreshSwapIntentState: async () => {
+    try {
+      const ownerAddress = get().wallet.ownerAddress
+      const swapIntent = await readSwapIntentState(ownerAddress, get().wallet.executionEnvironment)
+      set((state) => {
+        const swapTriggered =
+          swapIntent.lastOriginTxHash !== 'Unavailable' &&
+          swapIntent.lastOriginTxHash !== state.swapIntent.lastOriginTxHash
+
+        return {
+          swapIntent,
+          statusMessage: swapTriggered
+            ? `${copy().swapIntentTriggeredStatus} ${swapIntent.lastOriginTxHash}`
+            : state.statusMessage
+        }
+      })
+    } catch {}
+  },
   submitIntent: async (values) => {
     set({ isPending: true, errorMessage: null, statusMessage: copy().submittingIntentTransaction })
 
@@ -611,12 +666,65 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
     }
   },
+  submitSwapIntent: async (values) => {
+    set({ isPending: true, errorMessage: null, statusMessage: copy().submittingSwapIntentTransaction })
+
+    try {
+      const action = await configureSwapIntent(values)
+      const swapIntent = await readSwapIntentState(get().wallet.ownerAddress, 'primary')
+      set({
+        swapIntent,
+        isPending: false,
+        statusMessage: `${action.label}: ${action.hash}`,
+        errorMessage: null
+      })
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().failedConfigureSwapIntent,
+        statusMessage: copy().swapIntentConfigurationFailed
+      })
+    }
+  },
   fundAutomation: async (values) => {
     set({ isPending: true, errorMessage: null, statusMessage: copy().fundingAutomationCredit })
 
     try {
       const action = await topUpAutomationCredit(values)
       await applyPostAction(set, get, action)
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().failedFundAutomation,
+        statusMessage: copy().automationFundingFailed
+      })
+    }
+  },
+  fundSwapIntentAutomation: async (amount) => {
+    set({ isPending: true, errorMessage: null, statusMessage: copy().fundingAutomationCredit })
+
+    try {
+      const action = await topUpSwapIntentAutomationCredit(amount)
+      const [swapIntent, snapshot] = await Promise.all([
+        readSwapIntentState(get().wallet.ownerAddress, 'primary'),
+        readWalletState(
+          get().wallet.ownerAddress,
+          get().wallet.connectionSource,
+          'full',
+          get().wallet.executionEnvironment
+        )
+      ])
+
+      set({
+        wallet: snapshot.wallet,
+        intent: snapshot.intent,
+        automation: snapshot.automation,
+        executionProofs: snapshot.executionProofs,
+        swapIntent,
+        isPending: false,
+        statusMessage: `${action.label}: ${action.hash}`,
+        errorMessage: null
+      })
     } catch (error) {
       set({
         isPending: false,
@@ -665,6 +773,46 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         isPending: false,
         errorMessage: error instanceof Error ? error.message : copy().failedResumeIntent,
         statusMessage: copy().resumeFailed
+      })
+    }
+  },
+  pauseSwapIntent: async () => {
+    set({ isPending: true, errorMessage: null, statusMessage: copy().pausingSwapIntent })
+
+    try {
+      const action = await pauseSwapIntentTx()
+      const swapIntent = await readSwapIntentState(get().wallet.ownerAddress, 'primary')
+      set({
+        swapIntent,
+        isPending: false,
+        statusMessage: `${action.label}: ${action.hash}`,
+        errorMessage: null
+      })
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().failedPauseSwapIntent,
+        statusMessage: copy().swapIntentPauseFailed
+      })
+    }
+  },
+  resumeSwapIntent: async () => {
+    set({ isPending: true, errorMessage: null, statusMessage: copy().resumingSwapIntent })
+
+    try {
+      const action = await resumeSwapIntentTx()
+      const swapIntent = await readSwapIntentState(get().wallet.ownerAddress, 'primary')
+      set({
+        swapIntent,
+        isPending: false,
+        statusMessage: `${action.label}: ${action.hash}`,
+        errorMessage: null
+      })
+    } catch (error) {
+      set({
+        isPending: false,
+        errorMessage: error instanceof Error ? error.message : copy().failedResumeSwapIntent,
+        statusMessage: copy().swapIntentResumeFailed
       })
     }
   },

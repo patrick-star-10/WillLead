@@ -1,5 +1,6 @@
 export type WalletConnectionSource = 'browser' | 'web' | 'disconnected'
 export type ExecutionEnvironment = 'primary' | 'lasna'
+export type DisplayIntentKind = 'transfer' | 'swap_faucet'
 export type ListenerSubscriptionStatus = 'armed' | 'missing' | 'unavailable'
 export type WalletAccessState = 'needs_connection' | 'needs_wallet' | 'bound' | 'mismatch' | 'unavailable'
 export type OperatorServiceStatus = 'online' | 'offline' | 'unknown'
@@ -71,6 +72,27 @@ export type IntentState = {
   enabled: boolean
 }
 
+export type SwapIntentState = {
+  supported: boolean
+  canManage: boolean
+  runtimeStatus: string
+  faucetAddress: string
+  recipient: string
+  requestValue: string
+  maxExecutions: number
+  executedCount: number
+  callbackReserve: string
+  callbackDebt: string
+  listenerAddress: string
+  poolManagerAddress: string
+  watchedPoolId: string
+  sourceChainId: string
+  destinationChainId: string
+  swapTopic0: string
+  lastExecutedAt: string
+  lastOriginTxHash: string
+}
+
 export type AutomationCreditState = {
   creditLabel: string
   availableBalance: string
@@ -103,6 +125,12 @@ export type IntentFormValues = {
   signalTopic0: string
 }
 
+export type SwapIntentFormValues = {
+  recipient: string
+  requestValue: string
+  maxExecutions: number
+}
+
 export type ActionResult = {
   hash: string
   label: string
@@ -111,6 +139,7 @@ export type ActionResult = {
 
 export type AutomationFundingValues = {
   amount: string
+  targetAddress?: string
 }
 
 export type WalletFundingValues = {
