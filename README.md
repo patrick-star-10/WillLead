@@ -12,7 +12,7 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 
 1. 原始 `emitSignal(...)` 路径的真实闭环
 2. 新的 `protocol operator + mirrored intent + permissionless poke()` 路径的真实闭环
-3. 真实上游协议事件 `Sepolia swap -> Reactive callback -> faucet intent execution` 路径的真实闭环
+3. 真实上游协议事件 `Sepolia swap -> Reactive callback -> wallet-funded faucet request` 路径的真实闭环
 
 当前最新版本已经做到：
 
@@ -26,7 +26,7 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 - operator service 已支持按当前钱包动态 target，不再只绑定单个固定 wallet
 - Lasna / Sepolia 的 operator runtime、proof polling、activity 排序和状态文案竞态都做过修复
 - 第二个 `intent` 已经可由真实上游协议事件驱动，不再依赖 `poke()` 或 operator relay
-- 新增的 `ReactiveFaucetIntent` 已可在收到协议事件 callback 后自动调用官方 faucet，把 `Sepolia ETH` 转成 `lREACT`
+- autonomous wallet 现在也能直接接收 swap callback，并用自己的执行余额去调用官方 faucet，把 `Sepolia ETH` 转成 `lREACT`
 
 这次最新的 `poke()` 版本验证里，关键交易为：
 
@@ -73,11 +73,11 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
    - 外部 keeper / 脚本只需要 `poke(wallet, nonce)`
    - 用户不需要为 source trigger 再签一次名
 
-3. `real protocol swap -> callback -> faucet intent execution`
+3. `real protocol swap -> callback -> wallet-funded faucet request`
    这是当前更贴题的真实上游事件方案。
    - source side 由真实 Sepolia 池子的 `Swap` 事件驱动
    - Reactive listener 直接订阅这只真实成交池，而不是 demo emitter
-   - destination side 不再执行固定转账，而是调用官方 faucet `request(address)`
+  - destination side 不再执行固定转账，而是由 autonomous wallet 调用官方 faucet `request(address)`
    - 用户能看到 `source swap -> destination faucet request` 的真实 proof
 
 4. 双 execution environment
@@ -141,7 +141,7 @@ frontend/
 - `WillLeadReactiveListener`
   基于官方 `reactive-lib` 订阅源链事件，并生成目标链 callback payload
 - `WillLeadReactiveFaucetIntent`
-  第二个 intent 的执行合约；收到 callback 后调用官方 faucet，把 `Sepolia ETH` 请求成 `lREACT`
+  旧版第二个 intent 的独立执行合约；仍可兼容，但当前推荐路径已经切到 wallet-based swap callback
 - `WillLeadUniswapV4SwapListener`
   第二个 intent 最早的 v4 `Swap` 事件 listener，用于监听指定 `PoolManager + poolId`
 - `WillLeadMultiSourceSwapListener`
@@ -151,9 +151,9 @@ frontend/
 
 - `WillLeadReactiveListener` 现在已经切到本地 vendor 的官方 `reactive-lib` 最小依赖和 `AbstractPausableReactive` 抽象类
 - callback payload 的第一个 `address` 参数按官方模式保留为 `address(0)` 占位，实际回调时由 Reactive 基础设施覆写成 RVM ID
-- `automation credit` 的产品语义已经进入前端和钱包配置，但实际 callback 资金准备仍然要通过官方 `depositTo(target)` 路径完成；wallet intent 和 swap intent 需要分别充值
+- `automation credit` 的产品语义已经进入前端和钱包配置，但实际 callback 资金准备仍然要通过官方 `depositTo(target)` 路径完成；当前 swap 路线应给 autonomous wallet 这个 callback target 充值
 - `WillLeadSignalEmitter` 现在不再只是一只 demo event emitter；operator 会把 destination wallet 的当前 intent 镜像到 origin emitter，之后任意 keeper 都可以通过 `poke(wallet, nonce)` 触发 source signal，而不需要用户再次签名
-- `WillLeadReactiveFaucetIntent` 当前复用了现有 callback 验证模型，但执行目标从“固定金额转账”切到“官方 faucet `request(address)`”，更适合证明真实上游协议事件已经可以驱动第二个 intent
+- 当前 swap 路线已经支持直接把 callback 打到 `WillLeadWallet`，并由钱包自己调用官方 faucet `request(address)`，这样资金语义会和 autonomous wallet 保持一致
 - `WillLeadMultiSourceSwapListener` 当前监听的是 4 只 `Sepolia USDC / WETH` v3 fee tier 池，不再局限于单池 route
 
 ## 前端范围
@@ -230,7 +230,7 @@ cp .env.example .env
 如果你想本地复现第二个 intent 的部署路径，可以直接用：
 
 ```bash
-./contracts/script/deploy-pool-swap-reactive-intent.sh <watchedPool> <targetIntent>
+./contracts/script/deploy-pool-swap-reactive-intent.sh <watchedPool> <targetCallbackContract>
 ```
 
 当前目录里已经有可直接运行的 shell 脚本：

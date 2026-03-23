@@ -76,6 +76,8 @@ export type SwapIntentState = {
   supported: boolean
   canManage: boolean
   runtimeStatus: string
+  executionContractAddress: string
+  executionContractBalance: string
   faucetAddress: string
   recipient: string
   requestValue: string

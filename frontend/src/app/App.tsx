@@ -62,7 +62,9 @@ export function App() {
   const [activeIntentKind, setActiveIntentKind] = useState<DisplayIntentKind>(defaultDisplayIntentKind)
   const [isWalletModalOpen, setWalletModalOpen] = useState(false)
   const activeRuntimePolling =
-    wallet.walletAccessState === 'bound' && wallet.runtimeStatus === 'active'
+    wallet.walletAccessState === 'bound' &&
+    (wallet.runtimeStatus === 'active' ||
+      (wallet.executionEnvironment === 'primary' && swapIntent.runtimeStatus === 'active'))
   const browserWalletOptions = getBrowserWalletOptions()
   const hasBoundWallet = wallet.walletAccessState === 'bound'
   const activityEmptyMessage =

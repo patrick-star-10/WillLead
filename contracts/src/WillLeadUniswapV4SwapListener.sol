@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {AbstractPausableReactive} from "../lib/reactive-lib/src/abstract-base/AbstractPausableReactive.sol";
-import {IWillLeadReactiveFaucetIntent} from "./interfaces/IWillLeadReactiveFaucetIntent.sol";
+import {IWillLeadSwapCallbackTarget} from "./interfaces/IWillLeadSwapCallbackTarget.sol";
 
 contract WillLeadUniswapV4SwapListener is AbstractPausableReactive {
     struct SwapCallbackData {
@@ -120,7 +120,7 @@ contract WillLeadUniswapV4SwapListener is AbstractPausableReactive {
 
     function _encodeCallbackPayload(SwapCallbackData memory callbackData) internal pure returns (bytes memory) {
         return abi.encodeWithSelector(
-            IWillLeadReactiveFaucetIntent.callback.selector,
+            IWillLeadSwapCallbackTarget.callback.selector,
             address(0),
             callbackData.poolId,
             callbackData.swapSender,

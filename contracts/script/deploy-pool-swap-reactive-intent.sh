@@ -16,13 +16,13 @@ require_env ORIGIN_CHAIN_ID
 require_env DESTINATION_CHAIN_ID
 
 WATCHED_POOL="${1:-}"
-TARGET_INTENT="${2:-}"
+TARGET_CALLBACK_CONTRACT="${2:-}"
 POOL_FEE="${3:-10000}"
 CALLBACK_GAS_LIMIT="${4:-800000}"
 REACTIVE_DEPLOY_VALUE="${REACTIVE_DEPLOY_VALUE:-0.01ether}"
 
-if [[ -z "$WATCHED_POOL" || -z "$TARGET_INTENT" ]]; then
-  echo "Usage: ./contracts/script/deploy-pool-swap-reactive-intent.sh <watchedPool> <targetIntent> [poolFee] [callbackGasLimit]"
+if [[ -z "$WATCHED_POOL" || -z "$TARGET_CALLBACK_CONTRACT" ]]; then
+  echo "Usage: ./contracts/script/deploy-pool-swap-reactive-intent.sh <watchedPool> <targetCallbackContract> [poolFee] [callbackGasLimit]"
   exit 1
 fi
 
@@ -33,7 +33,7 @@ LISTENER_OUTPUT="$(
     --broadcast \
     --value "$REACTIVE_DEPLOY_VALUE" \
     --json \
-    --constructor-args "$WATCHED_POOL" "$TARGET_INTENT" "$POOL_FEE" "$ORIGIN_CHAIN_ID" "$DESTINATION_CHAIN_ID" "$CALLBACK_GAS_LIMIT"
+    --constructor-args "$WATCHED_POOL" "$TARGET_CALLBACK_CONTRACT" "$POOL_FEE" "$ORIGIN_CHAIN_ID" "$DESTINATION_CHAIN_ID" "$CALLBACK_GAS_LIMIT"
 )"
 
 LISTENER_ADDRESS="$(echo "$LISTENER_OUTPUT" | jq -r '.deployedTo // .deployed_to // .address')"
@@ -46,18 +46,36 @@ cast send \
   "$LISTENER_ADDRESS" \
   "repairSubscriptions()" >/dev/null
 
-cast send \
-  --rpc-url "$DESTINATION_RPC_URL" \
-  --private-key "$OWNER_PRIVATE_KEY" \
-  "$TARGET_INTENT" \
-  "configureRuntimeRoute(address,address,bytes32,uint256,uint256,uint256)" \
-  "$LISTENER_ADDRESS" \
-  "$WATCHED_POOL" \
-  "$WATCHED_POOL_ID" \
-  "$ORIGIN_CHAIN_ID" \
-  "$DESTINATION_CHAIN_ID" \
-  "$SWAP_TOPIC0" >/dev/null
+if cast call \
+  "$TARGET_CALLBACK_CONTRACT" \
+  "getSwapRuntimeBinding()(address,address,bytes32,uint256,uint256,uint256)" \
+  --rpc-url "$DESTINATION_RPC_URL" >/dev/null 2>&1; then
+  cast send \
+    --rpc-url "$DESTINATION_RPC_URL" \
+    --private-key "$OWNER_PRIVATE_KEY" \
+    "$TARGET_CALLBACK_CONTRACT" \
+    "configureSwapRuntimeRoute(address,address,bytes32,uint256,uint256,uint256)" \
+    "$LISTENER_ADDRESS" \
+    "$WATCHED_POOL" \
+    "$WATCHED_POOL_ID" \
+    "$ORIGIN_CHAIN_ID" \
+    "$DESTINATION_CHAIN_ID" \
+    "$SWAP_TOPIC0" >/dev/null
+else
+  cast send \
+    --rpc-url "$DESTINATION_RPC_URL" \
+    --private-key "$OWNER_PRIVATE_KEY" \
+    "$TARGET_CALLBACK_CONTRACT" \
+    "configureRuntimeRoute(address,address,bytes32,uint256,uint256,uint256)" \
+    "$LISTENER_ADDRESS" \
+    "$WATCHED_POOL" \
+    "$WATCHED_POOL_ID" \
+    "$ORIGIN_CHAIN_ID" \
+    "$DESTINATION_CHAIN_ID" \
+    "$SWAP_TOPIC0" >/dev/null
+fi
 
 echo "PoolSwapListener: $LISTENER_ADDRESS"
+echo "CallbackTarget: $TARGET_CALLBACK_CONTRACT"
 echo "WatchedPool: $WATCHED_POOL"
 echo "WatchedPoolId: $WATCHED_POOL_ID"

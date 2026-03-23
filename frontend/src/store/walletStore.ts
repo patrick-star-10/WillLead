@@ -143,6 +143,8 @@ const initialSwapIntentState: SwapIntentState = {
   supported: true,
   canManage: false,
   runtimeStatus: 'inactive',
+  executionContractAddress: 'Unavailable',
+  executionContractBalance: 'Unavailable',
   faucetAddress: 'Unavailable',
   recipient: 'Not configured',
   requestValue: '0',
@@ -548,14 +550,14 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     try {
       const ownerAddress = get().wallet.ownerAddress
       const connectionSource = get().wallet.connectionSource
-      const snapshot = await readWalletState(
+      const { snapshot, swapIntent } = await readCoreWalletAndSwapState(
         ownerAddress,
         connectionSource,
-        'core',
         get().wallet.executionEnvironment
       )
       set({
         ...snapshot,
+        swapIntent: swapIntent ?? get().swapIntent,
         isPending: false,
         statusMessage: copy().walletStateRefreshed,
         errorMessage: null
@@ -589,10 +591,9 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
     if (initialState.isPending || !initialState.wallet.ownerAddress) return
 
     try {
-      const snapshot = await readWalletState(
+      const { snapshot, swapIntent } = await readCoreWalletAndSwapState(
         initialState.wallet.ownerAddress,
         initialState.wallet.connectionSource,
-        'core',
         initialState.wallet.executionEnvironment
       )
 
@@ -604,10 +605,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         const settled =
           snapshot.wallet.lastExecutionNonce > state.wallet.lastExecutionNonce ||
           snapshot.intent.executedCount > state.intent.executedCount ||
-          snapshot.wallet.balanceLabel !== state.wallet.balanceLabel
+          snapshot.wallet.balanceLabel !== state.wallet.balanceLabel ||
+          (swapIntent?.lastOriginTxHash !== undefined &&
+            swapIntent.lastOriginTxHash !== state.swapIntent.lastOriginTxHash)
 
         return {
           ...mergeCoreSnapshotIntoState(state, snapshot),
+          swapIntent: swapIntent ?? state.swapIntent,
           isPending: false,
           errorMessage: null,
           statusMessage: settled ? copy().automationResultDetected : state.statusMessage
@@ -625,13 +629,22 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
   refreshSwapIntentState: async () => {
     try {
       const ownerAddress = get().wallet.ownerAddress
-      const swapIntent = await readSwapIntentState(ownerAddress, get().wallet.executionEnvironment)
+      const initialState = get()
+      const { snapshot, swapIntent } = await readCoreWalletAndSwapState(
+        ownerAddress,
+        initialState.wallet.connectionSource,
+        initialState.wallet.executionEnvironment
+      )
+
+      if (!swapIntent) return
+
       set((state) => {
         const swapTriggered =
           swapIntent.lastOriginTxHash !== 'Unavailable' &&
           swapIntent.lastOriginTxHash !== state.swapIntent.lastOriginTxHash
 
         return {
+          ...mergeCoreSnapshotIntoState(state, snapshot),
           swapIntent,
           statusMessage: swapTriggered
             ? `${copy().swapIntentTriggeredStatus} ${swapIntent.lastOriginTxHash}`
@@ -1025,6 +1038,26 @@ async function applyPostAction(
       executionEnvironment
     )
   }
+}
+
+async function readCoreWalletAndSwapState(
+  ownerAddress: string | null,
+  connectionSource: WalletState['connectionSource'],
+  executionEnvironment: WalletState['executionEnvironment']
+) {
+  const snapshot = await readWalletState(
+    ownerAddress,
+    connectionSource,
+    'core',
+    executionEnvironment
+  )
+
+  const swapIntent =
+    ownerAddress && executionEnvironment === 'primary'
+      ? await readSwapIntentState(ownerAddress, executionEnvironment).catch(() => null)
+      : null
+
+  return { snapshot, swapIntent }
 }
 
 async function hydrateDetailedSnapshot(

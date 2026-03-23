@@ -3,7 +3,8 @@ import { formatEther, getAddress, parseEther, type Address } from 'viem'
 import { getExecutionContractAddresses } from '../contracts/addresses'
 import { callbackProxyAbi } from '../contracts/abi/callbackProxy'
 import { willLeadPoolSwapListenerAbi } from '../contracts/abi/willLeadPoolSwapListener'
-import { willLeadReactiveFaucetIntentAbi } from '../contracts/abi/willLeadReactiveFaucetIntent'
+import { willLeadWalletAbi } from '../contracts/abi/willLeadWallet'
+import { willLeadWalletFactoryAbi } from '../contracts/abi/willLeadWalletFactory'
 import { getExecutionChain, reactiveChain } from './chains'
 import { getDestinationPublicClient, getExecutionWalletClient, getReactivePublicClient, getReactiveWalletClient } from './clients'
 import { getMessages, useLanguageStore } from './i18n'
@@ -57,6 +58,37 @@ function formatTimestamp(timestamp: bigint) {
 function formatOriginTxHash(value: bigint) {
   if (value === 0n) return 'Unavailable'
   return `0x${value.toString(16).padStart(64, '0')}`
+}
+
+async function resolveSwapWalletAddress(
+  ownerAddress: string | null,
+  executionEnvironment: ExecutionEnvironment
+): Promise<Address | null> {
+  const client = getDestinationPublicClient(executionEnvironment)
+  if (!client) return null
+
+  const executionAddresses = getExecutionContractAddresses(executionEnvironment)
+  const configuredWallet = executionAddresses.wallet
+  const factoryAddress = executionAddresses.walletFactory
+
+  if (ownerAddress && factoryAddress && factoryAddress !== '0x0000000000000000000000000000000000000000') {
+    const walletAddress = await client.readContract({
+      address: getAddress(factoryAddress),
+      abi: willLeadWalletFactoryAbi,
+      functionName: 'walletOf',
+      args: [getAddress(ownerAddress)]
+    }) as Address
+
+    if (walletAddress.toLowerCase() !== '0x0000000000000000000000000000000000000000') {
+      return walletAddress
+    }
+  }
+
+  if (configuredWallet && configuredWallet !== '0x0000000000000000000000000000000000000000') {
+    return getAddress(configuredWallet)
+  }
+
+  return null
 }
 
 async function ensureSwapListenerArmed(config: NonNullable<ReturnType<typeof getSwapFaucetDemoIntent>>) {
@@ -126,6 +158,8 @@ function buildUnsupportedSwapIntentState(): SwapIntentState {
     supported: false,
     canManage: false,
     runtimeStatus: 'inactive',
+    executionContractAddress: 'Unavailable',
+    executionContractBalance: 'Unavailable',
     faucetAddress: 'Unavailable',
     recipient: 'Not configured',
     requestValue: '0',
@@ -161,41 +195,48 @@ export async function readSwapIntentState(
     }
   }
 
-  const intentAddress = getAddress(config.executionContractAddress)
+  const walletAddress = await resolveSwapWalletAddress(ownerAddress, executionEnvironment)
+  if (!walletAddress) {
+    return {
+      ...buildUnsupportedSwapIntentState(),
+      supported: true
+    }
+  }
+
   const callbackProxyAddress = getExecutionContractAddresses(executionEnvironment).callbackProxy
-  const [contractOwner, summary, runtimeBinding, lastExecutedAt, lastOriginTxHash, callbackReserve, callbackDebt] =
+  const [contractOwner, summary, runtimeBinding, lastExecutedAt, lastOriginTxHash, callbackReserve, callbackDebt, contractBalance] =
     await Promise.all([
     client.readContract({
-      address: intentAddress,
-      abi: willLeadReactiveFaucetIntentAbi,
+      address: walletAddress,
+      abi: willLeadWalletAbi,
       functionName: 'owner'
     }) as Promise<Address>,
     client.readContract({
-      address: intentAddress,
-      abi: willLeadReactiveFaucetIntentAbi,
-      functionName: 'getIntentSummary'
+      address: walletAddress,
+      abi: willLeadWalletAbi,
+      functionName: 'getSwapIntentSummary'
     }) as Promise<[number, Address, Address, bigint, bigint, bigint]>,
     client.readContract({
-      address: intentAddress,
-      abi: willLeadReactiveFaucetIntentAbi,
-      functionName: 'getRuntimeBinding'
+      address: walletAddress,
+      abi: willLeadWalletAbi,
+      functionName: 'getSwapRuntimeBinding'
     }) as Promise<[Address, Address, `0x${string}`, bigint, bigint, bigint]>,
     client.readContract({
-      address: intentAddress,
-      abi: willLeadReactiveFaucetIntentAbi,
-      functionName: 'lastExecutedAt'
+      address: walletAddress,
+      abi: willLeadWalletAbi,
+      functionName: 'lastSwapExecutedAt'
     }) as Promise<bigint>,
     client.readContract({
-      address: intentAddress,
-      abi: willLeadReactiveFaucetIntentAbi,
-      functionName: 'lastOriginTxHash'
+      address: walletAddress,
+      abi: willLeadWalletAbi,
+      functionName: 'lastSwapOriginTxHash'
     }) as Promise<bigint>,
     callbackProxyAddress && callbackProxyAddress !== '0x0000000000000000000000000000000000fffFfF'
       ? (client.readContract({
           address: getAddress(callbackProxyAddress),
           abi: callbackProxyAbi,
           functionName: 'reserves',
-          args: [intentAddress]
+          args: [walletAddress]
         }) as Promise<bigint>)
       : Promise.resolve(0n),
     callbackProxyAddress && callbackProxyAddress !== '0x0000000000000000000000000000000000fffFfF'
@@ -203,9 +244,10 @@ export async function readSwapIntentState(
           address: getAddress(callbackProxyAddress),
           abi: callbackProxyAbi,
           functionName: 'debts',
-          args: [intentAddress]
+          args: [walletAddress]
         }) as Promise<bigint>)
-      : Promise.resolve(0n)
+      : Promise.resolve(0n),
+    client.getBalance({ address: walletAddress })
   ])
 
   const [status, faucet, recipient, requestValue, maxExecutions, executedCount] = summary
@@ -217,6 +259,8 @@ export async function readSwapIntentState(
     canManage:
       !!ownerAddress && contractOwner.toLowerCase() === ownerAddress.toLowerCase(),
     runtimeStatus: formatRuntimeStatus(Number(status)),
+    executionContractAddress: walletAddress,
+    executionContractBalance: formatDecimalString(formatEther(contractBalance), 4),
     faucetAddress: faucet,
     recipient:
       recipient.toLowerCase() === '0x0000000000000000000000000000000000000000'
@@ -241,7 +285,7 @@ export async function readSwapIntentState(
 async function assertSwapIntentOwnership(
   account: Address,
   executionEnvironment: ExecutionEnvironment,
-  intentAddress: Address
+  walletAddress: Address
 ) {
   const client = getDestinationPublicClient(executionEnvironment)
   if (!client) {
@@ -249,8 +293,8 @@ async function assertSwapIntentOwnership(
   }
 
   const contractOwner = await client.readContract({
-    address: intentAddress,
-    abi: willLeadReactiveFaucetIntentAbi,
+    address: walletAddress,
+    abi: willLeadWalletAbi,
     functionName: 'owner'
   }) as Address
 
@@ -268,9 +312,12 @@ export async function configureSwapIntent(values: SwapIntentFormValues): Promise
 
   const { account, client } = await getExecutionWalletClient(executionEnvironment)
   const chain = getExecutionChain(executionEnvironment)
-  const intentAddress = getAddress(config.executionContractAddress)
+  const walletAddress = await resolveSwapWalletAddress(account, executionEnvironment)
+  if (!walletAddress) {
+    throw new Error(copy().initializeAutonomousWalletNote)
+  }
 
-  await assertSwapIntentOwnership(account, executionEnvironment, intentAddress)
+  await assertSwapIntentOwnership(account, executionEnvironment, walletAddress)
 
   const publicClient = getDestinationPublicClient(executionEnvironment)
   if (!publicClient) {
@@ -278,18 +325,18 @@ export async function configureSwapIntent(values: SwapIntentFormValues): Promise
   }
 
   const currentRuntimeBinding = await publicClient.readContract({
-    address: intentAddress,
-    abi: willLeadReactiveFaucetIntentAbi,
-    functionName: 'getRuntimeBinding'
+    address: walletAddress,
+    abi: willLeadWalletAbi,
+    functionName: 'getSwapRuntimeBinding'
   }) as [Address, Address, `0x${string}`, bigint, bigint, bigint]
 
   if (!swapRuntimeRouteMatches(currentRuntimeBinding, config)) {
     const routeHash = await client.writeContract({
       account,
-      address: intentAddress,
-      abi: willLeadReactiveFaucetIntentAbi,
+      address: walletAddress,
+      abi: willLeadWalletAbi,
       chain,
-      functionName: 'configureRuntimeRoute',
+      functionName: 'configureSwapRuntimeRoute',
       args: [
         getAddress(config.listenerAddress),
         getAddress(config.poolManagerAddress),
@@ -306,10 +353,10 @@ export async function configureSwapIntent(values: SwapIntentFormValues): Promise
 
   const hash = await client.writeContract({
     account,
-    address: intentAddress,
-    abi: willLeadReactiveFaucetIntentAbi,
+    address: walletAddress,
+    abi: willLeadWalletAbi,
     chain,
-    functionName: 'configureIntent',
+    functionName: 'configureSwapIntent',
     args: [
       getAddress(config.faucetAddress),
       getAddress(values.recipient),
@@ -338,8 +385,11 @@ export async function pauseSwapIntent(): Promise<ActionResult> {
 
   const { account, client } = await getExecutionWalletClient(executionEnvironment)
   const chain = getExecutionChain(executionEnvironment)
-  const intentAddress = getAddress(config.executionContractAddress)
-  await assertSwapIntentOwnership(account, executionEnvironment, intentAddress)
+  const walletAddress = await resolveSwapWalletAddress(account, executionEnvironment)
+  if (!walletAddress) {
+    throw new Error(copy().initializeAutonomousWalletNote)
+  }
+  await assertSwapIntentOwnership(account, executionEnvironment, walletAddress)
   const publicClient = getDestinationPublicClient(executionEnvironment)
   if (!publicClient) {
     throw new Error(copy().walletAccessUnavailable)
@@ -347,10 +397,10 @@ export async function pauseSwapIntent(): Promise<ActionResult> {
 
   const hash = await client.writeContract({
     account,
-    address: intentAddress,
-    abi: willLeadReactiveFaucetIntentAbi,
+    address: walletAddress,
+    abi: willLeadWalletAbi,
     chain,
-    functionName: 'pauseIntent'
+    functionName: 'pauseSwapIntent'
   })
   await publicClient.waitForTransactionReceipt({ hash })
 
@@ -370,8 +420,11 @@ export async function resumeSwapIntent(): Promise<ActionResult> {
 
   const { account, client } = await getExecutionWalletClient(executionEnvironment)
   const chain = getExecutionChain(executionEnvironment)
-  const intentAddress = getAddress(config.executionContractAddress)
-  await assertSwapIntentOwnership(account, executionEnvironment, intentAddress)
+  const walletAddress = await resolveSwapWalletAddress(account, executionEnvironment)
+  if (!walletAddress) {
+    throw new Error(copy().initializeAutonomousWalletNote)
+  }
+  await assertSwapIntentOwnership(account, executionEnvironment, walletAddress)
   const publicClient = getDestinationPublicClient(executionEnvironment)
   if (!publicClient) {
     throw new Error(copy().walletAccessUnavailable)
@@ -379,10 +432,10 @@ export async function resumeSwapIntent(): Promise<ActionResult> {
 
   const hash = await client.writeContract({
     account,
-    address: intentAddress,
-    abi: willLeadReactiveFaucetIntentAbi,
+    address: walletAddress,
+    abi: willLeadWalletAbi,
     chain,
-    functionName: 'resumeIntent'
+    functionName: 'resumeSwapIntent'
   })
   await publicClient.waitForTransactionReceipt({ hash })
 
@@ -410,13 +463,16 @@ export async function topUpSwapIntentAutomationCredit(amount: string): Promise<A
 
   const { account, client } = await getExecutionWalletClient(executionEnvironment)
   const chain = getExecutionChain(executionEnvironment)
-  const intentAddress = getAddress(config.executionContractAddress)
+  const walletAddress = await resolveSwapWalletAddress(account, executionEnvironment)
+  if (!walletAddress) {
+    throw new Error(copy().initializeAutonomousWalletNote)
+  }
   const publicClient = getDestinationPublicClient(executionEnvironment)
   if (!publicClient) {
     throw new Error(copy().walletAccessUnavailable)
   }
 
-  await assertSwapIntentOwnership(account, executionEnvironment, intentAddress)
+  await assertSwapIntentOwnership(account, executionEnvironment, walletAddress)
 
   const hash = await client.writeContract({
     account,
@@ -424,7 +480,7 @@ export async function topUpSwapIntentAutomationCredit(amount: string): Promise<A
     abi: callbackProxyAbi,
     chain,
     functionName: 'depositTo',
-    args: [intentAddress],
+    args: [walletAddress],
     value: parseEther(amount)
   })
 

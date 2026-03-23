@@ -8,7 +8,7 @@ fi
 
 source .env
 
-TARGET_INTENT="${1:-0x18F1B7489763fA108A43B2Df40b70b2185d4E10F}"
+TARGET_CALLBACK_CONTRACT="${1:-0x18F1B7489763fA108A43B2Df40b70b2185d4E10F}"
 CALLBACK_GAS_LIMIT="${2:-800000}"
 ROUTE_ID="${3:-}"
 
@@ -22,6 +22,6 @@ exec ./contracts/script/deploy-multi-source-swap-reactive-intent.sh \
   "$TOPICS_CSV" \
   "$FEES_CSV" \
   "$TOPIC1_FLAGS_CSV" \
-  "$TARGET_INTENT" \
+  "$TARGET_CALLBACK_CONTRACT" \
   "$CALLBACK_GAS_LIMIT" \
   "$ROUTE_ID"

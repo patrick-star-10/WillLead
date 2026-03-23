@@ -58,7 +58,15 @@ export function SwapIntentRuntimePanel(props: SwapIntentRuntimePanelProps) {
         </div>
         <div>
           <dt>{copy.executionContract}</dt>
-          <dd>{swapFaucetDemoIntent.executionContractAddress}</dd>
+          <dd>{props.swapIntent.executionContractAddress}</dd>
+        </div>
+        <div>
+          <dt>{copy.executionContractBalance}</dt>
+          <dd>
+            {props.swapIntent.executionContractBalance === 'Unavailable'
+              ? props.swapIntent.executionContractBalance
+              : `${props.swapIntent.executionContractBalance} Sepolia ETH`}
+          </dd>
         </div>
         <div>
           <dt>{copy.executionFundingPerTrigger}</dt>
