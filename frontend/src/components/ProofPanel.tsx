@@ -10,10 +10,18 @@ import {
 type ProofPanelProps = {
   events: ExecutionProof[]
   emptyStateMessage: string
+  historyStatus: 'idle' | 'loading' | 'ready' | 'partial' | 'error'
+  historyDiagnostics: string | null
 }
 
 export function ProofPanel(props: ProofPanelProps) {
   const { copy, locale } = useCopy()
+  const emptyMessage =
+    props.historyStatus === 'loading'
+      ? copy.loadingExecutionHistory
+      : props.historyStatus === 'error'
+        ? copy.executionHistoryRefreshFailed
+        : props.emptyStateMessage
 
   return (
     <article className="panel proof-panel">
@@ -26,7 +34,10 @@ export function ProofPanel(props: ProofPanelProps) {
       </div>
       <ul className="proof-list">
         {props.events.length === 0 ? (
-          <li className="proof-empty-state">{props.emptyStateMessage}</li>
+          <li className="proof-empty-state">
+            <span>{emptyMessage}</span>
+            {props.historyDiagnostics ? <code>{props.historyDiagnostics}</code> : null}
+          </li>
         ) : null}
         {props.events.map((event) => (
           <li className="proof-item" key={event.id}>
@@ -72,6 +83,11 @@ export function ProofPanel(props: ProofPanelProps) {
           </li>
         ))}
       </ul>
+      {props.events.length > 0 && props.historyDiagnostics ? (
+        <p className="wallet-footnote">
+          {copy.historyDiagnosticsLabel} <code>{props.historyDiagnostics}</code>
+        </p>
+      ) : null}
     </article>
   )
 }

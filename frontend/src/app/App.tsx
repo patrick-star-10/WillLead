@@ -329,7 +329,12 @@ export function App() {
           ) : null}
 
           {activeSection === 'activity' ? (
-            <ProofPanel emptyStateMessage={activityEmptyMessage} events={deferredEvents} />
+            <ProofPanel
+              emptyStateMessage={activityEmptyMessage}
+              events={deferredEvents}
+              historyDiagnostics={wallet.historyDiagnostics}
+              historyStatus={wallet.historyStatus}
+            />
           ) : null}
         </section>
       </section>

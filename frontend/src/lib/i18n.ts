@@ -16,6 +16,10 @@ const messages = {
     connectHint: 'Connect first, then configure the transfer plan.',
     connectedHint: 'connected. Click above to disconnect this session.',
     walletAccessUnavailable: 'Wallet binding is unavailable until chain state can be read.',
+    executionHistoryPartialWarning:
+      'Some execution history could not be loaded. Check the current RPC endpoints and refresh again.',
+    executionHistoryRefreshFailed:
+      'Execution history refresh failed. Check the current RPC endpoints and try again.',
     connectWalletToLoadRuntime: 'Connect the controlling wallet to load listener state and execution history.',
     initializeWalletToContinue: 'No autonomous wallet exists for this address yet. Initialize one to continue.',
     connectedWalletMismatch:
@@ -175,6 +179,8 @@ const messages = {
       'A rolling execution history that shows what the wallet observed, executed, or skipped while you were away.',
     chainEvidence: 'Chain Evidence',
     activityEmpty: 'No execution history yet for this wallet.',
+    loadingExecutionHistory: 'Loading recent chain history...',
+    historyDiagnosticsLabel: 'History diagnostics',
     observedStatus: 'Observed',
     successStatus: 'Executed',
     skippedStatus: 'Skipped',
@@ -377,6 +383,8 @@ const messages = {
     connectHint: '先连接钱包，再配置转账计划。',
     connectedHint: '已连接。点击上方可断开这次会话。',
     walletAccessUnavailable: '链上状态不可读之前，暂时无法确认钱包归属。',
+    executionHistoryPartialWarning: '部分链上历史记录暂时读取失败。请检查当前 RPC 配置后再刷新一次。',
+    executionHistoryRefreshFailed: '链上历史记录刷新失败。请检查当前 RPC 配置后重试。',
     connectWalletToLoadRuntime: '先连接控制这个自主钱包的地址，才能读取监听状态和执行历史。',
     initializeWalletToContinue: '当前地址还没有对应的自主钱包，需要先初始化后才能继续。',
     connectedWalletMismatch: '当前连接的钱包并不控制这只自主钱包，因此不会展示它的监听和执行状态。',
@@ -529,6 +537,8 @@ const messages = {
     activityNote: '这里会持续展示钱包离线期间观察到、完成或跳过的执行历史。',
     chainEvidence: '链上证据',
     activityEmpty: '这只钱包目前还没有执行历史。',
+    loadingExecutionHistory: '正在读取最近的链上历史...',
+    historyDiagnosticsLabel: '历史诊断',
     observedStatus: '已观察',
     successStatus: '已执行',
     skippedStatus: '已跳过',
@@ -937,6 +947,10 @@ export function translateChainLabel(value: string, locale: Locale) {
 
 export function translateProofLabel(value: string, locale: Locale) {
   const copy = messages[locale]
+  if (value === 'Autonomous Wallet Ready') return copy.autonomousWalletCreatedAction
+  if (value === 'Transfer Plan Saved') return copy.intentConfiguredAction
+  if (value === 'Intent Paused') return copy.intentPausedAction
+  if (value === 'Intent Resumed') return copy.intentResumedAction
   if (value === 'Origin Signal') return copy.originSignal
   if (value === 'Reactive Callback' || value === 'Reactive Dispatch') return copy.reactiveCallbackLabel
   if (value === 'Wallet Runtime Bound') return copy.walletRuntimeBound
@@ -947,6 +961,10 @@ export function translateProofLabel(value: string, locale: Locale) {
 
 export function translateProofDescription(label: string, description: string, locale: Locale) {
   const copy = messages[locale]
+  if (label === 'Autonomous Wallet Ready') return copy.autonomousWalletCreatedDesc
+  if (label === 'Transfer Plan Saved') return copy.intentConfiguredDesc
+  if (label === 'Intent Paused') return copy.intentPausedDesc
+  if (label === 'Intent Resumed') return copy.intentResumedDesc
   if (label === 'Origin Signal') return copy.originSignalDesc
   if (label === 'Reactive Callback' || label === 'Reactive Dispatch') return copy.reactiveCallbackDesc
   if (label === 'Wallet Runtime Bound') return copy.walletRuntimeBoundDesc

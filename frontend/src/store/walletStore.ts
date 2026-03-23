@@ -103,7 +103,9 @@ const initialWalletState: WalletState = {
   operatorLastFundingResult: 'Unknown',
   operatorMirroredIntentActive: null,
   automationReadiness: 'unavailable',
-  singleSignatureReadiness: 'unavailable'
+  singleSignatureReadiness: 'unavailable',
+  historyStatus: 'idle',
+  historyDiagnostics: null
 }
 
 const initialIntentState: IntentState = {
@@ -205,12 +207,7 @@ function statusMessageForSnapshot(snapshot: {
 
 function mergeCoreSnapshotIntoState(
   state: WillLeadStore,
-  snapshot: {
-    wallet: WalletState
-    intent: IntentState
-    automation: AutomationCreditState
-    executionProofs: ExecutionProof[]
-  }
+  snapshot: Awaited<ReturnType<typeof readWalletState>>
 ) {
   return {
     ...snapshot,
@@ -318,6 +315,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
 
       if (restored?.address) {
+        set((state) => ({
+          wallet: {
+            ...state.wallet,
+            historyStatus: 'loading',
+            historyDiagnostics: null
+          }
+        }))
         void hydrateDetailedSnapshot(
           set,
           restored.address,
@@ -349,7 +353,9 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         ...snapshot,
         wallet: {
           ...snapshot.wallet,
-          connectionLabel: result.providerLabel ?? snapshot.wallet.connectionLabel
+          connectionLabel: result.providerLabel ?? snapshot.wallet.connectionLabel,
+          historyStatus: 'loading',
+          historyDiagnostics: null
         },
         isPending: false,
         statusMessage: statusMessageForSnapshot(
@@ -388,6 +394,11 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
       set({
         ...snapshot,
+        wallet: {
+          ...snapshot.wallet,
+          historyStatus: 'loading',
+          historyDiagnostics: null
+        },
         isPending: false,
         statusMessage: statusMessageForSnapshot(snapshot, `${copy().createdWebWallet} ${result.address}`),
         errorMessage: null
@@ -424,6 +435,11 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
 
       set({
         ...snapshot,
+        wallet: {
+          ...snapshot.wallet,
+          historyStatus: 'loading',
+          historyDiagnostics: null
+        },
         isPending: false,
         statusMessage: statusMessageForSnapshot(snapshot, `${copy().importedWebWallet} ${result.address}`),
         errorMessage: null
@@ -509,6 +525,13 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
       })
 
       if (ownerAddress) {
+        set((state) => ({
+          wallet: {
+            ...state.wallet,
+            historyStatus: 'loading',
+            historyDiagnostics: state.wallet.historyDiagnostics
+          }
+        }))
         void hydrateDetailedSnapshot(
           set,
           ownerAddress,
@@ -890,14 +913,42 @@ async function hydrateDetailedSnapshot(
         return {}
       }
 
+        return {
+          ...snapshot,
+          wallet: {
+            ...snapshot.wallet,
+            historyStatus: snapshot.historyWarning ? 'partial' : 'ready',
+            historyDiagnostics: snapshot.historyDiagnostics
+          },
+          isPending: false,
+          errorMessage: snapshot.historyWarning,
+          statusMessage: state.statusMessage
+      }
+    })
+  } catch (error) {
+    set((state) => {
+      if (
+        state.isPending ||
+        state.wallet.ownerAddress !== ownerAddress ||
+        state.wallet.connectionSource !== connectionSource ||
+        state.wallet.executionEnvironment !== executionEnvironment
+      ) {
+        return {}
+      }
+
       return {
-        ...snapshot,
+        wallet: {
+          ...state.wallet,
+          historyStatus: 'error',
+          historyDiagnostics: state.wallet.historyDiagnostics
+        },
         isPending: false,
-        errorMessage: null,
+        errorMessage:
+          error instanceof Error ? error.message : copy().executionHistoryRefreshFailed,
         statusMessage: state.statusMessage
       }
     })
-  } catch {}
+  }
   finally {
     if (detailedSnapshotInFlightKey === requestKey) {
       detailedSnapshotInFlightKey = null

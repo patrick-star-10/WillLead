@@ -1,4 +1,5 @@
 import {
+  decodeFunctionData,
   formatEther,
   getAddress,
   parseAbi,
@@ -8,6 +9,7 @@ import {
   type Address,
   type Hex
 } from 'viem'
+import type { PublicClient } from 'viem'
 
 import { callbackProxyAbi } from '../contracts/abi/callbackProxy'
 import { willLeadReactiveListenerAbi } from '../contracts/abi/willLeadReactiveListener'
@@ -67,9 +69,15 @@ const reactiveSystemAbi = parseAbi([
   'function subscribeContract(address contractAddress,uint256 chainId,address sourceContract,uint256 topic0,uint256 topic1,uint256 topic2,uint256 topic3)',
   'function debt(address _contract) view returns (uint256)'
 ])
+const walletCallbackDecoderAbi = parseAbi([
+  'function callback(address rvmId,address token,address recipient,uint256 amount,uint256 executionNonce,uint256 emittedAt,uint256 originTxHash)'
+])
 const reactiveIgnore =
   '0xa65f96fc951c35ead38878e0f0b7a3c744a6f5ccc1476b313353ce31712313ad' as Hex
 const executionEnvironmentStorageKey = 'willlead.execution-environment'
+const logQueryChunkSize = 25_000n
+const historyLookbackBlocks = 100_000n
+const subscriptionLookbackBlocks = 500_000n
 
 function isConfiguredAddress(value: string) {
   return value.toLowerCase() !== emptyAddress
@@ -200,6 +208,84 @@ export function getBrowserWalletOptions() {
 
 function copy() {
   return getMessages(useLanguageStore.getState().locale)
+}
+
+type WalletSnapshot = {
+  wallet: WalletState
+  intent: IntentState
+  automation: AutomationCreditState
+  executionProofs: ExecutionProof[]
+  historyWarning: string | null
+  historyDiagnostics: string | null
+}
+
+async function getLogsPaged(parameters: {
+  client: PublicClient
+  address: Address
+  event: any
+  args?: any
+  lookbackBlocks?: bigint
+  strict?: boolean
+}) {
+  const latestBlock = await parameters.client.getBlockNumber()
+  const startBlock =
+    parameters.lookbackBlocks && latestBlock > parameters.lookbackBlocks
+      ? latestBlock - parameters.lookbackBlocks
+      : 0n
+  const logs: any[] = []
+
+  for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += logQueryChunkSize + 1n) {
+    const toBlock =
+      fromBlock + logQueryChunkSize > latestBlock ? latestBlock : fromBlock + logQueryChunkSize
+
+    const chunk = await parameters.client.getLogs({
+      address: parameters.address,
+      event: parameters.event,
+      args: parameters.args,
+      fromBlock,
+      toBlock,
+      strict: parameters.strict
+    })
+
+    logs.push(...chunk)
+  }
+
+  return logs
+}
+
+async function getRawLogsPaged(parameters: {
+  client: PublicClient
+  address: Address
+  topics: [Hex, ...(Hex | null)[]]
+  lookbackBlocks?: bigint
+}) {
+  const latestBlock = await parameters.client.getBlockNumber()
+  const startBlock =
+    parameters.lookbackBlocks && latestBlock > parameters.lookbackBlocks
+      ? latestBlock - parameters.lookbackBlocks
+      : 0n
+  const logs: Array<{ data?: string }> = []
+
+  for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += logQueryChunkSize + 1n) {
+    const toBlock =
+      fromBlock + logQueryChunkSize > latestBlock ? latestBlock : fromBlock + logQueryChunkSize
+
+    const chunk = await parameters.client.request({
+      method: 'eth_getLogs',
+      params: [
+        {
+          address: parameters.address,
+          fromBlock: `0x${fromBlock.toString(16)}`,
+          toBlock: `0x${toBlock.toString(16)}`,
+          topics: parameters.topics
+        }
+      ]
+    })
+
+    logs.push(...(chunk as Array<{ data?: string }>))
+  }
+
+  return logs
 }
 
 export async function connectOwnerWallet(providerId: string) {
@@ -727,7 +813,9 @@ function buildUnboundSnapshot(params: {
       operatorLastFundingResult: 'Unknown',
       operatorMirroredIntentActive: null,
       automationReadiness: 'unavailable' as const,
-      singleSignatureReadiness: 'unavailable' as const
+      singleSignatureReadiness: 'unavailable' as const,
+      historyStatus: 'idle' as const,
+      historyDiagnostics: null
     },
     intent: {
       token: 'native',
@@ -743,13 +831,10 @@ function buildUnboundSnapshot(params: {
       availableBalance: 'Unavailable',
       minRequiredBalance: 'Unavailable'
     },
-    executionProofs: []
-  } satisfies {
-    wallet: WalletState
-    intent: IntentState
-    automation: AutomationCreditState
-    executionProofs: ExecutionProof[]
-  }
+    executionProofs: [],
+    historyWarning: null,
+    historyDiagnostics: null
+  } satisfies WalletSnapshot
 }
 
 async function readOperatorRuntime(): Promise<OperatorRuntime> {
@@ -942,12 +1027,7 @@ export async function readWalletState(
   connectionSource: WalletConnectionSource = 'disconnected',
   detailLevel: 'core' | 'full' = 'full',
   executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
-): Promise<{
-  wallet: WalletState
-  intent: IntentState
-  automation: AutomationCreditState
-  executionProofs: ExecutionProof[]
-}> {
+): Promise<WalletSnapshot> {
   const executionChainConfig = getExecutionChainConfig(executionEnvironment)
   const executionAddresses = getExecutionContractAddresses(executionEnvironment)
   const destinationClient = getDestinationPublicClient(executionEnvironment)
@@ -1141,7 +1221,9 @@ export async function readWalletState(
           operatorLastFundingResult: scopedOperatorRuntime.lastFundingResult,
           operatorMirroredIntentActive: scopedOperatorRuntime.mirroredIntentActive,
           automationReadiness: 'unavailable',
-          singleSignatureReadiness: 'unavailable'
+          singleSignatureReadiness: 'unavailable',
+          historyStatus: 'idle',
+          historyDiagnostics: null
         },
         intent: {
           token: token === zeroAddress ? 'native' : token,
@@ -1153,7 +1235,9 @@ export async function readWalletState(
           enabled: status === 1
         },
         automation,
-        executionProofs: []
+        executionProofs: [],
+        historyWarning: null,
+        historyDiagnostics: null
       }
     }
 
@@ -1164,8 +1248,11 @@ export async function readWalletState(
     const runtimeListenerAddress = runtimeBinding?.listener ?? reactiveListenerAddress
     const runtimeSignalEmitter = runtimeBinding?.signalEmitter ?? listenerState.signalEmitter
     const automation = await readAutomationCredit(walletAddress, automationFloor, executionEnvironment)
-    const proofs = await readExecutionProofs(
+    const { proofs, historyWarning, historyDiagnostics } = await readExecutionProofs(
+      getAddress(ownerAddress),
       walletAddress,
+      configuredAddressOrNull(executionAddresses.walletFactory),
+      runtimeListenerAddress,
       runtimeSignalEmitter,
       originClient,
       destinationClient,
@@ -1230,7 +1317,9 @@ export async function readWalletState(
         singleSignatureReadiness: computeSingleSignatureReadiness({
           operatorRelayAvailable: scopedOperatorRuntime.apiUrl !== null,
           automationReadiness
-        })
+        }),
+        historyStatus: 'idle',
+        historyDiagnostics
       },
       intent: {
         token: token === zeroAddress ? 'native' : token,
@@ -1242,9 +1331,29 @@ export async function readWalletState(
         enabled: status === 1
       },
       automation,
-      executionProofs: proofs
+      executionProofs: proofs,
+      historyWarning,
+      historyDiagnostics
     }
-  } catch {
+  } catch (error) {
+    if (detailLevel === 'full') {
+      const fallbackSnapshot = await readWalletState(
+        ownerAddress,
+        connectionSource,
+        'core',
+        executionEnvironment
+      )
+
+      return {
+        ...fallbackSnapshot,
+        historyWarning:
+          error instanceof Error && error.message
+            ? error.message
+            : copy().executionHistoryRefreshFailed,
+        historyDiagnostics: fallbackSnapshot.historyDiagnostics
+      }
+    }
+
     return buildUnboundSnapshot({
       ownerAddress,
       connectionSource,
@@ -1398,20 +1507,16 @@ async function readReactiveListenerState(
     let subscriptionStatus: 'armed' | 'missing' | 'unavailable' = 'missing'
 
     try {
-      const logs = await reactiveClient.request({
-        method: 'eth_getLogs',
-        params: [
-          {
-            address: reactiveSystemContract as Hex,
-            fromBlock: '0x0',
-            topics: [
-              subscribeContractTopic0,
-              formatAddressTopic(reactiveListenerAddress),
-              formatUint256Topic(originChainId),
-              formatAddressTopic(signalEmitter)
-            ] as [Hex, Hex, Hex, Hex]
-          }
-        ]
+      const logs = await getRawLogsPaged({
+        client: reactiveClient,
+        address: reactiveSystemContract as Address,
+        topics: [
+          subscribeContractTopic0,
+          formatAddressTopic(reactiveListenerAddress),
+          formatUint256Topic(originChainId),
+          formatAddressTopic(signalEmitter)
+        ] as [Hex, Hex, Hex, Hex],
+        lookbackBlocks: subscriptionLookbackBlocks
       })
 
       const expectedStrategySignalTopic0 = strategySignalTopic0
@@ -1568,12 +1673,15 @@ async function readAutomationCredit(
 }
 
 async function readExecutionProofs(
+  ownerAddress: Address,
   walletAddress: Address,
+  walletFactoryAddress: Address | null,
+  reactiveListenerAddress: Address,
   signalEmitterAddress: Address,
   originClient: ReturnType<typeof getOriginPublicClient>,
   destinationClient: NonNullable<ReturnType<typeof getDestinationPublicClient>>,
   executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
-): Promise<ExecutionProof[]> {
+): Promise<{ proofs: ExecutionProof[]; historyWarning: string | null; historyDiagnostics: string | null }> {
   type HistoryItem = ExecutionProof & {
     observedAt: bigint
     blockNumber: bigint
@@ -1581,130 +1689,345 @@ async function readExecutionProofs(
   }
 
   const proofs: HistoryItem[] = []
+  let firstHistoryError: string | null = null
 
-  try {
-    const runtimeBindingLogs = await destinationClient.getLogs({
+  function recordHistoryError(error: unknown) {
+    if (firstHistoryError) return
+    firstHistoryError = error instanceof Error && error.message ? error.message : null
+  }
+
+  const reactiveClient = getReactivePublicClient()
+  const logResults = await Promise.allSettled([
+    reactiveClient && isConfiguredAddress(reactiveListenerAddress)
+      ? getLogsPaged({
+          client: reactiveClient,
+          address: reactiveListenerAddress,
+          event: parseAbiItem(
+            'event Callback(uint256 indexed chain_id, address indexed _contract, uint64 indexed gas_limit, bytes payload)'
+          ),
+          args: {
+            _contract: walletAddress
+          },
+          lookbackBlocks: historyLookbackBlocks,
+          strict: true
+        })
+      : Promise.resolve([]),
+    walletFactoryAddress && isConfiguredAddress(walletFactoryAddress)
+      ? getLogsPaged({
+          client: destinationClient,
+          address: walletFactoryAddress,
+          event: parseAbiItem(
+            'event WalletCreated(address indexed owner, address indexed wallet, address indexed reactiveListener)'
+          ),
+          args: {
+            owner: ownerAddress,
+            wallet: walletAddress
+          },
+          lookbackBlocks: historyLookbackBlocks,
+          strict: true
+        })
+      : Promise.resolve([]),
+    getLogsPaged({
+      client: destinationClient,
       address: walletAddress,
       event: parseAbiItem(
         'event RuntimeBindingConfigured(address indexed wallet, address indexed listener, address indexed signalEmitter, uint256 sourceChainId, uint256 destinationChainId, uint256 strategySignalTopic0)'
       ),
-      fromBlock: 0n,
+      lookbackBlocks: historyLookbackBlocks,
       strict: true
-    })
-
-    for (const runtimeBindingLog of runtimeBindingLogs) {
-      const block = await destinationClient.getBlock({ blockNumber: runtimeBindingLog.blockNumber! })
-      proofs.push({
-        id: `runtime-binding-${runtimeBindingLog.transactionHash}-${runtimeBindingLog.logIndex}`,
-        label: 'Wallet Runtime Bound',
-        description: 'Autonomous wallet declared its Reactive runtime route onchain.',
-        status: 'observed',
-        reference: runtimeBindingLog.transactionHash ?? 'unknown',
-        chain: 'destination',
-        timestampLabel: formatTimestamp(block.timestamp),
-        nonceLabel: null,
-        detailLabel: null,
-        href: txExplorerLink('destination', runtimeBindingLog.transactionHash, executionEnvironment),
-        observedAt: block.timestamp,
-        blockNumber: runtimeBindingLog.blockNumber ?? 0n,
-        logIndex: Number(runtimeBindingLog.logIndex ?? 0)
-      })
-    }
-  } catch {}
-
-  try {
-    const executionLogs = await destinationClient.getLogs({
+    }),
+    getLogsPaged({
+      client: destinationClient,
+      address: walletAddress,
+      event: parseAbiItem(
+        'event IntentConfigured(address indexed wallet, address indexed token, address indexed recipient, uint256 amountPerExecution, uint256 maxExecutions, uint256 minAutomationBalance)'
+      ),
+      args: {
+        wallet: walletAddress
+      },
+      lookbackBlocks: historyLookbackBlocks,
+      strict: true
+    }),
+    getLogsPaged({
+      client: destinationClient,
+      address: walletAddress,
+      event: parseAbiItem('event RuntimeStatusUpdated(address indexed wallet, uint8 status)'),
+      args: {
+        wallet: walletAddress
+      },
+      lookbackBlocks: historyLookbackBlocks,
+      strict: true
+    }),
+    getLogsPaged({
+      client: destinationClient,
       address: walletAddress,
       event: parseAbiItem(
         'event IntentExecuted(address indexed wallet, address indexed token, address indexed recipient, uint256 amount, uint256 executionNonce, bytes32 signalHash, uint256 originTxHash)'
       ),
-      fromBlock: 0n,
+      lookbackBlocks: historyLookbackBlocks,
       strict: true
-    })
-
-    for (const executionLog of executionLogs) {
-      const block = await destinationClient.getBlock({ blockNumber: executionLog.blockNumber! })
-      proofs.push({
-        id: `wallet-${executionLog.transactionHash}`,
-        label: 'Destination Execution',
-        description: 'Autonomous wallet executed the transfer on the destination chain.',
-        status: 'success',
-        reference: executionLog.transactionHash ?? 'unknown',
-        chain: 'destination',
-        timestampLabel: formatTimestamp(block.timestamp),
-        nonceLabel: executionLog.args.executionNonce?.toString() ?? null,
-        detailLabel: null,
-        href: txExplorerLink('destination', executionLog.transactionHash, executionEnvironment),
-        observedAt: block.timestamp,
-        blockNumber: executionLog.blockNumber ?? 0n,
-        logIndex: Number(executionLog.logIndex ?? 0)
-      })
-    }
-  } catch {}
-
-  try {
-    const skippedLogs = await destinationClient.getLogs({
+    }),
+    getLogsPaged({
+      client: destinationClient,
       address: walletAddress,
       event: parseAbiItem(
         'event IntentExecutionSkipped(address indexed wallet, uint256 executionNonce, bytes32 signalHash, string reason)'
       ),
-      fromBlock: 0n,
+      lookbackBlocks: historyLookbackBlocks,
       strict: true
-    })
-
-    for (const skippedLog of skippedLogs) {
-      const block = await destinationClient.getBlock({ blockNumber: skippedLog.blockNumber! })
-      proofs.push({
-        id: `skipped-${skippedLog.transactionHash}-${skippedLog.logIndex}`,
-        label: 'Destination Skipped',
-        description: 'Autonomous wallet skipped execution and recorded the reason.',
-        status: 'skipped',
-        reference: skippedLog.transactionHash ?? 'unknown',
-        chain: 'destination',
-        timestampLabel: formatTimestamp(block.timestamp),
-        nonceLabel: skippedLog.args.executionNonce?.toString() ?? null,
-        detailLabel: typeof skippedLog.args.reason === 'string' ? skippedLog.args.reason : null,
-        href: txExplorerLink('destination', skippedLog.transactionHash, executionEnvironment),
-        observedAt: block.timestamp,
-        blockNumber: skippedLog.blockNumber ?? 0n,
-        logIndex: Number(skippedLog.logIndex ?? 0)
-      })
-    }
-  } catch {}
-
-  try {
-    if (originClient && isConfiguredAddress(signalEmitterAddress)) {
-      const signalLogs = await originClient.getLogs({
-        address: signalEmitterAddress,
-        event: parseAbiItem(
-          'event StrategySignal(address indexed wallet, address indexed token, address indexed recipient, uint256 amount, uint256 executionNonce, uint256 emittedAt)'
-        ),
-        fromBlock: 0n,
-        strict: true
-      })
-
-      for (const signalLog of signalLogs) {
-        const block = await originClient.getBlock({ blockNumber: signalLog.blockNumber! })
-        proofs.push({
-          id: `signal-${signalLog.transactionHash}-${signalLog.logIndex}`,
-          label: 'Origin Signal',
-          description: 'Source chain signal emitted for the wallet intent.',
-          status: 'observed',
-          reference: signalLog.transactionHash ?? 'unknown',
-          chain: 'origin',
-          timestampLabel: formatTimestamp(block.timestamp),
-          nonceLabel: signalLog.args.executionNonce?.toString() ?? null,
-          detailLabel: null,
-          href: txExplorerLink('origin', signalLog.transactionHash),
-          observedAt: block.timestamp,
-          blockNumber: signalLog.blockNumber ?? 0n,
-          logIndex: Number(signalLog.logIndex ?? 0)
+    }),
+    originClient && isConfiguredAddress(signalEmitterAddress)
+      ? getLogsPaged({
+          client: originClient,
+          address: signalEmitterAddress,
+          event: parseAbiItem(
+            'event StrategySignal(address indexed wallet, address indexed token, address indexed recipient, uint256 amount, uint256 executionNonce, uint256 emittedAt)'
+          ),
+          args: {
+            wallet: walletAddress
+          },
+          lookbackBlocks: historyLookbackBlocks,
+          strict: true
         })
-      }
-    }
-  } catch {}
+      : Promise.resolve([])
+  ])
 
-  return proofs
+  for (const result of logResults) {
+    if (result.status === 'rejected') {
+      recordHistoryError(result.reason)
+    }
+  }
+
+  const [
+    callbackLogs,
+    walletCreatedLogs,
+    runtimeBindingLogs,
+    configuredLogs,
+    runtimeStatusLogs,
+    executionLogs,
+    skippedLogs,
+    signalLogs
+  ] = logResults.map((result) => (result.status === 'fulfilled' ? result.value : [] as any[]))
+
+  const configuredTxHashes = new Set<string>(
+    configuredLogs.map((log) => log.transactionHash ?? 'unknown')
+  )
+
+  const blockClients = new Map<string, { blockNumber: bigint; client: PublicClient }>()
+  const registerBlock = (chain: 'reactive' | 'origin' | 'destination', blockNumber: bigint | null | undefined, client: PublicClient | null) => {
+    if (blockNumber === null || blockNumber === undefined || !client) return
+    const key = `${chain}:${blockNumber.toString()}`
+    blockClients.set(key, { blockNumber, client })
+  }
+
+  for (const log of callbackLogs) registerBlock('reactive', log.blockNumber, reactiveClient)
+  for (const log of signalLogs) registerBlock('origin', log.blockNumber, originClient)
+  for (const log of [
+    ...walletCreatedLogs,
+    ...runtimeBindingLogs,
+    ...configuredLogs,
+    ...runtimeStatusLogs,
+    ...executionLogs,
+    ...skippedLogs
+  ]) {
+    registerBlock('destination', log.blockNumber, destinationClient)
+  }
+
+  const blockTimestampCache = new Map<string, bigint>()
+  await Promise.all(
+    [...blockClients.entries()].map(async ([key, { blockNumber, client }]) => {
+      try {
+        const block = await client.getBlock({ blockNumber })
+        blockTimestampCache.set(key, block.timestamp)
+      } catch (error) {
+        recordHistoryError(error)
+      }
+    })
+  )
+
+  const timestampFor = (
+    chain: 'reactive' | 'origin' | 'destination',
+    blockNumber: bigint | null | undefined
+  ) =>
+    blockNumber !== null && blockNumber !== undefined
+      ? (blockTimestampCache.get(`${chain}:${blockNumber.toString()}`) ?? 0n)
+      : 0n
+
+  for (const callbackLog of callbackLogs) {
+    let nonceLabel: string | null = null
+
+    try {
+      const decoded = decodeFunctionData({
+        abi: walletCallbackDecoderAbi,
+        data: callbackLog.args.payload
+      })
+
+      const executionNonce = decoded.args?.[4]
+      nonceLabel = typeof executionNonce === 'bigint' ? executionNonce.toString() : null
+    } catch {}
+
+    const observedAt = timestampFor('reactive', callbackLog.blockNumber)
+    proofs.push({
+      id: `reactive-callback-${callbackLog.transactionHash}-${callbackLog.logIndex}`,
+      label: 'Reactive Callback',
+      description: 'Reactive runtime dispatched the callback payload toward the destination wallet.',
+      status: 'observed',
+      reference: callbackLog.transactionHash ?? 'unknown',
+      chain: 'reactive',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel,
+      detailLabel: null,
+      href: txExplorerLink('reactive', callbackLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: callbackLog.blockNumber ?? 0n,
+      logIndex: Number(callbackLog.logIndex ?? 0)
+    })
+  }
+
+  for (const walletCreatedLog of walletCreatedLogs) {
+    const observedAt = timestampFor('destination', walletCreatedLog.blockNumber)
+    proofs.push({
+      id: `wallet-created-${walletCreatedLog.transactionHash}-${walletCreatedLog.logIndex}`,
+      label: 'Autonomous Wallet Ready',
+      description: 'Created or recovered the autonomous wallet bound to this owner.',
+      status: 'observed',
+      reference: walletCreatedLog.transactionHash ?? 'unknown',
+      chain: 'destination',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: null,
+      detailLabel: null,
+      href: txExplorerLink('destination', walletCreatedLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: walletCreatedLog.blockNumber ?? 0n,
+      logIndex: Number(walletCreatedLog.logIndex ?? 0)
+    })
+  }
+
+  for (const runtimeBindingLog of runtimeBindingLogs) {
+    const observedAt = timestampFor('destination', runtimeBindingLog.blockNumber)
+    proofs.push({
+      id: `runtime-binding-${runtimeBindingLog.transactionHash}-${runtimeBindingLog.logIndex}`,
+      label: 'Wallet Runtime Bound',
+      description: 'Autonomous wallet declared its Reactive runtime route onchain.',
+      status: 'observed',
+      reference: runtimeBindingLog.transactionHash ?? 'unknown',
+      chain: 'destination',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: null,
+      detailLabel: null,
+      href: txExplorerLink('destination', runtimeBindingLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: runtimeBindingLog.blockNumber ?? 0n,
+      logIndex: Number(runtimeBindingLog.logIndex ?? 0)
+    })
+  }
+
+  for (const configuredLog of configuredLogs) {
+    const observedAt = timestampFor('destination', configuredLog.blockNumber)
+    const txHash = configuredLog.transactionHash ?? 'unknown'
+    proofs.push({
+      id: `intent-configured-${txHash}-${configuredLog.logIndex}`,
+      label: 'Transfer Plan Saved',
+      description: 'Saved the wallet intent onchain.',
+      status: 'observed',
+      reference: txHash,
+      chain: 'destination',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: null,
+      detailLabel: null,
+      href: txExplorerLink('destination', configuredLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: configuredLog.blockNumber ?? 0n,
+      logIndex: Number(configuredLog.logIndex ?? 0)
+    })
+  }
+
+  for (const runtimeStatusLog of runtimeStatusLogs) {
+    const status = Number(runtimeStatusLog.args.status)
+    const txHash = runtimeStatusLog.transactionHash ?? 'unknown'
+
+    if (status === 1 && configuredTxHashes.has(txHash)) continue
+    if (status !== 1 && status !== 2) continue
+
+    const observedAt = timestampFor('destination', runtimeStatusLog.blockNumber)
+    proofs.push({
+      id: `runtime-status-${txHash}-${runtimeStatusLog.logIndex}`,
+      label: status === 2 ? 'Intent Paused' : 'Intent Resumed',
+      description:
+        status === 2
+          ? 'Paused reactive execution on the destination wallet.'
+          : 'Reactivated reactive execution on the destination wallet.',
+      status: 'observed',
+      reference: txHash,
+      chain: 'destination',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: null,
+      detailLabel: null,
+      href: txExplorerLink('destination', runtimeStatusLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: runtimeStatusLog.blockNumber ?? 0n,
+      logIndex: Number(runtimeStatusLog.logIndex ?? 0)
+    })
+  }
+
+  for (const executionLog of executionLogs) {
+    const observedAt = timestampFor('destination', executionLog.blockNumber)
+    proofs.push({
+      id: `wallet-${executionLog.transactionHash}`,
+      label: 'Destination Execution',
+      description: 'Autonomous wallet executed the transfer on the destination chain.',
+      status: 'success',
+      reference: executionLog.transactionHash ?? 'unknown',
+      chain: 'destination',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: executionLog.args.executionNonce?.toString() ?? null,
+      detailLabel: null,
+      href: txExplorerLink('destination', executionLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: executionLog.blockNumber ?? 0n,
+      logIndex: Number(executionLog.logIndex ?? 0)
+    })
+  }
+
+  for (const skippedLog of skippedLogs) {
+    const observedAt = timestampFor('destination', skippedLog.blockNumber)
+    proofs.push({
+      id: `skipped-${skippedLog.transactionHash}-${skippedLog.logIndex}`,
+      label: 'Destination Skipped',
+      description: 'Autonomous wallet skipped execution and recorded the reason.',
+      status: 'skipped',
+      reference: skippedLog.transactionHash ?? 'unknown',
+      chain: 'destination',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: skippedLog.args.executionNonce?.toString() ?? null,
+      detailLabel: typeof skippedLog.args.reason === 'string' ? skippedLog.args.reason : null,
+      href: txExplorerLink('destination', skippedLog.transactionHash, executionEnvironment),
+      observedAt,
+      blockNumber: skippedLog.blockNumber ?? 0n,
+      logIndex: Number(skippedLog.logIndex ?? 0)
+    })
+  }
+
+  for (const signalLog of signalLogs) {
+    const observedAt = timestampFor('origin', signalLog.blockNumber)
+    proofs.push({
+      id: `signal-${signalLog.transactionHash}-${signalLog.logIndex}`,
+      label: 'Origin Signal',
+      description: 'Source chain signal emitted for the wallet intent.',
+      status: 'observed',
+      reference: signalLog.transactionHash ?? 'unknown',
+      chain: 'origin',
+      timestampLabel: formatTimestamp(observedAt),
+      nonceLabel: signalLog.args.executionNonce?.toString() ?? null,
+      detailLabel: null,
+      href: txExplorerLink('origin', signalLog.transactionHash),
+      observedAt,
+      blockNumber: signalLog.blockNumber ?? 0n,
+      logIndex: Number(signalLog.logIndex ?? 0)
+    })
+  }
+
+  const sortedProofs = proofs
     .sort((left, right) => {
       if (left.observedAt === right.observedAt) {
         if (left.blockNumber === right.blockNumber) {
@@ -1730,6 +2053,14 @@ async function readExecutionProofs(
     })
     .slice(0, 12)
     .map(({ observedAt: _observedAt, blockNumber: _blockNumber, logIndex: _logIndex, ...proof }) => proof)
+
+  return {
+    proofs: sortedProofs,
+    historyWarning: firstHistoryError
+      ? `${copy().executionHistoryPartialWarning} ${firstHistoryError}`
+      : null,
+    historyDiagnostics: `walletCreated=${proofs.filter((item) => item.label === 'Autonomous Wallet Ready').length}, configured=${proofs.filter((item) => item.label === 'Transfer Plan Saved').length}, runtimeStatus=${proofs.filter((item) => item.label === 'Intent Paused' || item.label === 'Intent Resumed').length}, signals=${proofs.filter((item) => item.label === 'Origin Signal').length}, callbacks=${proofs.filter((item) => item.label === 'Reactive Callback').length}, executions=${proofs.filter((item) => item.label === 'Destination Execution').length}, skipped=${proofs.filter((item) => item.label === 'Destination Skipped').length}`
+  }
 }
 
 export async function configureIntent(

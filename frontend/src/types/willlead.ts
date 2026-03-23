@@ -13,6 +13,7 @@ export type AutomationReadiness =
   | 'intent_exhausted'
   | 'unavailable'
 export type SingleSignatureReadiness = 'ready' | 'requires_operator' | 'unavailable'
+export type HistoryLoadStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'error'
 
 export type RuntimeRouteState = {
   listenerAddress: string
@@ -56,6 +57,8 @@ export type WalletState = {
   operatorMirroredIntentActive: boolean | null
   automationReadiness: AutomationReadiness
   singleSignatureReadiness: SingleSignatureReadiness
+  historyStatus: HistoryLoadStatus
+  historyDiagnostics: string | null
 }
 
 export type IntentState = {
