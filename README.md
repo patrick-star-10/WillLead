@@ -8,10 +8,11 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 
 ## 当前进度
 
-截至 2026-03-21，这个 MVP 已经完成了两层验证：
+截至 2026-03-23，这个 MVP 已经完成了三层验证：
 
 1. 原始 `emitSignal(...)` 路径的真实闭环
 2. 新的 `protocol operator + mirrored intent + permissionless poke()` 路径的真实闭环
+3. 真实上游协议事件 `Sepolia swap -> Reactive callback -> faucet intent execution` 路径的真实闭环
 
 当前最新版本已经做到：
 
@@ -20,6 +21,12 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 - source side 不再需要每次人工重填 `token / recipient / amount`
 - keeper 或脚本只需要调用 `poke(wallet, nonce)` 就能触发 source signal
 - shared listener 会继续把 signal 路由到 destination callback，wallet 按已保存的 intent 执行
+- `Sepolia Execution` 和 `Lasna Execution` 两套 execution environment 都已经在前端和链上跑通
+- 前端的 `Test Source Event` 已恢复为 operator relay 路径，不要求用户为 source trigger 再签第二次名
+- operator service 已支持按当前钱包动态 target，不再只绑定单个固定 wallet
+- Lasna / Sepolia 的 operator runtime、proof polling、activity 排序和状态文案竞态都做过修复
+- 第二个 `intent` 已经可由真实上游协议事件驱动，不再依赖 `poke()` 或 operator relay
+- 新增的 `ReactiveFaucetIntent` 已可在收到协议事件 callback 后自动调用官方 faucet，把 `Sepolia ETH` 转成 `lREACT`
 
 这次最新的 `poke()` 版本验证里，关键交易为：
 
@@ -32,10 +39,83 @@ WillLead 是一个按照 [WillLead_Implementation_Guide.pdf](/Users/wx/Desktop/W
 
 - `intent save -> listener armed -> external signal -> destination execution` 这条主链路已经成立
 - `protocol operator -> mirrored intent -> permissionless poke()` 这条更接近正式产品的运行路径也已经成立
+- `real swap event -> Reactive callback -> faucet request` 这条更贴近 `reactive-native wallet` 的上游事件链路已经成立
 - controller wallet 和 autonomous wallet 的资产语义已经在前端分开展示
 - operator service 已经会自动同步 mirrored intent、补 Reactive listener runtime 资金、清理 debt、恢复订阅并 resume listener
-- 当前还没有做到“完全不依赖链下服务”；更准确地说，这是链上执行 + 协议 operator 维护的版本
-- 还没做的是真实上游协议事件接入、keeper 网络化和更完整的钱包产品体验，而不是基础自动执行闭环
+- 当前还没有做到“完全不依赖链下服务”；更准确地说，这是链上执行 + 协议 operator 维护 + 独立事件 listener 的版本
+- 还没做完的是更多协议事件接入、keeper 网络化和更完整的钱包产品体验，而不是基础自动执行闭环
+
+这次新的真实协议事件验证里，关键交易为：
+
+- source swap: `0xec408d555a87a07db58d5de6e72dbb3a86b3b71394fd53198ff1aea7d0d0302a`
+- destination faucet request: `0xa38a1ec5571ae27d3aa813e3ae6f1c41f3d2bd056eb9b4d254ca283580606ff9`
+
+这条链路当前监听的是一只已经被实际成交验证过的 `Sepolia USDC / WETH` 池：
+
+- watched pool: `0x6418EEC70f50913ff0d756B48d32Ce7C02b47C47`
+- Circle Sepolia USDC: `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
+- Sepolia WETH: `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14`
+
+## 已实现方案
+
+当前仓库已经真实实现并验证过下面这些方案：
+
+1. `raw signal -> listener -> callback -> wallet execution`
+   最原始的 `emitSignal(...)` 闭环已经打通，适合底层链路调试。
+
+2. `operator mirrored intent -> permissionless poke() -> callback -> wallet execution`
+   这是当前更接近产品形态的方案。
+   - destination wallet 保存 intent
+   - operator 把 intent 镜像到 origin emitter
+   - 外部 keeper / 脚本只需要 `poke(wallet, nonce)`
+   - 用户不需要为 source trigger 再签一次名
+
+3. `real protocol swap -> callback -> faucet intent execution`
+   这是当前更贴题的真实上游事件方案。
+   - source side 由真实 Sepolia 池子的 `Swap` 事件驱动
+   - Reactive listener 直接订阅这只真实成交池，而不是 demo emitter
+   - destination side 不再执行固定转账，而是调用官方 faucet `request(address)`
+   - 用户能看到 `source swap -> destination faucet request` 的真实 proof
+
+4. 双 execution environment
+   前端当前可以切换并管理：
+   - `Sepolia Execution`
+   - `Lasna Execution`
+
+5. operator-managed runtime maintenance
+   operator service 当前已能自动完成：
+   - `syncIntent(...)`
+   - listener funding
+   - `coverDebt()`
+   - subscription 检查与补齐
+   - `resume listener`
+   - test signal relay
+
+6. 前端运行态与证据面板
+   前端当前已能展示：
+   - controller wallet / autonomous wallet 资产分离
+   - runtime route
+   - automation credit
+   - destination execution / skipped / origin signal 等 activity 记录
+
+## 还未实现
+
+下面这些能力仍然没有实现，或者还不够产品化：
+
+- 真实上游协议事件接入
+  当前已经接通一条真实 `Sepolia swap` 上游事件，但还没有扩展到更多协议、更多事件类型或可配置订阅。
+
+- keeper 网络化 / 长期在线部署
+  目前默认还是本机 operator 服务，不是正式部署版 keeper 网络。
+
+- 完整钱包产品能力
+  还没有多 intent、portfolio、完整历史索引、多账户/多钱包管理等成熟钱包体验。
+
+- 更完整的失败恢复策略
+  当前已有 pause / skip / exhausted / duplicate 防护，但还缺更系统的 retry / recover / failure 分类展示。
+
+- 完整 proof / 截图 / 提交材料固化
+  链路已跑通，但还没有把演示材料、固定截图、稳定 proof 产物整理成正式交付包。
 
 ## 项目结构
 
@@ -57,6 +137,12 @@ frontend/
   在源链保存由 protocol operator 镜像过来的 intent，并提供 permissionless `poke()` 来发出 `StrategySignal`
 - `WillLeadReactiveListener`
   基于官方 `reactive-lib` 订阅源链事件，并生成目标链 callback payload
+- `WillLeadReactiveFaucetIntent`
+  第二个 intent 的执行合约；收到 callback 后调用官方 faucet，把 `Sepolia ETH` 请求成 `lREACT`
+- `WillLeadUniswapV4SwapListener`
+  第二个 intent 最早的 v4 `Swap` 事件 listener，用于监听指定 `PoolManager + poolId`
+- `WillLeadPoolSwapListener`
+  当前实际使用的真实成交池 listener，直接监听一只已验证可成交的 `Sepolia USDC / WETH` 池
 
 说明：
 
@@ -64,6 +150,8 @@ frontend/
 - callback payload 的第一个 `address` 参数按官方模式保留为 `address(0)` 占位，实际回调时由 Reactive 基础设施覆写成 RVM ID
 - `automation credit` 的产品语义已经进入前端和钱包配置，但实际 callback 资金准备仍然要通过官方 `depositTo(wallet)` 路径完成
 - `WillLeadSignalEmitter` 现在不再只是一只 demo event emitter；operator 会把 destination wallet 的当前 intent 镜像到 origin emitter，之后任意 keeper 都可以通过 `poke(wallet, nonce)` 触发 source signal，而不需要用户再次签名
+- `WillLeadReactiveFaucetIntent` 当前复用了现有 callback 验证模型，但执行目标从“固定金额转账”切到“官方 faucet `request(address)`”，更适合证明真实上游协议事件已经可以驱动第二个 intent
+- `WillLeadPoolSwapListener` 当前监听的是一只实际成交验证过的 `Sepolia USDC / WETH` 池，而不是只依赖前端是否给某个 v4 小池报价
 
 ## 前端范围
 
@@ -76,10 +164,13 @@ frontend/
 现在的前端已经接了 `viem` 的实现入口：
 
 - 可连接浏览器钱包
+- 可创建 / 导入本地网页钱包
 - 可通过 `WillLeadWalletFactory` 按 `ownerAddress` 发现或初始化 autonomous wallet
 - 可向目标链钱包调用 `configureIntent / pauseIntent / resumeIntent`
-- 可展示外部 signal source、listener 路由和执行结果；源链 `emitSignal` 保留给脚本 / operator 侧使用
+- 可在 `Sepolia Execution / Lasna Execution` 之间切换当前管理的 execution environment
+- 可展示外部 signal source、listener 路由、automation credit 和执行结果；源链 `emitSignal` 保留给脚本 / operator 侧使用
 - 可读取目标链钱包状态和 callback proxy 的 reserves / debts
+- 可通过 `Activity` 面板展示按真实时间排序的跨链 execution proof
 
 ## 本地开发
 
@@ -130,6 +221,12 @@ cp .env.example .env
 3. 增加真实链路的回归测试和 proof 留存，而不只依赖临场脚本
 4. 把单 intent 模型扩展成更像钱包的多 intent / 历史记录体验
 
+如果你想本地复现第二个 intent 的部署路径，可以直接用：
+
+```bash
+./contracts/script/deploy-pool-swap-reactive-intent.sh <watchedPool> <targetIntent>
+```
+
 当前目录里已经有可直接运行的 shell 脚本：
 
 - [deploy-local.sh](/Users/wx/Desktop/WillLead/contracts/script/deploy-local.sh)
@@ -158,6 +255,8 @@ cp .env.example .env
 - [set-callback-gas.sh](/Users/wx/Desktop/WillLead/contracts/script/set-callback-gas.sh)
 - [status-snapshot.sh](/Users/wx/Desktop/WillLead/contracts/script/status-snapshot.sh)
 - [sync-frontend-env.sh](/Users/wx/Desktop/WillLead/contracts/script/sync-frontend-env.sh)
+- [deploy-uniswap-reactive-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/deploy-uniswap-reactive-intent.sh)
+- [deploy-pool-swap-reactive-intent.sh](/Users/wx/Desktop/WillLead/contracts/script/deploy-pool-swap-reactive-intent.sh)
 
 ### 2. 前端
 
@@ -167,6 +266,17 @@ npm install
 npm run dev
 ```
 
+当前脚本说明：
+
+- `npm run dev`
+  同时启动前端、primary operator、Lasna operator，适合本地完整联调
+- `npm run dev:ui`
+  只启动前端，不自动拉起 operator
+- `npm run operator`
+  单独启动当前 execution environment 对应的 operator
+- `EXECUTION_ENV=lasna npm run operator`
+  单独启动 Lasna operator
+
 我已经在本地执行过：
 
 ```bash
@@ -175,7 +285,7 @@ npm run build
 
 前端当前可以成功打包。
 
-如果你想做现场 demo 排查，`Proof Panel` 现在按 `origin / reactive / destination` 三段展示证据；配好 `VITE_*_EXPLORER_BASE_URL` 后可以直接点到浏览器。
+如果你想做现场 demo 排查，`Proof Panel` 现在会展示最近的 origin / destination 关键证据，并按真实事件时间排序；配好 `VITE_*_EXPLORER_BASE_URL` 后可以直接点到浏览器。
 
 当前前端故意不再提供“由用户钱包直接发送 source signal”的主按钮。产品口径是：
 
@@ -252,6 +362,7 @@ npm run build
 
 ## 下一步建议
 
-1. 把 operator runtime 状态继续接回前端，显式展示 listener balance / debt / last funding action
-2. 给这次测试网闭环补一份稳定的 proof 产物和截图，作为黑客松提交材料
-3. 把单 intent MVP 继续包装成更完整的钱包体验，而不是继续停留在脚本层可演示
+1. 把真实上游协议事件从单一路径扩展到更多协议 / 更多池，而不是只保留当前这一只 `USDC / WETH` 池
+2. 把 operator / keeper 从本机脚本升级成长期在线部署版服务
+3. 把 proof、截图、runbook 和演示材料整理成稳定交付包
+4. 把单 intent MVP 往多 intent / 钱包历史 / portfolio 继续扩展
