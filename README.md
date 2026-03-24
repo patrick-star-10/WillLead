@@ -1,97 +1,159 @@
 # WillLead
 
-中文项目介绍说明文件。  
-English version: [README_EN.md](./README_EN.md)
+中文版评审说明文件。  
+English judge-facing version: [README_EN.md](./README_EN.md)
 
-WillLead 是一种新钱包范式的原型：一个以意图为核心、由事件驱动执行的 autonomous wallet。
+WillLead 是一个**面向 Reactive Network 原生设计的钱包原型，也是一个用于探索新钱包范式的参考实现**。
 
-它不是一个“带一点自动化功能的钱包”，而是在证明另一种钱包模型：
+它要证明的不是“普通钱包也可以接一点 Reactive 能力”，而是另一种钱包范式：
 
-> 用户定义一次意图，钱包在正确事件发生时持续执行这条意图。
+**如果 Reactive Network 提供了事件驱动执行能力，那么钱包就不应该只保存私钥和余额。钱包还应该保存用户意图，并在正确事件发生时持续执行。**
 
-本仓库用于 Reactive Network 黑客松提交，目标不是展示“普通 Solidity 合约也能部署”，而是展示真正的响应式执行闭环。
+因此，WillLead 的核心不是“给钱包加自动化”，而是把 **intent**、**runtime state** 和 **event-driven execution** 设计成钱包本体的一部分。
 
-## 一句话说明
+这个项目的提交重点不是功能堆叠，而是验证一个判断：
 
-- 用户把 intent 保存到链上的 autonomous wallet
-- Reactive 合约监听源链 EVM 事件
-- Reactive Network 把 callback 路由到目标合约
-- 钱包或目标 intent 合约自动执行
-- 即使前端离线，执行仍然可以继续
+**Reactive Network 不只是给现有应用增加自动化能力，它也可能成为一类新钱包和新消费应用的执行底座。**
 
-## 这个项目要解决什么问题
+## 项目核心
 
-传统钱包是被动的。
+传统钱包是被动的：
 
-用户每次想完成链上动作，都要重新打开前端、重新连接钱包、重新签名。  
-这种模型不适合下面这些需求：
+- 用户回来
+- 打开前端
+- 重新连接钱包
+- 再签一次名
 
-- “当某个事件发生时，自动执行一笔动作”
-- “当上游协议出现某个信号时，钱包继续执行我的计划”
-- “即使我离线，链上执行也不要停”
+WillLead 试图把这个模式改成：
 
-WillLead 想证明的是：
+- 用户先把 intent 保存到自己的 autonomous wallet
+- Reactive contract 监听源链事件
+- Reactive Network 把 callback 路由到目标侧
+- 目标侧 autonomous wallet 按已保存 intent 自动执行
 
-- 钱包不应该只保存私钥和余额
-- 钱包应该能够保存用户意图
-- 钱包应该在事件发生时继续代表用户执行
+换句话说，WillLead 把钱包理解成：
 
-## 为什么这里必须用 Reactive Network
+- 一个保存 intent 的链上主体
+- 一个拥有 runtime 状态的执行单元
+- 一个原生接入 Reactive Network 事件模型的钱包原型
+- 一个可继续演化成开发者参考架构的最小实现
 
-这个项目里，Reactive Network 不是装饰，也不是“顺手部署一下”。
+## 为什么这个项目必须用 Reactive Network
 
-如果没有 Reactive Network，这条链路会退化成：
+这个用例里，Reactive Network 不是装饰，而是钱包模型成立的前提。
 
-- 链下 bot 自己轮询 origin 事件
-- 链下服务自己拼 callback 和目标交易
-- 自动化逻辑不属于钱包，只是外挂脚本
+如果没有 Reactive Network，这个系统会退化成：
 
-而在 WillLead 里，Reactive Network 负责：
+- 链下 bot 轮询 origin 事件
+- 链下服务决定什么时候转发和执行
+- 钱包本身仍然是被动的
+- 自动化能力不属于钱包，而属于外挂脚本
 
-- 监听源链事件
-- 触发响应式 listener
-- 生成并路由目标链 callback
-- 让目标侧合约按已保存的 intent 执行
+而在 WillLead 中：
 
-这也是为什么 WillLead 要被定义成 `reactive-native wallet`，而不是“普通钱包 + 一点自动化”。
+- Reactive contract 真正监听 EVM 事件
+- 监听到事件后自动触发 callback
+- callback 被路由到目标 autonomous wallet
+- 钱包按照链上已保存的 intent 执行
 
-## 核心架构
+所以这个项目的重点不是“钱包支持自动化”，而是：
 
-主执行路径如下：
+**WillLead 是一个按 Reactive Network 运行方式来设计的钱包原型，并且可以作为 `Reactive-native wallet` 方向的参考实现。**
 
-```text
-Origin Event
-  -> Reactive Contract Listener
-  -> Reactive Callback
-  -> Destination Autonomous Wallet / Intent Contract
-  -> Intent Execution
-  -> Frontend State Refresh / Proof View
-```
+## 已验证的三条关键路径
 
-当前仓库里已经验证过三条关键路径：
+### 1. Raw Signal Path
 
-1. 钱包转账 intent
-   `SignalEmitter -> WillLeadReactiveListener -> WillLeadWallet.callback(...) -> transfer execution`
+最基础的闭环：
 
-2. mirrored intent + permissionless `poke()`
-   `mirrored intent on origin -> permissionless poke(wallet, nonce) -> Reactive callback -> wallet execution`
+`emitSignal(...) -> Reactive listener -> wallet callback -> destination execution`
 
-3. 真实协议事件 -> 钱包内 faucet intent
-   `real Sepolia swap -> WillLeadMultiSourceSwapListener -> WillLeadWallet.swapCallback(...) -> wallet-funded faucet request`
+已验证交易：
 
-## 仓库中的合约角色
+- Origin signal  
+  `0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
+- Destination execution  
+  `0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
 
-### Origin Contracts
+### 2. Mirrored Intent + Permissionless `poke()` Path
+
+这条路径更接近产品形态：
+
+- 用户在目标钱包保存 intent
+- operator 把 intent 镜像到源链 `WillLeadSignalEmitter`
+- keeper 或脚本只需要调用 `poke(wallet, nonce)`
+- Reactive Network 自动派发 callback
+- 目标钱包按已保存的 intent 执行
+
+已验证交易：
+
+- Intent configured  
+  `0xd2c178ea2a913de8d2753d39cb30064ea28525c26ce9194197d0f2bfe908d1e1`
+- Origin permissionless poke  
+  `0x6eb2c2db96dba97c5f75c5fcb6c515e5f2a3794c98e1f6c17054b95af2e4d5a9`
+- Reactive dispatch  
+  `0x615eed2c1948971dbe5bf3f73d42e48bdc943b4c676d4fce8ceda124e7730e5f`
+- Destination execution  
+  `0x5e01719af3cfad116144118372cc5d6a69e0141ca5ece0a41e7de3b27cf77abe`
+
+### 3. Real Protocol Event -> Wallet-Funded Faucet Path
+
+这是项目最重要的亮点之一。
+
+这条路径不是由你自己写的 demo event 驱动，而是由 **真实上游协议事件** 触发：
+
+- 监听的是 **Uniswap Sepolia** 上真实存在的 live v3 pools
+- 触发事件是 `Swap`
+- Reactive listener 收到真实协议事件后，直接把 callback 打到 autonomous wallet
+- autonomous wallet 用自己的执行余额调用官方 faucet `request(address)`
+
+也就是说，这条路径证明了两件事：
+
+- WillLead 不只是能响应自己发的 demo event
+- WillLead 真的能对外部协议世界发生的事件作出反应
+
+这也是 `Reactive-native wallet` 叙事里最有说服力的部分之一，因为它把平台能力和真实消费级产品形态连接了起来。
+
+已验证交易：
+
+- Source swap  
+  `0xec408d555a87a07db58d5de6e72dbb3a86b3b71394fd53198ff1aea7d0d0302a`
+- Destination faucet request  
+  `0xa38a1ec5571ae27d3aa813e3ae6f1c41f3d2bd056eb9b4d254ca283580606ff9`
+
+## 部署后完整工作流
+
+1. 用户连接 controller wallet。
+2. 前端通过 `WillLeadWalletFactory` 发现或创建该用户对应的 autonomous wallet。
+3. 用户把 transfer intent 或 swap intent 保存到 autonomous wallet。
+4. operator 把当前 transfer intent 镜像到源链 `WillLeadSignalEmitter`。
+5. 源链事件发生：
+   - 可以是 raw signal
+   - 可以是 permissionless `poke(wallet, nonce)`
+   - 也可以是真实协议事件，例如被监听的 Uniswap Sepolia `Swap`
+6. Reactive contract 在 Reactive Network 上接收到源链事件。
+7. Reactive contract 生成 callback payload，并把 callback 路由到目标侧 autonomous wallet。
+8. autonomous wallet 校验 callback，并按已保存 intent 执行：
+   - 固定转账
+   - 或 wallet-funded faucet request
+9. 前端刷新状态并展示 proof：
+   - `Origin Signal`
+   - `Reactive Callback`
+   - `Destination Execution`
+
+## 合约清单
+
+### Origin Contract
 
 - `WillLeadSignalEmitter`
-  源链信号合约。保存 mirrored intent，并提供 permissionless `poke(wallet, nonce)` 发出 `StrategySignal`。
+  保存 mirrored intent，并在 raw signal 或 `poke()` 路径下发出 `StrategySignal`
 
 ### Reactive Contracts
 
 - `WillLeadReactiveListener`
-  监听 `StrategySignal`，把 callback payload 路由到目标钱包。
+  监听 `StrategySignal`，用于 transfer intent 路径
 - `WillLeadMultiSourceSwapListener`
-  监听多条真实 Sepolia swap 事件，把 callback payload 路由到目标 autonomous wallet。
+  监听多条真实 Sepolia swap 来源，用于 swap intent 路径
 - `WillLeadPoolSwapListener`
 - `WillLeadRoutePoolSwapListener`
 - `WillLeadUniswapV4SwapListener`
@@ -100,36 +162,13 @@ Origin Event
 ### Destination Contracts
 
 - `WillLeadWallet`
-  autonomous wallet。保存转账 intent、swap intent、runtime 状态、最后一次执行信息，并在 callback 到达时真正执行。
+  每个用户对应一只 autonomous wallet，保存 transfer intent、swap intent、runtime 状态，并在 callback 到达时真正执行
 - `WillLeadWalletFactory`
-  为每个 owner 创建并发现对应的 autonomous wallet。
+  创建并发现 owner 对应的 autonomous wallet
 - `WillLeadReactiveFaucetIntent`
-  仓库中仍保留的独立目标 intent 合约，用于更早版本的 faucet callback 路径和兼容性验证。
-
-## 钱包为什么不是普通合约壳子
-
-`WillLeadWallet` 不是只存配置，它有明确的运行时状态模型：
-
-- `Inactive`
-- `Active`
-- `Paused`
-- `Exhausted`
-
-它还会记录：
-
-- `lastExecutionNonce`
-- `lastExecutedAt`
-- `lastSignalHash`
-- duplicate signal 防护
-- 执行次数上限
-- runtime route binding
-- swap intent route 与执行状态
-
-这部分很关键，因为它对应的不是一次性 demo，而是“钱包本身具备运行态”。
+  仓库中保留的旧版独立 faucet intent 合约，用于早期路径和兼容性验证
 
 ## 已部署合约地址
-
-当前仓库接了两套已经验证过的 execution environment。
 
 ### Primary Flow
 
@@ -167,7 +206,7 @@ Destination chain: Reactive Lasna (`5318007`)
 | --- | --- |
 | `WillLeadMultiSourceSwapListener` | `0xf448eDB9244dadfC5135bb9b89023c567B9F9CC9` |
 
-这条真实协议事件路径当前监听的 Sepolia 池：
+当前监听的真实 Sepolia pools：
 
 - fee 100: `0xFeEd501c2B21D315F04946F85fC6416B640240b5`
 - fee 500: `0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1`
@@ -176,103 +215,81 @@ Destination chain: Reactive Lasna (`5318007`)
 - Circle Sepolia USDC: `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
 - Sepolia WETH: `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14`
 
-## 已验证工作流与交易哈希
+## 为什么这个项目值得看
 
-### 1. Raw Signal 路径
+这个项目最重要的不是“做了一个钱包 UI”，而是它把“Reactive Network 原生钱包”这个想法做成了可以验证的最小原型。
 
-这是最基础的响应式闭环：
+它验证了三件事：
 
-`emitSignal(...) -> Reactive listener -> wallet callback -> destination execution`
+- intent 可以变成钱包的一等状态，而不是前端临时输入
+- Reactive Network 可以让钱包在前端离线后继续执行
+- 真实上游协议事件可以直接触发 autonomous wallet，而不是只靠你自己发的 demo event
 
-- Origin signal:
-  `0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
-- Destination execution:
-  `0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
+如果把传统钱包总结成：
 
-### 2. Mirrored Intent + Permissionless `poke()` 路径
+**“用户点一次，钱包动一次。”**
 
-这是当前更接近产品形态的转账 intent 路径：
+那么 WillLead 想证明的是：
 
-- 用户在目标侧钱包保存 intent
-- operator 把当前 intent 镜像到 origin emitter
-- keeper 或脚本可以直接调用 `poke(wallet, nonce)`
-- Reactive Network 路由 callback
-- 目标侧钱包按已保存的 intent 执行
+**“用户定义一次，钱包在正确事件到来时持续执行。”**
 
-已验证交易：
+而进一步说，WillLead 想表达的是：
 
-- Intent configured:
-  `0xd2c178ea2a913de8d2753d39cb30064ea28525c26ce9194197d0f2bfe908d1e1`
-- Origin permissionless poke:
-  `0x6eb2c2db96dba97c5f75c5fcb6c515e5f2a3794c98e1f6c17054b95af2e4d5a9`
-- Reactive dispatch:
-  `0x615eed2c1948971dbe5bf3f73d42e48bdc943b4c676d4fce8ceda124e7730e5f`
-- Destination execution:
-  `0x5e01719af3cfad116144118372cc5d6a69e0141ca5ece0a41e7de3b27cf77abe`
+**Reactive Network 不只是给现有 dApp 增加自动化能力，它也可能催生一种新的钱包范式。**
 
-### 3. 真实协议事件 -> 钱包内 Faucet Intent 路径
+## 生态价值
 
-这条路径证明 WillLead 不只是依赖 demo emitter。  
-真实上游协议事件可以直接进入 autonomous wallet，并由钱包自己的执行余额去调用官方 faucet `request(address)`。
+从生态角度看，WillLead 的价值不只是一个独立 demo，而是它可以作为下面这些方向的参考起点：
 
-已验证交易：
+- `Reactive-native wallet` 的参考实现
+- 面向开发者的 intent-driven consumer app 参考架构
+- 解释 `origin -> reactive -> destination` 执行模型的教学案例
+- 展示“真实协议事件如何直接驱动用户侧产品”的平台案例
 
-- Source swap:
-  `0xec408d555a87a07db58d5de6e72dbb3a86b3b71394fd53198ff1aea7d0d0302a`
-- Destination faucet request:
-  `0xa38a1ec5571ae27d3aa813e3ae6f1c41f3d2bd056eb9b4d254ca283580606ff9`
+对 Reactive Network 而言，这个项目更像一个可以继续沉淀的产品范例，而不是一次性的黑客松脚本集合。
 
-## 部署后的完整运行逻辑
+## 为什么值得继续支持
 
-1. 用户在前端连接 controller wallet。
-2. 前端通过 `WillLeadWalletFactory` 发现或创建这位用户对应的 autonomous wallet。
-3. 用户把 intent 保存到 autonomous wallet。
-4. operator 把这条 intent 镜像到源链的 `WillLeadSignalEmitter`。
-5. 源链事件发生：
-   - 可以是 raw signal
-   - 可以是 permissionless `poke(wallet, nonce)`
-   - 也可以是真实协议事件，比如被监听的 Sepolia swap
-6. Reactive Network 上的 listener 收到源链事件，生成目标 callback payload。
-7. 目标侧钱包或目标侧 intent 合约通过 callback proxy 接收 callback。
-8. 目标合约校验 callback 后执行已保存的 intent。
-9. 前端刷新状态，并展示三段 proof：
-   - `Origin Signal`
-   - `Reactive Callback`
-   - `Destination Execution`
+如果这个方向继续推进，WillLead 的价值不仅在于把现有闭环跑通，还在于它能够回答更大的生态问题：
 
-## 给评委的叙事口径
+- 钱包如何把 Reactive execution 作为默认能力，而不是外挂功能
+- intent 如何成为钱包和消费应用的一等状态
+- 真实协议事件如何成为用户侧应用的直接触发器
+- Reactive Network 如何从基础设施能力，演进为开发者可复用的产品范式
 
-推荐一句话：
+因此，这个项目值得继续支持的原因是：
 
-> This is not a wallet with optional automation. Each user gets their own autonomous wallet, and a shared reactive runtime keeps executing that wallet's saved intent after the frontend goes offline.
+- 它已经证明核心闭环成立，不是纯概念
+- 它提供了一个容易传播和复用的产品方向
+- 它天然适合沉淀成文档案例、starter、workshop 示例或参考实现
 
-中文版可以讲成：
+## 下一阶段里程碑
 
-> 这不是一个“附带自动化功能的钱包”，而是一种新的钱包范式：用户拥有自己的 autonomous wallet，当前端离线后，共享的 reactive runtime 仍然会继续执行这只钱包已经保存的意图。
+WillLead 的下一阶段目标不是简单扩功能，而是把这个方向推进成更成熟的 `Reactive-native wallet` 参考实现。
 
-更短的产品句子：
+优先里程碑包括：
 
-> Configure once. Execute later, when the right event happens.
+- 多 intent wallet 架构
+- 更多真实上游协议事件模板，而不只是一条 swap 路径
+- 更稳定的 operator / keeper 部署形态
+- 更完整的 proof、历史与失败恢复表达
+- 面向开发者的参考文档与可复用模块沉淀
 
 ## 仓库结构
 
 ```text
 contracts/
-  src/      合约源码
-  script/   部署、资金补充、同步、proof、demo 脚本
-  test/     Foundry 测试
+  src/      smart contracts
+  script/   deployment, funding, sync, proof, and demo scripts
+  test/     Foundry tests
 frontend/
-  src/      前端界面、钱包状态、proof panel、execution dashboard
+  src/      UI, wallet state, execution dashboard, proof panel
 ```
 
-关键文件：
+## 验证与复现
 
-- `contracts/src/WillLeadWallet.sol`
-- `contracts/src/WillLeadWalletFactory.sol`
-- `contracts/src/WillLeadSignalEmitter.sol`
-- `contracts/src/WillLeadReactiveListener.sol`
-- `contracts/src/WillLeadReactiveFaucetIntent.sol`
-- `contracts/src/WillLeadMultiSourceSwapListener.sol`
+关键脚本：
+
 - `contracts/script/deploy-local.sh`
 - `contracts/script/create-wallet.sh`
 - `contracts/script/configure-intent.sh`
@@ -282,113 +299,42 @@ frontend/
 - `contracts/script/poke-signal.sh`
 - `contracts/script/collect-proof.sh`
 - `contracts/script/demo-readiness.sh`
-- `Demo_Runbook.md`
 
-## 本地运行
+运行顺序与演示流程可直接参考：
 
-### 合约
+- [Demo_Runbook.md](./Demo_Runbook.md)
+
+合约测试：
 
 ```bash
-forge build
 forge test --offline
 ```
 
-从空环境开始的推荐顺序：
-
-```bash
-cp .env.example .env
-./contracts/script/verify-env.sh
-./contracts/script/deploy-local.sh
-./contracts/script/create-wallet.sh
-./contracts/script/verify-deployments.sh
-./contracts/script/sync-listener-subscription.sh
-./contracts/script/sync-swap-listener-subscription.sh
-./contracts/script/fund-reactive-listener.sh
-./contracts/script/fund-callback.sh
-./contracts/script/configure-intent.sh <token> <recipient>
-./contracts/script/sync-frontend-env.sh
-./contracts/script/demo-readiness.sh
-```
-
-也可以压成：
-
-```bash
-./contracts/script/bootstrap-demo.sh <token> <recipient>
-```
-
-### 前端
+前端构建：
 
 ```bash
 cd frontend
-npm install
 npm run build
-npm run dev
 ```
 
-前端脚本：
+## 结论
 
-- `npm run dev`
-  启动前端和本地 demo 用的 operator 进程。
-- `npm run dev:ui`
-  只启动前端。
-- `npm run operator`
-  启动当前 execution environment 的 operator。
-- `EXECUTION_ENV=lasna npm run operator`
-  启动 Lasna execution operator。
+WillLead 不是在证明“钱包也可以调用 Reactive Network”。
 
-## Proof 收集
+它真正想证明的是：
 
-收集当前环境下最新的 proof：
+- 钱包可以原生围绕 Reactive Network 的事件驱动执行模型来设计
+- intent 可以成为钱包的核心状态
+- autonomous wallet 可以在前端离线后继续响应链上世界
+- 真实协议事件可以直接成为钱包执行的触发条件
 
-```bash
-./contracts/script/collect-proof.sh
-```
+更进一步说，WillLead 想证明：
 
-会输出最近的：
+- `Reactive-native wallet` 是一个值得继续探索的产品方向
+- 这个方向可以沉淀成面向开发者和生态的参考实现
+- Reactive Network 有机会支持一类新的 consumer application architecture，而不仅仅是给现有系统加自动化
 
-- wallet creation
-- origin signal
-- reactive dispatch
-- destination execution
+如果传统钱包的默认假设是“用户在线时，钱包才行动”，  
+那么 WillLead 的原型假设是：
 
-在录最终 demo 视频前，建议先检查 readiness：
-
-```bash
-./contracts/script/demo-readiness.sh
-```
-
-如果已经触发了 source event，想等 destination execution 真正落地：
-
-```bash
-./contracts/script/wait-for-execution.sh <executionNonce>
-```
-
-## 当前范围
-
-这个仓库是一个有意聚焦的 MVP，不是完整消费级钱包。
-
-已经证明的能力：
-
-- user-specific autonomous wallet
-- onchain intent storage
-- 通过 Reactive contracts 的事件驱动执行
-- mirrored intent + permissionless trigger 路径
-- proof 收集与 activity 展示
-- Sepolia execution 和 Lasna execution 双环境
-- 第二条真实协议事件驱动的 intent 路径
-
-暂时还不是重点的部分：
-
-- 多 intent portfolio wallet
-- 长期在线 keeper network
-- 完整历史索引
-- 更完整的钱包产品 UX
-
-## 总结
-
-WillLead 想证明的是另一种钱包模型：
-
-- 传统钱包：用户点一下，钱包动一次
-- WillLead：用户定义一次意图，钱包在正确事件到来时持续执行
-
-这就是这个项目希望借助 Reactive Network 证明的核心观点。
+**钱包应该是一个面向 Reactive Network 原生设计的、能够持续执行用户意图的链上主体。**

@@ -1,94 +1,159 @@
 # WillLead
 
-WillLead is a prototype of a new wallet paradigm: an intent-native, event-driven autonomous wallet.
+Judge-facing project overview.  
+Chinese judge-facing version: [README.md](./README.md)
 
-Instead of asking users to come back and manually repeat the same onchain action forever, WillLead lets the user configure intent once and lets the wallet keep executing that intent when the right onchain event happens.
+WillLead is a **wallet prototype designed natively for Reactive Network, and a reference implementation for exploring a new wallet paradigm**.
 
-This repository was built for the Reactive Network hackathon and is designed to show real reactive behavior, not just ordinary Solidity contracts deployed somewhere else.
+Its goal is not to show that a normal wallet can integrate a bit of Reactive functionality. Its goal is to explore a different wallet paradigm:
 
-## TL;DR
+**If Reactive Network makes event-driven execution possible, then a wallet should not only hold keys and balances. It should also hold user intent and continue acting on that intent when the right event happens.**
 
-- The user saves intent onchain in a dedicated autonomous wallet.
-- A Reactive contract listens for origin-side EVM events.
-- Reactive Network routes the callback to the destination-side wallet or intent contract.
-- The wallet executes the saved intent even after the frontend goes offline.
+So the point of WillLead is not "adding automation to a wallet." The point is designing a wallet around **intent**, **runtime state**, and **event-driven execution** as native wallet behavior.
 
-Current MVP thesis:
+The submission is not primarily about feature count. It is about validating a larger claim:
 
-> A wallet should not only store keys and balances. A wallet should be able to hold intent and keep executing it.
+**Reactive Network is not only an automation layer for existing applications. It may also serve as the execution substrate for a new category of wallets and consumer applications.**
 
-## What Problem It Solves
+## Core Idea
 
-Traditional wallets are passive. They only move when the user comes back, opens the frontend, and signs again.
+Traditional wallets are passive:
 
-That model breaks down for repeated or event-driven actions:
+- the user comes back
+- opens the frontend
+- reconnects the wallet
+- signs again
 
-- "Send funds when this trigger happens."
-- "React when a protocol event appears."
-- "Keep executing my saved plan even if I am offline."
+WillLead tries to replace that model with:
 
-WillLead turns the wallet into an autonomous onchain execution unit:
+- the user saves intent onchain in a personal autonomous wallet
+- a Reactive contract listens for origin-side EVM events
+- Reactive Network routes the callback to the destination side
+- the autonomous wallet executes the saved intent
 
-- the user signs once during setup
-- the intent stays onchain
-- reactive execution can keep happening later
-- the frontend is no longer the system that must stay alive for the wallet to act
+In other words, WillLead treats the wallet as:
 
-## Why Reactive Network Is Necessary
+- an onchain holder of intent
+- an execution unit with runtime state
+- a wallet designed around Reactive Network's event model
+- a minimal implementation that can evolve into reusable developer reference architecture
 
-This project is not using Reactive Network as branding. It depends on reactive execution for the core user experience.
+## Why Reactive Network Is Essential Here
 
-Without Reactive Network, this flow becomes much harder and much less native:
+Reactive Network is not cosmetic in this project. It is what makes the wallet model possible.
 
-- you need a separate offchain bot to poll origin events
-- you need custom infra to detect, relay, and submit destination transactions
-- the wallet is still basically passive, and automation lives outside of it
+Without Reactive Network, this design collapses back into:
 
-With Reactive Network:
+- an offchain bot polling origin events
+- offchain infra deciding when to relay and execute
+- a wallet that is still fundamentally passive
+- automation that lives outside the wallet as a service wrapper
 
-- Reactive contracts subscribe to origin-side EVM events
-- the listener emits a destination callback payload
-- destination contracts execute based on saved onchain intent
+In WillLead:
 
-That is the core reason WillLead is framed as a reactive-native wallet rather than a normal wallet with optional automation.
+- a Reactive contract actually listens to EVM events
+- that event automatically triggers a callback
+- the callback is routed to the destination autonomous wallet
+- the wallet executes against already-saved onchain intent
 
-## Architecture
+That is why this project is not presented as "a wallet with automation." It is presented as:
 
-Main execution path:
+**a wallet prototype designed around the way Reactive Network works, and a reference implementation for a Reactive-native wallet direction.**
 
-```text
-Origin Event
-  -> Reactive Contract Listener
-  -> Reactive Callback
-  -> Destination Autonomous Wallet / Intent Contract
-  -> Intent Execution
-  -> Frontend State Refresh / Proof View
-```
+## Three Verified Execution Paths
 
-There are three validated execution patterns in this repository:
+### 1. Raw Signal Path
 
-1. Wallet transfer intent
-   `SignalEmitter -> WillLeadReactiveListener -> WillLeadWallet.callback(...) -> transfer execution`
+The minimum end-to-end loop:
 
-2. Mirrored intent + permissionless trigger
-   `mirrored intent on origin -> permissionless poke(wallet, nonce) -> Reactive callback -> wallet execution`
+`emitSignal(...) -> Reactive listener -> wallet callback -> destination execution`
 
-3. Real protocol event intent
-   `real Sepolia swap -> WillLeadMultiSourceSwapListener -> WillLeadWallet.swapCallback(...) -> wallet-funded faucet request`
+Verified transactions:
 
-## Contracts In This Repo
+- Origin signal  
+  `0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
+- Destination execution  
+  `0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
 
-### Origin Contracts
+### 2. Mirrored Intent + Permissionless `poke()` Path
+
+This is the more product-shaped flow:
+
+- the user saves intent in the destination wallet
+- the operator mirrors the current intent to `WillLeadSignalEmitter` on the origin side
+- any keeper or script can call `poke(wallet, nonce)`
+- Reactive Network dispatches the callback
+- the destination wallet executes the saved intent
+
+Verified transactions:
+
+- Intent configured  
+  `0xd2c178ea2a913de8d2753d39cb30064ea28525c26ce9194197d0f2bfe908d1e1`
+- Origin permissionless poke  
+  `0x6eb2c2db96dba97c5f75c5fcb6c515e5f2a3794c98e1f6c17054b95af2e4d5a9`
+- Reactive dispatch  
+  `0x615eed2c1948971dbe5bf3f73d42e48bdc943b4c676d4fce8ceda124e7730e5f`
+- Destination execution  
+  `0x5e01719af3cfad116144118372cc5d6a69e0141ca5ece0a41e7de3b27cf77abe`
+
+### 3. Real Protocol Event -> Wallet-Funded Faucet Path
+
+This is one of the strongest points of the project.
+
+This path is **not** triggered by a custom demo event from our own contract. It is triggered by **real upstream protocol events**:
+
+- the watched source is a set of real **Uniswap Sepolia** live v3 pools
+- the trigger event is `Swap`
+- the Reactive listener receives the real protocol event and routes a callback directly into the autonomous wallet
+- the autonomous wallet uses its own execution balance to call the official faucet `request(address)`
+
+This path proves two important things:
+
+- WillLead is not limited to self-authored demo events
+- WillLead can react to events coming from the outside protocol world
+
+That is one of the strongest pieces of evidence for the `Reactive-native wallet` thesis, because it connects platform capability to a credible user-facing product form.
+
+Verified transactions:
+
+- Source swap  
+  `0xec408d555a87a07db58d5de6e72dbb3a86b3b71394fd53198ff1aea7d0d0302a`
+- Destination faucet request  
+  `0xa38a1ec5571ae27d3aa813e3ae6f1c41f3d2bd056eb9b4d254ca283580606ff9`
+
+## Full Post-Deployment Workflow
+
+1. The user connects a controller wallet.
+2. The frontend discovers or creates the user’s autonomous wallet through `WillLeadWalletFactory`.
+3. The user saves either a transfer intent or a swap intent into that autonomous wallet.
+4. The operator mirrors the transfer intent to the origin-side `WillLeadSignalEmitter`.
+5. A source-side event happens:
+   - a raw signal
+   - a permissionless `poke(wallet, nonce)`
+   - or a real protocol event, such as a watched Uniswap Sepolia `Swap`
+6. A Reactive contract on Reactive Network receives the origin-side event.
+7. The Reactive contract builds the callback payload and routes it to the destination-side autonomous wallet.
+8. The autonomous wallet validates the callback and executes the saved intent:
+   - fixed transfer
+   - or wallet-funded faucet request
+9. The frontend refreshes state and surfaces proof entries for:
+   - `Origin Signal`
+   - `Reactive Callback`
+   - `Destination Execution`
+
+## Contract Inventory
+
+### Origin Contract
 
 - `WillLeadSignalEmitter`
-  Stores mirrored intent on the origin side and exposes permissionless `poke(wallet, nonce)` to emit `StrategySignal`.
+  Stores mirrored intent and emits `StrategySignal` for the raw signal and `poke()` paths
 
 ### Reactive Contracts
 
 - `WillLeadReactiveListener`
-  Subscribes to `StrategySignal` and dispatches callback payloads to destination wallets.
+  Listens to `StrategySignal` for the transfer intent path
 - `WillLeadMultiSourceSwapListener`
-  Subscribes to multiple real Sepolia swap sources and dispatches callback payloads to the autonomous wallet.
+  Listens to multiple real Sepolia swap sources for the swap intent path
 - `WillLeadPoolSwapListener`
 - `WillLeadRoutePoolSwapListener`
 - `WillLeadUniswapV4SwapListener`
@@ -97,36 +162,13 @@ There are three validated execution patterns in this repository:
 ### Destination Contracts
 
 - `WillLeadWallet`
-  The autonomous wallet that stores transfer intent, swap intent, runtime state, last execution data, and executes on callback.
+  A user-specific autonomous wallet that stores transfer intent, swap intent, runtime state, and executes when callbacks arrive
 - `WillLeadWalletFactory`
-  Creates and discovers the autonomous wallet for each owner.
+  Creates and discovers the autonomous wallet for each owner
 - `WillLeadReactiveFaucetIntent`
-  A legacy standalone destination intent contract still kept in the repo for the earlier faucet-callback flow and compatibility testing.
+  A legacy standalone faucet intent contract still kept in the repository for earlier flows and compatibility validation
 
-## Key Contract Behaviors
-
-The destination wallet is not just a vault. It has an explicit runtime model:
-
-- `Inactive`
-- `Active`
-- `Paused`
-- `Exhausted`
-
-It also tracks:
-
-- `lastExecutionNonce`
-- `lastExecutedAt`
-- `lastSignalHash`
-- duplicate signal protection
-- execution count limits
-- runtime route binding
-- swap intent route and execution state
-
-That runtime state is part of the wallet product thesis: the wallet is not only a signer, it is an execution system.
-
-## Deployed Contracts
-
-The current repo is wired to two verified execution environments.
+## Deployed Contract Addresses
 
 ### Primary Flow
 
@@ -164,7 +206,7 @@ Destination chain: Reactive Lasna (`5318007`)
 | --- | --- |
 | `WillLeadMultiSourceSwapListener` | `0xf448eDB9244dadfC5135bb9b89023c567B9F9CC9` |
 
-Watched real Sepolia pools used in the verified swap-driven path:
+Currently watched real Sepolia pools:
 
 - fee 100: `0xFeEd501c2B21D315F04946F85fC6416B640240b5`
 - fee 500: `0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1`
@@ -173,82 +215,67 @@ Watched real Sepolia pools used in the verified swap-driven path:
 - Circle Sepolia USDC: `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
 - Sepolia WETH: `0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14`
 
-## Verified Workflows And Transaction Hashes
+## Why This Project Matters
 
-### 1. Raw Signal Path
+The point of WillLead is not that it has a wallet UI. The point is that it turns the idea of a Reactive Network-native wallet into a verifiable minimum prototype.
 
-This is the minimum end-to-end reactive flow:
+It verifies three things:
 
-`emitSignal(...) -> Reactive listener -> wallet callback -> destination execution`
+- intent can become first-class wallet state rather than temporary frontend input
+- Reactive Network can keep the wallet executing after the frontend goes offline
+- real upstream protocol events can trigger the autonomous wallet directly, rather than only self-authored demo events
 
-- Origin signal:
-  `0xae457bbcb7822be50027c9d31ed392aa52faad45f1c431d28130b7bfad9fa7d3`
-- Destination execution:
-  `0x8de1684ceafaf6293f5d098f6f690953849f1a9c14f81cf8f4e9a2e3eb0a7584`
+If a traditional wallet can be summarized as:
 
-### 2. Mirrored Intent + Permissionless `poke()` Path
+**"The user clicks once, and the wallet acts once."**
 
-This is the product-shaped path for the transfer intent:
+WillLead is trying to prove:
 
-- the wallet stores the intent on the destination side
-- the operator mirrors the current intent to the origin emitter
-- any keeper or script can call `poke(wallet, nonce)`
-- Reactive Network routes the callback
-- the destination wallet executes saved intent
+**"The user defines once, and the wallet keeps acting when the right event arrives."**
 
-Verified transactions:
+And more broadly, WillLead is making this claim:
 
-- Intent configured:
-  `0xd2c178ea2a913de8d2753d39cb30064ea28525c26ce9194197d0f2bfe908d1e1`
-- Origin permissionless poke:
-  `0x6eb2c2db96dba97c5f75c5fcb6c515e5f2a3794c98e1f6c17054b95af2e4d5a9`
-- Reactive dispatch:
-  `0x615eed2c1948971dbe5bf3f73d42e48bdc943b4c676d4fce8ceda124e7730e5f`
-- Destination execution:
-  `0x5e01719af3cfad116144118372cc5d6a69e0141ca5ece0a41e7de3b27cf77abe`
+**Reactive Network is not only useful for adding automation to existing apps. It may also enable a new wallet paradigm.**
 
-### 3. Real Protocol Event -> Wallet-Funded Faucet Path
+## Ecosystem Value
 
-This path proves that WillLead is not limited to a demo emitter. A real upstream protocol event can flow directly into the autonomous wallet, which then uses its own execution balance to call the official faucet `request(address)`.
+From an ecosystem perspective, WillLead is valuable not only as a standalone demo, but as a starting point for several reusable directions:
 
-Verified transactions:
+- a reference implementation for `Reactive-native wallet` architecture
+- a developer-facing example of intent-driven consumer application design
+- a teaching case for the `origin -> reactive -> destination` execution model
+- a platform example showing how real protocol events can directly drive end-user product behavior
 
-- Source swap:
-  `0xec408d555a87a07db58d5de6e72dbb3a86b3b71394fd53198ff1aea7d0d0302a`
-- Destination faucet request:
-  `0xa38a1ec5571ae27d3aa813e3ae6f1c41f3d2bd056eb9b4d254ca283580606ff9`
+For Reactive Network, this makes the project more than a one-off hackathon artifact. It can become a durable product example.
 
-## Post-Deployment Workflow
+## Why Further Support Would Be Valuable
 
-This is the step-by-step runtime logic after deployment.
+The value of continuing this direction is not only that the current loop works. It is that the project helps answer larger ecosystem questions:
 
-1. The user connects a controller wallet in the frontend.
-2. The frontend discovers or creates the user-specific autonomous wallet through `WillLeadWalletFactory`.
-3. The user saves an intent onchain in the autonomous wallet.
-4. The operator mirrors that intent to the origin-side `WillLeadSignalEmitter`.
-5. A source event happens:
-   - either a raw signal
-   - or permissionless `poke(wallet, nonce)`
-   - or a real protocol event such as a watched Sepolia swap
-6. A Reactive contract listener on Reactive Network receives the origin event and emits a destination callback payload.
-7. The destination wallet or destination intent contract receives the callback through the callback proxy.
-8. The destination contract validates the callback and executes the saved intent.
-9. The frontend refreshes wallet state and shows proof entries for:
-   - `Origin Signal`
-   - `Reactive Callback`
-   - `Destination Execution`
+- how wallets can adopt Reactive execution as native behavior rather than as an add-on
+- how intent can become first-class state in wallets and consumer apps
+- how real protocol events can become direct triggers for user-facing application behavior
+- how Reactive Network can evolve from infrastructure capability into reusable product architecture
 
-## Demo Narrative
+That makes the project worth further support because:
 
-The intended judge narrative is:
+- the core loop is already proven, not merely proposed
+- the direction is easy to communicate and reuse
+- it is naturally suited to become a docs case study, starter, workshop example, or reference implementation
 
-> This is not a wallet with optional automation. Each user gets their own autonomous wallet, and a shared reactive runtime keeps executing that wallet's saved intent after the frontend goes offline.
+## Next Milestones
 
-The short product line is:
+The next stage for WillLead is not simply to add more features. It is to harden this direction into a stronger `Reactive-native wallet` reference implementation.
 
-> Configure once. Execute later, when the right event happens.
+Priority milestones include:
 
-## Repository Map
+- multi-intent wallet architecture
+- more real upstream protocol event templates beyond a single swap path
+- more robust operator / keeper deployment
+- more complete proof, history, and failure-recovery expression
+- developer-facing reference docs and reusable modules
+
+## Repository Structure
 
 ```text
 contracts/
@@ -256,17 +283,13 @@ contracts/
   script/   deployment, funding, sync, proof, and demo scripts
   test/     Foundry tests
 frontend/
-  src/      UI, wallet state, proof panel, execution dashboard
+  src/      UI, wallet state, execution dashboard, proof panel
 ```
 
-Important files:
+## Verification And Reproduction
 
-- `contracts/src/WillLeadWallet.sol`
-- `contracts/src/WillLeadWalletFactory.sol`
-- `contracts/src/WillLeadSignalEmitter.sol`
-- `contracts/src/WillLeadReactiveListener.sol`
-- `contracts/src/WillLeadReactiveFaucetIntent.sol`
-- `contracts/src/WillLeadMultiSourceSwapListener.sol`
+Key scripts:
+
 - `contracts/script/deploy-local.sh`
 - `contracts/script/create-wallet.sh`
 - `contracts/script/configure-intent.sh`
@@ -276,113 +299,41 @@ Important files:
 - `contracts/script/poke-signal.sh`
 - `contracts/script/collect-proof.sh`
 - `contracts/script/demo-readiness.sh`
-- `Demo_Runbook.md`
 
-## Local Setup
+The execution order and demo flow are documented in:
 
-### Contracts
+- [Demo_Runbook.md](./Demo_Runbook.md)
+
+Contract tests:
 
 ```bash
-forge build
 forge test --offline
 ```
 
-Recommended setup flow from a fresh environment:
-
-```bash
-cp .env.example .env
-./contracts/script/verify-env.sh
-./contracts/script/deploy-local.sh
-./contracts/script/create-wallet.sh
-./contracts/script/verify-deployments.sh
-./contracts/script/sync-listener-subscription.sh
-./contracts/script/sync-swap-listener-subscription.sh
-./contracts/script/fund-reactive-listener.sh
-./contracts/script/fund-callback.sh
-./contracts/script/configure-intent.sh <token> <recipient>
-./contracts/script/sync-frontend-env.sh
-./contracts/script/demo-readiness.sh
-```
-
-You can also compress most of this into:
-
-```bash
-./contracts/script/bootstrap-demo.sh <token> <recipient>
-```
-
-### Frontend
+Frontend build:
 
 ```bash
 cd frontend
-npm install
 npm run build
-npm run dev
 ```
 
-Available frontend scripts:
+## Conclusion
 
-- `npm run dev`
-  Starts the frontend plus operator processes used for local demo.
-- `npm run dev:ui`
-  Starts only the frontend.
-- `npm run operator`
-  Starts the current execution-environment operator.
-- `EXECUTION_ENV=lasna npm run operator`
-  Starts the Lasna execution operator.
+WillLead is not trying to show that "wallets can call Reactive Network."
 
-## Proof Collection
+It is trying to show something stronger:
 
-To collect the latest proof entries from the currently configured environment:
+- a wallet can be designed natively around Reactive Network's event-driven execution model
+- intent can become core wallet state
+- an autonomous wallet can continue responding after the frontend goes offline
+- real protocol events can directly become wallet execution triggers
 
-```bash
-./contracts/script/collect-proof.sh
-```
+More broadly, WillLead is trying to show:
 
-This prints the latest:
+- `Reactive-native wallet` is a direction worth continued exploration
+- that direction can be distilled into reusable developer and ecosystem reference architecture
+- Reactive Network has the potential to support a new class of consumer application architecture, not only automation for existing systems
 
-- wallet creation
-- origin signal
-- reactive dispatch
-- destination execution
+If the default assumption behind a traditional wallet is "the wallet acts when the user is online," then the prototype assumption behind WillLead is:
 
-To verify demo readiness before recording the final video:
-
-```bash
-./contracts/script/demo-readiness.sh
-```
-
-To wait until a destination execution really lands after a trigger:
-
-```bash
-./contracts/script/wait-for-execution.sh <executionNonce>
-```
-
-## Current Scope
-
-This repository is intentionally an MVP, not a full consumer wallet.
-
-Already proven:
-
-- user-specific autonomous wallet
-- onchain intent storage
-- event-driven execution through Reactive contracts
-- mirrored intent + permissionless trigger path
-- proof collection and activity view
-- Sepolia execution and Lasna execution environments
-- a second real protocol-event-driven intent path
-
-Not yet the focus:
-
-- multi-intent portfolio wallet
-- long-term keeper network deployment
-- full history indexer
-- polished production wallet UX
-
-## Summary
-
-WillLead argues for a different wallet model:
-
-- traditional wallet: user clicks, wallet acts once
-- WillLead: user defines intent, wallet keeps acting when the right event arrives
-
-That is the core idea this project is trying to prove with Reactive Network.
+**a wallet should be a Reactive Network-native onchain entity that keeps executing user intent over time.**
