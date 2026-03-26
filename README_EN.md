@@ -283,8 +283,25 @@ contracts/
   script/   deployment, funding, sync, proof, and demo scripts
   test/     Foundry tests
 frontend/
-  src/      UI, wallet state, execution dashboard, proof panel
+  src/
+    app/        app shell
+    components/ UI panels and controls
+    store/      wallet state orchestration
+    lib/
+      willlead.ts         public API barrel for the wallet runtime
+      actions/            intent, funding, signal, and listener writes
+      internal/
+        wallet/           binding, wallet state, and tracked assets
+        reactive/         listener runtime, automation credit, and proofs
+        operator.ts       operator runtime helpers
+        storage.ts        execution environment and watched-token storage
+        logs.ts           paged log readers
+        address.ts        address and topic helpers
+        format.ts         formatting helpers
 ```
+
+After the frontend refactor, `frontend/src/lib/willlead.ts` no longer carries the full implementation. It now acts as a public API barrel.
+The actual runtime logic is split across `actions/` and `internal/`, following the boundaries of write paths, wallet reads, reactive reads, and operator helpers. That structure is intended to make future multi-intent, proof, and operator-runtime work easier to extend.
 
 ## Verification And Reproduction
 
