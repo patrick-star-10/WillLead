@@ -334,6 +334,33 @@ cd frontend
 npm run build
 ```
 
+## Next Extension: LI.FI-Powered Cross-Chain Intent
+
+The current version of WillLead already proves the more foundational point:
+
+- intent can live onchain inside the wallet
+- Reactive Network can continue routing external events into wallet execution
+- the autonomous wallet can keep acting after the frontend goes offline
+
+From that baseline, the most natural next step is not simply adding more same-chain demos. It is upgrading the current transfer intent from "direct destination-chain transfer" into "destination-side cross-chain execution."
+
+That is why **LI.FI** is a natural next extension for WillLead.
+
+If that path is implemented well, the story becomes stronger than:
+
+- external events can trigger wallet-native automated transfers
+
+It becomes:
+
+- external events can trigger wallet-native cross-chain asset movement
+- Reactive Network provides the event-driven execution entry point
+- LI.FI provides the downstream routing, bridging, and swapping infrastructure
+
+In other words, the current version already proves that the `Reactive-native wallet` execution model works.  
+The LI.FI extension would push that model one step further, toward a more realistic **Reactive-native cross-chain wallet**.
+
+This is not the part that had to be forced into the current submission, but it is one of the clearest and most product-relevant upgrade directions for the project.
+
 ## Conclusion
 
 WillLead is not trying to show that "wallets can call Reactive Network."

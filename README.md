@@ -334,6 +334,33 @@ cd frontend
 npm run build
 ```
 
+## 下一步扩展：LI.FI 驱动的跨链 Intent
+
+当前版本里，WillLead 已经证明了一件更基础也更重要的事：
+
+- 钱包可以把 intent 保存在链上
+- Reactive Network 可以把外部事件继续路由到钱包
+- autonomous wallet 可以在前端离线后继续执行
+
+在这个基础上，最自然的下一步不是继续堆更多同链 demo，而是把当前的 transfer intent 从“目标链直接转账”推进到“目标链发起跨链执行”。
+
+这也是 WillLead 后续考虑接入 **LI.FI** 的原因。
+
+如果这条路径成立，WillLead 想表达的就不再只是：
+
+- 外部事件可以触发钱包自动转账
+
+而是进一步变成：
+
+- 外部事件可以触发钱包自动发起跨链资产移动
+- Reactive Network 负责把事件驱动执行送到正确的钱包入口
+- LI.FI 负责把后续跨链路由、桥接与兑换基础设施接起来
+
+换句话说，WillLead 当前版本已经证明了 `Reactive-native wallet` 的执行模型成立；  
+而 LI.FI 对应的下一阶段价值，是把这个模型从“Reactive-native wallet”进一步推进到更接近真实消费场景的 **Reactive-native cross-chain wallet**。
+
+这不是本次提交必须强行完成的部分，但它是这个项目最清晰、也最有产品化价值的下一步升级方向之一。
+
 ## 结论
 
 WillLead 不是在证明“钱包也可以调用 Reactive Network”。
