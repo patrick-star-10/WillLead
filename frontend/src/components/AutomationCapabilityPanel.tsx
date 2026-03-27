@@ -82,6 +82,20 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
       : props.singleSignatureReadiness === 'requires_operator'
         ? copy.singleSignatureRequiresOperatorNote
         : copy.connectWalletToLoadRuntime
+  const readinessChecks = [
+    {
+      label: copy.listenerStatus,
+      value: listenerStatusLabel
+    },
+    {
+      label: copy.automationReadinessLabel,
+      value: translateAutomationReadiness(props.automationReadiness, locale)
+    },
+    {
+      label: copy.operatorService,
+      value: translateOperatorServiceStatus(props.operatorServiceStatus, locale)
+    }
+  ]
 
   return (
     <article className="panel automation-panel">
@@ -91,6 +105,21 @@ export function AutomationCapabilityPanel(props: AutomationCapabilityPanelProps)
           <p className="section-note">{copy.automationNote}</p>
         </div>
         <span className={listenerClassName}>{listenerBadgeLabel}</span>
+      </div>
+
+      <div className="readiness-strip">
+        <div className="readiness-copy">
+          <p className="panel-kicker">{copy.runtimeReadinessKicker}</p>
+          <p className="section-note">{copy.runtimeReadinessNote}</p>
+        </div>
+        <div className="readiness-grid">
+          {readinessChecks.map((check) => (
+            <div className="readiness-card" key={check.label}>
+              <span>{check.label}</span>
+              <strong>{check.value}</strong>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="automation-hero">

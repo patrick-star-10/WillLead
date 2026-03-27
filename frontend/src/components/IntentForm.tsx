@@ -217,104 +217,114 @@ export function IntentForm(props: IntentFormProps) {
       <p className="wallet-footnote">
         {copy.destinationAmountNote} {executionNativeSymbol}.
       </p>
-      <div className="panel-header">
-        <div>
-          <p className="panel-kicker">{copy.listenerRoutingKicker}</p>
-          <p className="section-note">{copy.planRouteNote}</p>
-        </div>
-      </div>
-      <dl className="data-list form-grid">
-        <div>
-          <dt>{copy.listenerContract}</dt>
-          <dd>
-            <input
-              className="field"
+      <details className="advanced-route-panel">
+        <summary className="advanced-route-summary">
+          <div>
+            <p className="panel-kicker">{copy.advancedRouteSettings}</p>
+            <p className="section-note">{copy.advancedRouteNote}</p>
+          </div>
+        </summary>
+        <div className="advanced-route-body">
+          <div className="panel-header">
+            <div>
+              <p className="panel-kicker">{copy.listenerRoutingKicker}</p>
+              <p className="section-note">{copy.planRouteNote}</p>
+            </div>
+          </div>
+          <dl className="data-list form-grid">
+            <div>
+              <dt>{copy.listenerContract}</dt>
+              <dd>
+                <input
+                  className="field"
+                  disabled={!props.isEditable}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, listenerAddress: event.target.value }))
+                  }
+                  value={props.isEditable ? form.listenerAddress : translateDisplayValue(form.listenerAddress, locale)}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>{copy.signalSource}</dt>
+              <dd>
+                <input
+                  className="field"
+                  disabled={!props.isEditable}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, signalEmitterAddress: event.target.value }))
+                  }
+                  value={
+                    props.isEditable
+                      ? form.signalEmitterAddress
+                      : translateDisplayValue(form.signalEmitterAddress, locale)
+                  }
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>{copy.originChainRoute}</dt>
+              <dd>
+                <select
+                  className="field"
+                  disabled={!props.isEditable}
+                  onChange={(event) =>
+                    setForm((state) => ({ ...state, sourceChainId: event.target.value }))
+                  }
+                  value={form.sourceChainId}
+                >
+                  {chainOptions.map((option) => (
+                    <option key={`source-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </dd>
+            </div>
+            <div>
+              <dt>{copy.destinationChainRoute}</dt>
+              <dd>
+                <input
+                  className="field"
+                  disabled
+                  value={destinationChainLabel}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>{copy.signalTopic}</dt>
+              <dd>
+                <input
+                  className="field"
+                  disabled={!props.isEditable}
+                  onChange={(event) => setForm((state) => ({ ...state, signalTopic0: event.target.value }))}
+                  value={form.signalTopic0}
+                />
+              </dd>
+            </div>
+          </dl>
+          <p className="wallet-footnote">{copy.destinationChainLockedNote}</p>
+          <div className="action-row">
+            <button
+              className="secondary-button"
               disabled={!props.isEditable}
-              onChange={(event) =>
-                setForm((state) => ({ ...state, listenerAddress: event.target.value }))
+              onClick={() =>
+                setForm((state) => ({
+                  ...state,
+                  listenerAddress: props.listenerAddress,
+                  signalEmitterAddress: props.signalEmitterAddress,
+                  sourceChainId: props.sourceChainId,
+                  destinationChainId: props.destinationChainId,
+                  signalTopic0: props.signalTopic0
+                }))
               }
-              value={props.isEditable ? form.listenerAddress : translateDisplayValue(form.listenerAddress, locale)}
-            />
-          </dd>
-        </div>
-        <div>
-          <dt>{copy.signalSource}</dt>
-          <dd>
-            <input
-              className="field"
-              disabled={!props.isEditable}
-              onChange={(event) =>
-                setForm((state) => ({ ...state, signalEmitterAddress: event.target.value }))
-              }
-              value={
-                props.isEditable
-                  ? form.signalEmitterAddress
-                  : translateDisplayValue(form.signalEmitterAddress, locale)
-              }
-            />
-          </dd>
-        </div>
-        <div>
-          <dt>{copy.originChainRoute}</dt>
-          <dd>
-            <select
-              className="field"
-              disabled={!props.isEditable}
-              onChange={(event) =>
-                setForm((state) => ({ ...state, sourceChainId: event.target.value }))
-              }
-              value={form.sourceChainId}
+              type="button"
             >
-              {chainOptions.map((option) => (
-                <option key={`source-${option.value}`} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </dd>
+              {copy.useCurrentRoute}
+            </button>
+          </div>
         </div>
-        <div>
-          <dt>{copy.destinationChainRoute}</dt>
-          <dd>
-            <input
-              className="field"
-              disabled
-              value={destinationChainLabel}
-            />
-          </dd>
-        </div>
-        <div>
-          <dt>{copy.signalTopic}</dt>
-          <dd>
-            <input
-              className="field"
-              disabled={!props.isEditable}
-              onChange={(event) => setForm((state) => ({ ...state, signalTopic0: event.target.value }))}
-              value={form.signalTopic0}
-            />
-          </dd>
-        </div>
-      </dl>
-      <p className="wallet-footnote">{copy.destinationChainLockedNote}</p>
-      <div className="action-row">
-        <button
-          className="secondary-button"
-          disabled={!props.isEditable}
-          onClick={() =>
-            setForm((state) => ({
-              ...state,
-              listenerAddress: props.listenerAddress,
-              signalEmitterAddress: props.signalEmitterAddress,
-              sourceChainId: props.sourceChainId,
-              destinationChainId: props.destinationChainId,
-              signalTopic0: props.signalTopic0
-            }))
-          }
-          type="button"
-        >
-          {copy.useCurrentRoute}
-        </button>
-      </div>
+      </details>
       <div className="action-row">
         <button
           className="primary-button"

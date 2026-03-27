@@ -118,47 +118,57 @@ export function WalletHeader(props: WalletHeaderProps) {
         </button>
       </div>
       <p className="wallet-footnote">{copy.executionEnvironmentNote}</p>
-      <div className="action-row">
-        <input
-          className="field compact-field"
-          disabled={!hasBoundWallet || props.isPending}
-          onChange={(event) => setFundAmount(event.target.value)}
-          placeholder={`0.05 ${executionNativeSymbol}`}
-          value={fundAmount}
-        />
-        <button
-          className="primary-button"
-          disabled={!hasBoundWallet || props.isPending}
-          onClick={() => props.onFundWallet(fundAmount)}
-          type="button"
-        >
-          {props.isPending
-            ? copy.fundingAutonomousWalletShort
-            : `${copy.fundAutonomousWallet} (${executionNativeSymbol})`}
-        </button>
-      </div>
-      <p className="wallet-footnote">{fundingHelper}</p>
-      <div className="action-row">
-        <input
-          className="field compact-field"
-          disabled={!props.isConnected || props.isPending}
-          onChange={(event) => setWatchedToken(event.target.value)}
-          placeholder={copy.watchTokenPlaceholder}
-          value={watchedToken}
-        />
-        <button
-          className="secondary-button"
-          disabled={!props.isConnected || props.isPending || watchedToken.trim().length === 0}
-          onClick={() => {
-            props.onWatchToken(watchedToken)
-            setWatchedToken('')
-          }}
-          type="button"
-        >
-          {copy.watchToken}
-        </button>
-      </div>
-      <p className="wallet-footnote">{copy.watchTokenNote}</p>
+      <details className="wallet-utilities">
+        <summary className="wallet-utilities-summary">
+          <div>
+            <p className="panel-kicker">{copy.utilityActions}</p>
+            <p className="section-note">{copy.utilityActionsNote}</p>
+          </div>
+        </summary>
+        <div className="wallet-utilities-body">
+          <div className="action-row">
+            <input
+              className="field compact-field"
+              disabled={!hasBoundWallet || props.isPending}
+              onChange={(event) => setFundAmount(event.target.value)}
+              placeholder={`0.05 ${executionNativeSymbol}`}
+              value={fundAmount}
+            />
+            <button
+              className="primary-button"
+              disabled={!hasBoundWallet || props.isPending}
+              onClick={() => props.onFundWallet(fundAmount)}
+              type="button"
+            >
+              {props.isPending
+                ? copy.fundingAutonomousWalletShort
+                : `${copy.fundAutonomousWallet} (${executionNativeSymbol})`}
+            </button>
+          </div>
+          <p className="wallet-footnote">{fundingHelper}</p>
+          <div className="action-row">
+            <input
+              className="field compact-field"
+              disabled={!props.isConnected || props.isPending}
+              onChange={(event) => setWatchedToken(event.target.value)}
+              placeholder={copy.watchTokenPlaceholder}
+              value={watchedToken}
+            />
+            <button
+              className="secondary-button"
+              disabled={!props.isConnected || props.isPending || watchedToken.trim().length === 0}
+              onClick={() => {
+                props.onWatchToken(watchedToken)
+                setWatchedToken('')
+              }}
+              type="button"
+            >
+              {copy.watchToken}
+            </button>
+          </div>
+          <p className="wallet-footnote">{copy.watchTokenNote}</p>
+        </div>
+      </details>
       <div className="dual-asset-grid">
         <div>
           <p className="section-note">{copy.controllerWalletAssets}</p>

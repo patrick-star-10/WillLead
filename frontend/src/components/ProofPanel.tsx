@@ -22,6 +22,15 @@ export function ProofPanel(props: ProofPanelProps) {
       : props.historyStatus === 'error'
         ? copy.executionHistoryRefreshFailed
         : props.emptyStateMessage
+  const proofCounts = props.events.reduce(
+    (counts, event) => {
+      if (event.chain === 'origin') counts.origin += 1
+      if (event.chain === 'reactive') counts.reactive += 1
+      if (event.chain === 'destination') counts.destination += 1
+      return counts
+    },
+    { origin: 0, reactive: 0, destination: 0 }
+  )
 
   return (
     <article className="panel proof-panel">
@@ -32,6 +41,28 @@ export function ProofPanel(props: ProofPanelProps) {
         </div>
         <span className="status-pill status-proof">{copy.chainEvidence}</span>
       </div>
+      <div className="proof-flow">
+        <div className="proof-flow-copy">
+          <p className="panel-kicker">{copy.proofFlowTitle}</p>
+          <p className="section-note">{copy.proofFlowNote}</p>
+        </div>
+        <div className="proof-flow-track" aria-label="Proof flow">
+          <div className="proof-flow-node">
+            <span>{copy.sourceStage}</span>
+            <strong>{proofCounts.origin}</strong>
+          </div>
+          <div className="proof-flow-arrow" aria-hidden="true">-&gt;</div>
+          <div className="proof-flow-node">
+            <span>{copy.reactiveStage}</span>
+            <strong>{proofCounts.reactive}</strong>
+          </div>
+          <div className="proof-flow-arrow" aria-hidden="true">-&gt;</div>
+          <div className="proof-flow-node">
+            <span>{copy.destinationStage}</span>
+            <strong>{proofCounts.destination}</strong>
+          </div>
+        </div>
+      </div>
       <ul className="proof-list">
         {props.events.length === 0 ? (
           <li className="proof-empty-state">
@@ -40,7 +71,7 @@ export function ProofPanel(props: ProofPanelProps) {
           </li>
         ) : null}
         {props.events.map((event) => (
-          <li className="proof-item" key={event.id}>
+          <li className={`proof-item proof-item-${event.chain}`} key={event.id}>
             <div className="proof-main">
               <div className="proof-headline">
                 <strong>{translateProofLabel(event.label, locale)}</strong>

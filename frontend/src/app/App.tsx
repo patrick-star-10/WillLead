@@ -15,7 +15,13 @@ import { useExecutionEvents } from '../hooks/useExecutionEvents'
 import { useIntentState } from '../hooks/useIntentState'
 import { useSwapIntentState } from '../hooks/useSwapIntentState'
 import { useWalletState } from '../hooks/useWalletState'
-import { useCopy, useLocaleActions, translateConnectionLabel, translateStatusBanner } from '../lib/i18n'
+import {
+  useCopy,
+  useLocaleActions,
+  translateConnectionLabel,
+  translateRuntimeStatus,
+  translateStatusBanner
+} from '../lib/i18n'
 import { defaultDisplayIntentKind } from '../lib/intentCatalog'
 import { useWalletStore } from '../store/walletStore'
 import type { DisplayIntentKind } from '../types/willlead'
@@ -77,6 +83,47 @@ export function App() {
         : hasBoundWallet
           ? copy.activityEmpty
           : copy.connectWalletToLoadRuntime
+  const activeRuntimeLabel =
+    activeIntentKind === 'swap_faucet'
+      ? translateRuntimeStatus(swapIntent.runtimeStatus, locale)
+      : translateRuntimeStatus(wallet.runtimeStatus, locale)
+  const selectedIntentLabel =
+    activeIntentKind === 'swap_faucet' ? copy.swapIntentLabel : copy.transferIntentLabel
+  const heroChecklist = [
+    {
+      label: copy.heroChecklistWallet,
+      complete: wallet.isConnected
+    },
+    {
+      label: copy.heroChecklistIntent,
+      complete:
+        activeIntentKind === 'swap_faucet'
+          ? swapIntent.recipient.trim().length > 0 || swapIntent.executedCount > 0
+          : intent.enabled
+    },
+    {
+      label: copy.heroChecklistProof,
+      complete: deferredEvents.length > 0
+    }
+  ]
+  const summaryCards = [
+    {
+      label: copy.executionModeSummary,
+      value: wallet.executionEnvironmentLabel
+    },
+    {
+      label: copy.selectedIntentSummary,
+      value: selectedIntentLabel
+    },
+    {
+      label: copy.runtimeSummary,
+      value: activeRuntimeLabel
+    },
+    {
+      label: copy.proofCountSummary,
+      value: `${deferredEvents.length}`
+    }
+  ]
 
   const sections = [
     {
@@ -192,55 +239,82 @@ export function App() {
                 <h1>WillLead</h1>
               </div>
             </div>
+            <h2 className="hero-headline">{copy.heroHeadline}</h2>
             <p className="hero-copy">{copy.heroCopy}</p>
-          </div>
-          <div className="hero-actions">
-            <div className="language-toggle" aria-label="Language">
-              <button
-                className={`language-button ${locale === 'en' ? 'language-button-active' : ''}`}
-                onClick={() => setLocale('en')}
-                type="button"
-              >
-                {copy.localeEnglish}
-              </button>
-              <button
-                className={`language-button ${locale === 'zh-CN' ? 'language-button-active' : ''}`}
-                onClick={() => setLocale('zh-CN')}
-                type="button"
-              >
-                {copy.localeChinese}
-              </button>
+            <p className="hero-subcopy">{copy.heroSubcopy}</p>
+            <div className="hero-badge-strip" aria-label="WillLead capabilities">
+              <span className="hero-badge">{copy.heroBadgeOffline}</span>
+              <span className="hero-badge">{copy.heroBadgeProtocol}</span>
+              <span className="hero-badge">{copy.heroBadgeProof}</span>
             </div>
-            <button
-              className="primary-button"
-              onClick={() => {
-                if (wallet.isConnected) {
-                  void disconnectWallet()
-                  return
-                }
-                setWalletModalOpen(true)
-              }}
-              type="button"
-            >
-              {wallet.isConnected ? copy.disconnectWallet : copy.connectWallet}
-            </button>
-            <p className="hero-action-note">
-              {wallet.isConnected
-                ? `${translateConnectionLabel(wallet.connectionLabel, locale)} ${copy.connectedHint}`
-                : copy.connectHint}
-            </p>
+          </div>
+          <div className="hero-sidecar">
+            <div className="hero-actions">
+              <div className="language-toggle" aria-label="Language">
+                <button
+                  className={`language-button ${locale === 'en' ? 'language-button-active' : ''}`}
+                  onClick={() => setLocale('en')}
+                  type="button"
+                >
+                  {copy.localeEnglish}
+                </button>
+                <button
+                  className={`language-button ${locale === 'zh-CN' ? 'language-button-active' : ''}`}
+                  onClick={() => setLocale('zh-CN')}
+                  type="button"
+                >
+                  {copy.localeChinese}
+                </button>
+              </div>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  if (wallet.isConnected) {
+                    void disconnectWallet()
+                    return
+                  }
+                  setWalletModalOpen(true)
+                }}
+                type="button"
+              >
+                {wallet.isConnected ? copy.disconnectWallet : copy.connectWallet}
+              </button>
+              <p className="hero-action-note">
+                {wallet.isConnected
+                  ? `${translateConnectionLabel(wallet.connectionLabel, locale)} ${copy.connectedHint}`
+                  : copy.connectHint}
+              </p>
+            </div>
+
+            <aside className="hero-demo-card" aria-label="Demo flow">
+              <p className="panel-kicker">{copy.heroChecklistTitle}</p>
+              <div className="hero-checklist">
+                {heroChecklist.map((item, index) => (
+                  <div className="hero-check-item" key={item.label}>
+                    <span className="hero-check-index">0{index + 1}</span>
+                    <div className="hero-check-copy">
+                      <strong>{item.label}</strong>
+                      <span className={`status-pill ${item.complete ? 'status-active' : 'status-inactive'}`}>
+                        {item.complete ? copy.active : copy.inactive}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </aside>
           </div>
         </div>
       </section>
 
       <section className="section-nav" aria-label="Wallet sections">
-        {sections.map((section) => (
+        {sections.map((section, index) => (
           <button
             className={`section-tab ${section.id === activeSection ? 'section-tab-active' : ''}`}
             key={section.id}
             onClick={() => setActiveSection(section.id)}
             type="button"
           >
+            <span className="section-step-index">0{index + 1}</span>
             <span className="section-tab-label">{section.label}</span>
             <small>{section.description}</small>
           </button>
@@ -257,6 +331,14 @@ export function App() {
           <p className="panel-kicker">{copy.walletView}</p>
           <h2>{activeSectionMeta.title}</h2>
           <p className="section-note">{activeSectionMeta.description}</p>
+        </div>
+        <div className="view-summary-grid">
+          {summaryCards.map((card) => (
+            <div className="summary-card" key={card.label}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </div>
+          ))}
         </div>
 
         <section className="section-stage">
