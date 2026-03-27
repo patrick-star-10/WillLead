@@ -9,11 +9,20 @@ Its goal is not to show that a normal wallet can integrate a bit of Reactive fun
 
 **If Reactive Network makes event-driven execution possible, then a wallet should not only hold keys and balances. It should also hold user intent and continue acting on that intent when the right event happens.**
 
+Put more sharply:
+
+- current wallets are session-bound, user-triggered, and single-action
+- `Reactive-native wallets` should be persistent, stateful, and event-driven
+
 So the point of WillLead is not "adding automation to a wallet." The point is designing a wallet around **intent**, **runtime state**, and **event-driven execution** as native wallet behavior.
 
 The submission is not primarily about feature count. It is about validating a larger claim:
 
 **Reactive Network is not only an automation layer for existing applications. It may also serve as the execution substrate for a new category of wallets and consumer applications.**
+
+This is not a feature demo.
+
+**It is a minimal reference architecture for Reactive-native wallets.**
 
 ## Core Idea
 
@@ -59,6 +68,14 @@ In WillLead:
 That is why this project is not presented as "a wallet with automation." It is presented as:
 
 **a wallet prototype designed around the way Reactive Network works, and a reference implementation for a Reactive-native wallet direction.**
+
+Its advantage over bots is also not only "more decentralized."
+
+It defines a different product boundary:
+
+- the user does not have to trust an execution layer that lives outside the wallet model
+- intent becomes persistent wallet state instead of temporary frontend input
+- execution becomes a composable wallet-native capability instead of external automation glue
 
 ## Three Verified Execution Paths
 
@@ -361,6 +378,14 @@ The LI.FI extension would push that model one step further, toward a more realis
 
 This is not the part that had to be forced into the current submission, but it is one of the clearest and most product-relevant upgrade directions for the project.
 
+Over time, WillLead does not need to stop at being "a wallet."
+
+It can evolve into a more general **consumer intent execution layer**:
+
+- the wallet is only the first product entry point
+- persistent intent is the real core state
+- composable execution is the larger application direction
+
 ## Conclusion
 
 WillLead is not trying to show that "wallets can call Reactive Network."
@@ -377,6 +402,7 @@ More broadly, WillLead is trying to show:
 - `Reactive-native wallet` is a direction worth continued exploration
 - that direction can be distilled into reusable developer and ecosystem reference architecture
 - Reactive Network has the potential to support a new class of consumer application architecture, not only automation for existing systems
+- WillLead is not only a wallet prototype; it can evolve into a general intent execution layer for consumer applications
 
 If the default assumption behind a traditional wallet is "the wallet acts when the user is online," then the prototype assumption behind WillLead is:
 

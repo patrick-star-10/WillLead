@@ -9,11 +9,20 @@ WillLead 是一个**面向 Reactive Network 原生设计的钱包原型，也是
 
 **如果 Reactive Network 提供了事件驱动执行能力，那么钱包就不应该只保存私钥和余额。钱包还应该保存用户意图，并在正确事件发生时持续执行。**
 
+更直接地说：
+
+- 传统钱包是会话驱动、用户触发、执行一次就结束的
+- `Reactive-native wallet` 应该是持久的、有状态的、事件驱动的执行主体
+
 因此，WillLead 的核心不是“给钱包加自动化”，而是把 **intent**、**runtime state** 和 **event-driven execution** 设计成钱包本体的一部分。
 
 这个项目的提交重点不是功能堆叠，而是验证一个判断：
 
 **Reactive Network 不只是给现有应用增加自动化能力，它也可能成为一类新钱包和新消费应用的执行底座。**
+
+这不是一个功能演示。
+
+**这是一个面向 `Reactive-native wallet` 方向的最小参考架构。**
 
 ## 项目核心
 
@@ -59,6 +68,14 @@ WillLead 试图把这个模式改成：
 所以这个项目的重点不是“钱包支持自动化”，而是：
 
 **WillLead 是一个按 Reactive Network 运行方式来设计的钱包原型，并且可以作为 `Reactive-native wallet` 方向的参考实现。**
+
+它比链下 bot 的意义也不只是“更去中心化”。
+
+它表达的是另一种产品边界：
+
+- 用户不需要把执行层信任外包给钱包之外的 bot
+- intent 不再是临时前端输入，而是持续存在的钱包状态
+- 执行不再是外挂脚本行为，而是可组合的钱包原生能力
 
 ## 已验证的三条关键路径
 
@@ -361,6 +378,14 @@ npm run build
 
 这不是本次提交必须强行完成的部分，但它是这个项目最清晰、也最有产品化价值的下一步升级方向之一。
 
+继续推进之后，WillLead 也不会只停留在“一个钱包”。
+
+它可以进一步演化成一层更通用的 **consumer intent execution layer**：
+
+- 钱包只是第一个产品入口
+- 持久 intent 才是核心状态
+- 可组合执行才是更大的应用层方向
+
 ## 结论
 
 WillLead 不是在证明“钱包也可以调用 Reactive Network”。
@@ -377,6 +402,7 @@ WillLead 不是在证明“钱包也可以调用 Reactive Network”。
 - `Reactive-native wallet` 是一个值得继续探索的产品方向
 - 这个方向可以沉淀成面向开发者和生态的参考实现
 - Reactive Network 有机会支持一类新的 consumer application architecture，而不仅仅是给现有系统加自动化
+- WillLead 不只是一个钱包原型，它可以继续演化成面向消费应用的通用 intent execution layer
 
 如果传统钱包的默认假设是“用户在线时，钱包才行动”，  
 那么 WillLead 的原型假设是：
