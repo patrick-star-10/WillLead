@@ -8,27 +8,35 @@ export async function getLogsPaged(parameters: {
   event: any
   args?: any
   lookbackBlocks?: bigint
+  fromBlock?: bigint
+  toBlock?: bigint
   strict?: boolean
 }) {
-  const latestBlock = await parameters.client.getBlockNumber()
+  const latestBlock =
+    parameters.toBlock === undefined ? await parameters.client.getBlockNumber() : parameters.toBlock
   const startBlock =
-    parameters.lookbackBlocks && latestBlock > parameters.lookbackBlocks
+    parameters.fromBlock ??
+    (parameters.lookbackBlocks && latestBlock > parameters.lookbackBlocks
       ? latestBlock - parameters.lookbackBlocks
-      : 0n
+      : 0n)
   const logs: any[] = []
 
-  for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += logQueryChunkSize +1n) {
+  if (startBlock > latestBlock) {
+    return logs
+  }
+
+  for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += logQueryChunkSize + 1n) {
     const toBlock =
       fromBlock + logQueryChunkSize > latestBlock ? latestBlock : fromBlock + logQueryChunkSize
 
     const chunk = await parameters.client.getLogs({
-    address: parameters.address,
-    event: parameters.event,
-    args: parameters.args,
-    fromBlock,
-    toBlock,
-    strict: parameters.strict
-  })
+      address: parameters.address,
+      event: parameters.event,
+      args: parameters.args,
+      fromBlock,
+      toBlock,
+      strict: parameters.strict
+    })
 
     logs.push(...chunk)
   }
@@ -41,15 +49,23 @@ export async function getRawLogsPaged(parameters: {
   address: Address
   topics: [Hex, ...(Hex | null)[]]
   lookbackBlocks?: bigint
+  fromBlock?: bigint
+  toBlock?: bigint
 }) {
-  const latestBlock = await parameters.client.getBlockNumber()
+  const latestBlock =
+    parameters.toBlock === undefined ? await parameters.client.getBlockNumber() : parameters.toBlock
   const startBlock =
-    parameters.lookbackBlocks && latestBlock > parameters.lookbackBlocks
+    parameters.fromBlock ??
+    (parameters.lookbackBlocks && latestBlock > parameters.lookbackBlocks
       ? latestBlock - parameters.lookbackBlocks
-      : 0n
+      : 0n)
   const logs: Array<{ data?: string }> = []
 
-  for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += logQueryChunkSize+1n) {
+  if (startBlock > latestBlock) {
+    return logs
+  }
+
+  for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += logQueryChunkSize + 1n) {
     const toBlock =
       fromBlock + logQueryChunkSize > latestBlock ? latestBlock : fromBlock + logQueryChunkSize
 

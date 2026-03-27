@@ -3,7 +3,10 @@ import type { ActionResult } from '../../types/willlead'
 import { reactiveChain } from '../chains'
 import { getReactivePublicClient, getReactiveWalletClient } from '../clients'
 import { getMessages, useLanguageStore } from '../i18n'
-import { ensureReactiveListenerArmedWithClient } from '../internal/reactive/listener'
+import {
+  ensureReactiveListenerArmedWithClient,
+  invalidateReactiveListenerState
+} from '../internal/reactive/listener'
 import { resolveReactiveListenerForManager } from '../internal/wallet/binding'
 import { readExecutionEnvironment } from '../internal/storage'
 
@@ -39,6 +42,7 @@ export async function pauseReactiveListener(): Promise<ActionResult> {
   if (reactiveClient) {
     await reactiveClient.waitForTransactionReceipt({ hash })
   }
+  invalidateReactiveListenerState(reactiveListenerAddress, executionEnvironment)
 
   return {
     hash,
@@ -63,6 +67,7 @@ export async function resumeReactiveListener(): Promise<ActionResult> {
   if (reactiveClient) {
     await reactiveClient.waitForTransactionReceipt({ hash })
   }
+  invalidateReactiveListenerState(reactiveListenerAddress, executionEnvironment)
 
   return {
     hash,

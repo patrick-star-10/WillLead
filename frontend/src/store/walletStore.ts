@@ -596,18 +596,17 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         initialState.wallet.connectionSource,
         initialState.wallet.executionEnvironment
       )
+      const settled =
+        snapshot.wallet.lastExecutionNonce > initialState.wallet.lastExecutionNonce ||
+        snapshot.intent.executedCount > initialState.intent.executedCount ||
+        snapshot.wallet.balanceLabel !== initialState.wallet.balanceLabel ||
+        (swapIntent?.lastOriginTxHash !== undefined &&
+          swapIntent.lastOriginTxHash !== initialState.swapIntent.lastOriginTxHash)
 
       set((state) => {
         if (state.isPending || state.wallet.ownerAddress !== initialState.wallet.ownerAddress) {
           return {}
         }
-
-        const settled =
-          snapshot.wallet.lastExecutionNonce > state.wallet.lastExecutionNonce ||
-          snapshot.intent.executedCount > state.intent.executedCount ||
-          snapshot.wallet.balanceLabel !== state.wallet.balanceLabel ||
-          (swapIntent?.lastOriginTxHash !== undefined &&
-            swapIntent.lastOriginTxHash !== state.swapIntent.lastOriginTxHash)
 
         return {
           ...mergeCoreSnapshotIntoState(state, snapshot),
@@ -618,12 +617,21 @@ export const useWalletStore = create<WillLeadStore>((set, get) => ({
         }
       })
 
-      void hydrateDetailedSnapshot(
-        set,
-        initialState.wallet.ownerAddress,
-        initialState.wallet.connectionSource,
-        initialState.wallet.executionEnvironment
-      )
+      const currentState = get()
+      const shouldHydrateDetailedSnapshot =
+        settled ||
+        currentState.wallet.historyStatus === 'loading' ||
+        currentState.wallet.historyStatus === 'idle' ||
+        currentState.wallet.historyStatus === 'error'
+
+      if (shouldHydrateDetailedSnapshot) {
+        void hydrateDetailedSnapshot(
+          set,
+          initialState.wallet.ownerAddress,
+          initialState.wallet.connectionSource,
+          initialState.wallet.executionEnvironment
+        )
+      }
     } catch {}
   },
   refreshSwapIntentState: async () => {

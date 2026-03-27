@@ -22,9 +22,34 @@ import type { ListenerRuntime } from '../types'
 const reactiveSystemAbi = parseAbi([
   'function subscribeContract(address contractAddress,uint256 chainId,address sourceContract,uint256 topic0,uint256 topic1,uint256 topic2,uint256 topic3)'
 ])
+const listenerStateCacheTtlMs = 30_000
+const listenerStateCache = new Map<
+  string,
+  {
+    expiresAt: number
+    value: Omit<ListenerRuntime, 'canManageListener'>
+  }
+>()
 
 function copy() {
   return getMessages(useLanguageStore.getState().locale)
+}
+
+function createListenerRuntime(
+  value: Omit<ListenerRuntime, 'canManageListener'>
+): ListenerRuntime {
+  return {
+    ...value,
+    canManageListener: (ownerAddress: string | null) =>
+      ownerAddress !== null && isSameAddress(value.ownerAddress, ownerAddress)
+  }
+}
+
+export function invalidateReactiveListenerState(
+  reactiveListenerAddress: Address,
+  executionEnvironment: ExecutionEnvironment = readExecutionEnvironment()
+) {
+  listenerStateCache.delete(`${executionEnvironment}:${reactiveListenerAddress.toLowerCase()}`)
 }
 
 export async function readReactiveListenerState(
@@ -40,12 +65,17 @@ export async function readReactiveListenerState(
     originChainId: 'Unavailable',
     destinationChainId: 'Unavailable',
     strategySignalTopic0: 'Unavailable',
-    subscriptionStatus: 'unavailable',
-    canManageListener: (_ownerAddress: string | null) => false
-  } satisfies ListenerRuntime
+    subscriptionStatus: 'unavailable'
+  } satisfies Omit<ListenerRuntime, 'canManageListener'>
 
   if (!reactiveClient || !isConfiguredAddress(reactiveListenerAddress)) {
-    return unavailableRuntime
+    return createListenerRuntime(unavailableRuntime)
+  }
+
+  const cacheKey = `${executionEnvironment}:${reactiveListenerAddress.toLowerCase()}`
+  const cached = listenerStateCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return createListenerRuntime(cached.value)
   }
 
   try {
@@ -98,6 +128,9 @@ export async function readReactiveListenerState(
     let subscriptionStatus: ListenerRuntime['subscriptionStatus'] = 'missing'
 
     try {
+      const latestBlock = await reactiveClient.getBlockNumber()
+      const fromBlock =
+        latestBlock > subscriptionLookbackBlocks ? latestBlock - subscriptionLookbackBlocks : 0n
       const logs = await getRawLogsPaged({
         client: reactiveClient,
         address: reactiveSystemContract as Address,
@@ -107,7 +140,8 @@ export async function readReactiveListenerState(
           formatUint256Topic(originChainId),
           formatAddressTopic(signalEmitter)
         ] as [Hex, Hex, Hex, Hex],
-        lookbackBlocks: subscriptionLookbackBlocks
+        fromBlock,
+        toBlock: latestBlock
       })
 
       const expectedStrategySignalTopic0 = strategySignalTopic0
@@ -132,7 +166,7 @@ export async function readReactiveListenerState(
       subscriptionStatus = 'unavailable'
     }
 
-    return {
+    const runtimeValue = {
       listenerPaused,
       callbackGasLimit: callbackGasLimit.toString(),
       signalEmitter,
@@ -140,12 +174,17 @@ export async function readReactiveListenerState(
       originChainId: originChainId.toString(),
       destinationChainId: destinationChainId.toString(),
       strategySignalTopic0: `0x${strategySignalTopic0.toString(16)}`,
-      subscriptionStatus,
-      canManageListener: (ownerAddress: string | null) =>
-        ownerAddress !== null && isSameAddress(listenerOwnerAddress, ownerAddress)
-    }
+      subscriptionStatus
+    } satisfies Omit<ListenerRuntime, 'canManageListener'>
+
+    listenerStateCache.set(cacheKey, {
+      expiresAt: Date.now() + listenerStateCacheTtlMs,
+      value: runtimeValue
+    })
+
+    return createListenerRuntime(runtimeValue)
   } catch {
-    return unavailableRuntime
+    return createListenerRuntime(unavailableRuntime)
   }
 }
 
@@ -204,6 +243,8 @@ export async function ensureReactiveListenerArmedWithClient(params: {
   if (reactiveClient) {
     await reactiveClient.waitForTransactionReceipt({ hash })
   }
+
+  invalidateReactiveListenerState(params.reactiveListenerAddress, params.executionEnvironment)
 
   return {
     hash,

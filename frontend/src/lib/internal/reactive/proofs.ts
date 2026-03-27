@@ -38,8 +38,25 @@ export async function readExecutionProofs(
   }
 
   const reactiveClient = getReactivePublicClient()
+  const [reactiveLatestBlock, destinationLatestBlock, originLatestBlock] = await Promise.all([
+    reactiveClient ? reactiveClient.getBlockNumber().catch(() => null) : Promise.resolve(null),
+    destinationClient.getBlockNumber().catch(() => null),
+    originClient ? originClient.getBlockNumber().catch(() => null) : Promise.resolve(null)
+  ])
+  const reactiveFromBlock =
+    reactiveLatestBlock !== null && reactiveLatestBlock > historyLookbackBlocks
+      ? reactiveLatestBlock - historyLookbackBlocks
+      : 0n
+  const destinationFromBlock =
+    destinationLatestBlock !== null && destinationLatestBlock > historyLookbackBlocks
+      ? destinationLatestBlock - historyLookbackBlocks
+      : 0n
+  const originFromBlock =
+    originLatestBlock !== null && originLatestBlock > historyLookbackBlocks
+      ? originLatestBlock - historyLookbackBlocks
+      : 0n
   const logResults = await Promise.allSettled([
-    reactiveClient && isConfiguredAddress(reactiveListenerAddress)
+    reactiveClient && reactiveLatestBlock !== null && isConfiguredAddress(reactiveListenerAddress)
       ? getLogsPaged({
           client: reactiveClient,
           address: reactiveListenerAddress,
@@ -49,11 +66,12 @@ export async function readExecutionProofs(
           args: {
             _contract: walletAddress
           },
-          lookbackBlocks: historyLookbackBlocks,
+          fromBlock: reactiveFromBlock,
+          toBlock: reactiveLatestBlock,
           strict: true
         })
       : Promise.resolve([]),
-    walletFactoryAddress && isConfiguredAddress(walletFactoryAddress)
+    walletFactoryAddress && destinationLatestBlock !== null && isConfiguredAddress(walletFactoryAddress)
       ? getLogsPaged({
           client: destinationClient,
           address: walletFactoryAddress,
@@ -64,7 +82,8 @@ export async function readExecutionProofs(
             owner: ownerAddress,
             wallet: walletAddress
           },
-          lookbackBlocks: historyLookbackBlocks,
+          fromBlock: destinationFromBlock,
+          toBlock: destinationLatestBlock,
           strict: true
         })
       : Promise.resolve([]),
@@ -74,7 +93,8 @@ export async function readExecutionProofs(
       event: parseAbiItem(
         'event RuntimeBindingConfigured(address indexed wallet, address indexed listener, address indexed signalEmitter, uint256 sourceChainId, uint256 destinationChainId, uint256 strategySignalTopic0)'
       ),
-      lookbackBlocks: historyLookbackBlocks,
+      fromBlock: destinationFromBlock,
+      toBlock: destinationLatestBlock ?? undefined,
       strict: true
     }),
     getLogsPaged({
@@ -86,7 +106,8 @@ export async function readExecutionProofs(
       args: {
         wallet: walletAddress
       },
-      lookbackBlocks: historyLookbackBlocks,
+      fromBlock: destinationFromBlock,
+      toBlock: destinationLatestBlock ?? undefined,
       strict: true
     }),
     getLogsPaged({
@@ -96,7 +117,8 @@ export async function readExecutionProofs(
       args: {
         wallet: walletAddress
       },
-      lookbackBlocks: historyLookbackBlocks,
+      fromBlock: destinationFromBlock,
+      toBlock: destinationLatestBlock ?? undefined,
       strict: true
     }),
     getLogsPaged({
@@ -105,7 +127,8 @@ export async function readExecutionProofs(
       event: parseAbiItem(
         'event IntentExecuted(address indexed wallet, address indexed token, address indexed recipient, uint256 amount, uint256 executionNonce, bytes32 signalHash, uint256 originTxHash)'
       ),
-      lookbackBlocks: historyLookbackBlocks,
+      fromBlock: destinationFromBlock,
+      toBlock: destinationLatestBlock ?? undefined,
       strict: true
     }),
     getLogsPaged({
@@ -114,10 +137,11 @@ export async function readExecutionProofs(
       event: parseAbiItem(
         'event IntentExecutionSkipped(address indexed wallet, uint256 executionNonce, bytes32 signalHash, string reason)'
       ),
-      lookbackBlocks: historyLookbackBlocks,
+      fromBlock: destinationFromBlock,
+      toBlock: destinationLatestBlock ?? undefined,
       strict: true
     }),
-    originClient && isConfiguredAddress(signalEmitterAddress)
+    originClient && originLatestBlock !== null && isConfiguredAddress(signalEmitterAddress)
       ? getLogsPaged({
           client: originClient,
           address: signalEmitterAddress,
@@ -127,7 +151,8 @@ export async function readExecutionProofs(
           args: {
             wallet: walletAddress
           },
-          lookbackBlocks: historyLookbackBlocks,
+          fromBlock: originFromBlock,
+          toBlock: originLatestBlock,
           strict: true
         })
       : Promise.resolve([])
