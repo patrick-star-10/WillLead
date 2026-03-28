@@ -1,5 +1,11 @@
 # WillLead
 
+## Demo Video
+
+评委可直接观看路演视频：
+
+- [WillLead Demo Video](https://youtu.be/dqHAGzGRY4E)
+
 中文版评审说明文件。  
 English judge-facing version: [README_EN.md](./README_EN.md)
 
@@ -336,7 +342,7 @@ frontend/
 
 运行顺序与演示流程可直接参考：
 
-- [Demo_Runbook.md](./Demo_Runbook.md)
+- [WillLead Demo Video](https://youtu.be/dqHAGzGRY4E)
 
 合约测试：
 

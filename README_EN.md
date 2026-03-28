@@ -1,5 +1,11 @@
 # WillLead
 
+## Demo Video
+
+Judges can watch the pitch/demo video directly here:
+
+- [WillLead Demo Video](https://youtu.be/dqHAGzGRY4E)
+
 Judge-facing project overview.  
 Chinese judge-facing version: [README.md](./README.md)
 
@@ -336,7 +342,7 @@ Key scripts:
 
 The execution order and demo flow are documented in:
 
-- [Demo_Runbook.md](./Demo_Runbook.md)
+- [WillLead Demo Video](https://youtu.be/dqHAGzGRY4E)
 
 Contract tests:
 
