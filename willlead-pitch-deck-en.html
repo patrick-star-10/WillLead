@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WillLead Pitch Deck</title>
+    <style>
+      :root {
+        --bg: #071018;
+        --bg-soft: #0d1721;
+        --panel: rgba(12, 23, 34, 0.88);
+        --panel-strong: rgba(16, 29, 43, 0.96);
+        --line: rgba(255, 255, 255, 0.1);
+        --text: #f6ecd8;
+        --muted: #9fb3c1;
+        --signal: #b7ff57;
+        --signal-soft: rgba(183, 255, 87, 0.16);
+        --accent: #ff8f5b;
+        --accent-soft: rgba(255, 143, 91, 0.16);
+        --ink: #05090d;
+        --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+        --radius: 28px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(183, 255, 87, 0.08), transparent 28%),
+          radial-gradient(circle at 85% 15%, rgba(255, 143, 91, 0.12), transparent 24%),
+          linear-gradient(180deg, #050b10 0%, #09131b 100%);
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 32px 32px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.75), transparent 92%);
+      }
+
+      .toolbar {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 20;
+        display: flex;
+        gap: 10px;
+      }
+
+      .toolbar a,
+      .toolbar button {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(7, 16, 24, 0.76);
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 999px;
+        font: inherit;
+        text-decoration: none;
+        cursor: pointer;
+        backdrop-filter: blur(16px);
+      }
+
+      .toolbar a:hover,
+      .toolbar button:hover {
+        border-color: rgba(183, 255, 87, 0.44);
+        color: var(--signal);
+      }
+
+      .deck {
+        display: flex;
+        flex-direction: column;
+        gap: 48px;
+        padding: 48px 32px 56px;
+      }
+
+      .slide {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        scroll-snap-align: start;
+        page-break-after: always;
+      }
+
+      .stage {
+        position: relative;
+        width: min(1600px, calc(100vw - 64px));
+        aspect-ratio: 16 / 9;
+        background:
+          linear-gradient(135deg, rgba(183, 255, 87, 0.04), transparent 38%),
+          linear-gradient(160deg, rgba(255, 143, 91, 0.08), transparent 38%),
+          var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 20% 20%, rgba(183, 255, 87, 0.08), transparent 18%),
+          radial-gradient(circle at 80% 82%, rgba(255, 143, 91, 0.12), transparent 24%);
+        pointer-events: none;
+      }
+
+      .stage-inner {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100%;
+        padding: 48px 56px 44px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 12px;
+        color: var(--signal);
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 28px;
+        height: 1px;
+        background: currentColor;
+      }
+
+      .slide-number {
+        position: absolute;
+        right: 34px;
+        bottom: 26px;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.46);
+        letter-spacing: 0.12em;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        font-weight: 600;
+        line-height: 0.96;
+        letter-spacing: -0.03em;
+      }
+
+      h1 {
+        font-size: 88px;
+      }
+
+      h2 {
+        font-size: 62px;
+      }
+
+      h3 {
+        font-size: 28px;
+      }
+
+      p {
+        margin: 0;
+        line-height: 1.45;
+      }
+
+      .lede {
+        font-size: 29px;
+        max-width: 900px;
+        line-height: 1.16;
+      }
+
+      .sublede {
+        font-size: 18px;
+        color: var(--muted);
+        max-width: 820px;
+      }
+
+      .cover-grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 32px;
+        align-items: stretch;
+      }
+
+      .brand-block {
+        display: grid;
+        align-content: space-between;
+      }
+
+      .brand-lockup {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 28px;
+      }
+
+      .logo-shell {
+        width: 88px;
+        height: 88px;
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        display: grid;
+        place-items: center;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      }
+
+      .logo-mark {
+        width: 62px;
+        height: 62px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 30% 30%, rgba(183, 255, 87, 0.85), rgba(183, 255, 87, 0.08) 58%),
+          linear-gradient(135deg, rgba(255, 143, 91, 0.18), rgba(255, 255, 255, 0.03));
+        color: #081018;
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.06em;
+        box-shadow: 0 0 32px rgba(183, 255, 87, 0.18);
+      }
+
+      .signal-bar {
+        display: flex;
+        gap: 14px;
+        margin-top: 26px;
+        flex-wrap: wrap;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 14px;
+      }
+
+      .chip::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--signal);
+        box-shadow: 0 0 18px var(--signal);
+      }
+
+      .cover-card,
+      .panel,
+      .path-card,
+      .proof-box,
+      .quote-card,
+      .roadmap-card,
+      .metric-card {
+        border: 1px solid var(--line);
+        background: var(--panel-strong);
+        border-radius: 24px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+
+      .cover-card {
+        padding: 28px;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        gap: 22px;
+      }
+
+      .mini-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+      }
+
+      .big-stat {
+        font-size: 62px;
+        color: var(--signal);
+        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      }
+
+      .cover-points {
+        display: grid;
+        gap: 14px;
+      }
+
+      .cover-points div,
+      .bullet-list li,
+      .mini-list li {
+        color: var(--text);
+      }
+
+      .cover-points div span,
+      .mini-note,
+      .muted {
+        color: var(--muted);
+      }
+
+      .meta-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .meta-cell {
+        padding: 14px 0 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .two-col,
+      .split-grid,
+      .three-col,
+      .four-col,
+      .comparison-grid,
+      .path-grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .two-col {
+        grid-template-columns: 1.1fr 0.9fr;
+      }
+
+      .split-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .three-col {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .four-col {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .panel,
+      .path-card,
+      .proof-box,
+      .quote-card,
+      .roadmap-card,
+      .metric-card {
+        padding: 24px;
+      }
+
+      .panel h3,
+      .path-card h3,
+      .proof-box h3,
+      .quote-card h3,
+      .roadmap-card h3,
+      .metric-card h3 {
+        margin-bottom: 14px;
+      }
+
+      .bullet-list,
+      .mini-list {
+        margin: 0;
+        padding-left: 20px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .problem-stack,
+      .principle-stack,
+      .roadmap-stack,
+      .proof-stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .stack-item {
+        padding: 18px 20px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .stack-item strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 19px;
+      }
+
+      .highlight {
+        color: var(--signal);
+      }
+
+      .accent {
+        color: var(--accent);
+      }
+
+      .diagram {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+        align-items: center;
+      }
+
+      .node {
+        position: relative;
+        min-height: 154px;
+        padding: 18px;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .node::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -14px;
+        width: 28px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(183, 255, 87, 0.28), rgba(183, 255, 87, 0.8));
+      }
+
+      .node:last-child::after {
+        display: none;
+      }
+
+      .node-label {
+        margin-bottom: 10px;
+        color: var(--signal);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 11px;
+      }
+
+      .node-title {
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 24px;
+        margin-bottom: 10px;
+      }
+
+      .path-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .path-card {
+        display: grid;
+        align-content: start;
+        gap: 14px;
+      }
+
+      .path-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--signal-soft);
+        color: var(--signal);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .tx {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 13px;
+        color: #d7e4ef;
+        word-break: break-all;
+      }
+
+      .quote-card {
+        display: grid;
+        gap: 18px;
+        align-content: start;
+      }
+
+      .quote {
+        font-family: "Iowan Old Style", Georgia, serif;
+        font-size: 42px;
+        line-height: 1.08;
+      }
+
+      .comparison-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .versus {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 14px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .roadmap {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .roadmap-card {
+        min-height: 230px;
+      }
+
+      .roadmap-step {
+        display: inline-flex;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        justify-content: center;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--signal);
+        margin-bottom: 18px;
+      }
+
+      .footer-note {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .footline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .footline::before {
+        content: "";
+        width: 26px;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .proof-box strong,
+      .metric-card strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 20px;
+      }
+
+      .proof-matrix {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 20px;
+      }
+
+      .metric-card .big-number {
+        font-size: 54px;
+        line-height: 1;
+        margin-bottom: 10px;
+        color: var(--signal);
+        font-family: "Iowan Old Style", Georgia, serif;
+      }
+
+      .tiny {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      @media (max-width: 1100px) {
+        .toolbar {
+          position: static;
+          padding: 20px 20px 0;
+        }
+
+        .deck {
+          padding-top: 20px;
+        }
+
+        .slide {
+          min-height: auto;
+        }
+
+        .stage {
+          width: 100%;
+          aspect-ratio: auto;
+          min-height: 100vh;
+        }
+
+        .cover-grid,
+        .two-col,
+        .split-grid,
+        .three-col,
+        .four-col,
+        .comparison-grid,
+        .diagram,
+        .path-grid,
+        .proof-matrix,
+        .roadmap,
+        .meta-row {
+          grid-template-columns: 1fr;
+        }
+
+        .node::after {
+          display: none;
+        }
+
+        h1 {
+          font-size: 64px;
+        }
+
+        h2 {
+          font-size: 48px;
+        }
+
+        .quote {
+          font-size: 32px;
+        }
+      }
+
+      @media print {
+        @page {
+          size: 13.333in 7.5in;
+          margin: 0;
+        }
+
+        body {
+          background: #081018;
+        }
+
+        body::before,
+        .toolbar {
+          display: none;
+        }
+
+        .deck {
+          gap: 0;
+          padding: 0;
+        }
+
+        .slide {
+          min-height: auto;
+          break-after: page;
+        }
+
+        .stage {
+          width: 13.333in;
+          height: 7.5in;
+          aspect-ratio: auto;
+          border-radius: 0;
+          border: none;
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <a href="https://youtu.be/dqHAGzGRY4E" target="_blank" rel="noreferrer">Open Demo Video</a>
+      <button type="button" onclick="window.print()">Print / Export PDF</button>
+    </div>
+
+    <main class="deck">
+      <section class="slide" id="slide-1">
+        <div class="stage">
+          <div class="stage-inner">
+            <div class="cover-grid">
+              <div class="brand-block">
+                <div>
+                  <div class="eyebrow">Reactive-native Wallet MVP</div>
+                  <div class="brand-lockup">
+                    <div class="logo-shell">
+                      <div class="logo-mark" aria-label="WillLead logo">WL</div>
+                    </div>
+                    <div>
+                      <p class="mini-label">Hackathon Pitch Deck</p>
+                      <h1>WillLead</h1>
+                    </div>
+                  </div>
+                  <p class="lede">
+                    Define once.
+                    <span class="highlight">Execute when the right event arrives.</span>
+                  </p>
+                  <p class="sublede" style="margin-top: 18px">
+                    WillLead is a wallet prototype designed around Reactive Network itself. The wallet
+                    stores intent, keeps runtime state, receives callbacks, and executes even after the
+                    frontend goes offline.
+                  </p>
+                  <div class="signal-bar">
+                    <div class="chip">Persistent onchain intent</div>
+                    <div class="chip">Event-driven execution</div>
+                    <div class="chip">Live protocol proof</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cover-card">
+                <div>
+                  <p class="mini-label">Why this project matters</p>
+                  <div class="big-stat">A new wallet model</div>
+                </div>
+
+                <div class="cover-points">
+                  <div>
+                    <strong>Not just automation</strong><br />
+                    <span>This is a reference architecture for a Reactive-native wallet direction.</span>
+                  </div>
+                  <div>
+                    <strong>Not only demo events</strong><br />
+                    <span>It also reacts to real Uniswap Sepolia swap events.</span>
+                  </div>
+                  <div>
+                    <strong>Not frontend-bound</strong><br />
+                    <span>The wallet keeps acting after the UI disconnects.</span>
+                  </div>
+                </div>
+
+                <div class="meta-row">
+                  <div class="meta-cell">
+                    <div class="mini-label">Demo Video</div>
+                    <p>youtu.be/dqHAGzGRY4E</p>
+                  </div>
+                  <div class="meta-cell">
+                    <div class="mini-label">Execution Model</div>
+                    <p>Origin -> Reactive -> Destination</p>
+                  </div>
+                  <div class="meta-cell">
+                    <div class="mini-label">Verified Paths</div>
+                    <p>3 live end-to-end flows</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div></div>
+
+            <div class="footer-note">
+              <div class="footline">English judge-facing deck built from the submitted repository</div>
+              <div>01</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 01</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-2">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">The Problem</div>
+              <h2 style="margin-top: 14px">Current wallets are still session-bound.</h2>
+            </div>
+
+            <div class="two-col" style="align-items: center">
+              <div class="quote-card">
+                <div class="quote">
+                  "The user clicks once,
+                  <span class="accent">the wallet acts once.</span>"
+                </div>
+                <p class="sublede">
+                  That model breaks when the product should keep responding to external onchain events,
+                  not just to the user being online at the right moment.
+                </p>
+              </div>
+
+              <div class="problem-stack">
+                <div class="stack-item">
+                  <strong>Temporary intent</strong>
+                  Intent usually exists only inside the UI or in one signature flow, then disappears.
+                </div>
+                <div class="stack-item">
+                  <strong>Passive wallet model</strong>
+                  The wallet holds keys and balances, but it does not hold an ongoing execution posture.
+                </div>
+                <div class="stack-item">
+                  <strong>Automation lives outside the wallet</strong>
+                  Bots poll events, decide what to do, and execute on behalf of the user from the outside.
+                </div>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">We are not optimizing a normal wallet flow. We are challenging the wallet boundary itself.</div>
+              <div>02</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 02</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-3">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">The Thesis</div>
+              <h2 style="margin-top: 14px">If Reactive Network enables event-driven execution, the wallet should evolve too.</h2>
+            </div>
+
+            <div class="split-grid">
+              <div class="quote-card">
+                <div class="quote">
+                  A wallet should hold
+                  <span class="highlight">intent</span>,
+                  <span class="highlight">runtime state</span>,
+                  and
+                  <span class="highlight">execution logic</span>.
+                </div>
+              </div>
+
+              <div class="principle-stack">
+                <div class="stack-item">
+                  <strong>Persistent intent</strong>
+                  User intent becomes first-class wallet state, not temporary frontend input.
+                </div>
+                <div class="stack-item">
+                  <strong>Event-driven execution</strong>
+                  A valid source-side event can trigger wallet behavior without re-opening the UI.
+                </div>
+                <div class="stack-item">
+                  <strong>Wallet-native proof</strong>
+                  Source event, Reactive callback, and destination execution are all visible onchain.
+                </div>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">WillLead is the minimum reference architecture for this Reactive-native wallet thesis.</div>
+              <div>03</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 03</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-4">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Architecture</div>
+              <h2 style="margin-top: 14px">Origin event in. Autonomous wallet execution out.</h2>
+            </div>
+
+            <div class="panel">
+              <div class="diagram">
+                <div class="node">
+                  <div class="node-label">1. Controller</div>
+                  <div class="node-title">User signs once</div>
+                  <p>Saves transfer intent or swap intent into a personal autonomous wallet.</p>
+                </div>
+
+                <div class="node">
+                  <div class="node-label">2. Origin</div>
+                  <div class="node-title">Source event happens</div>
+                  <p>Raw signal, permissionless <code>poke()</code>, or a real Uniswap swap.</p>
+                </div>
+
+                <div class="node">
+                  <div class="node-label">3. Reactive</div>
+                  <div class="node-title">Listener reacts</div>
+                  <p>Reactive contract validates the route and builds the callback payload.</p>
+                </div>
+
+                <div class="node">
+                  <div class="node-label">4. Destination</div>
+                  <div class="node-title">Wallet validates</div>
+                  <p>Checks callback path, runtime state, duplicate protection, and execution limits.</p>
+                </div>
+
+                <div class="node">
+                  <div class="node-label">5. Proof</div>
+                  <div class="node-title">Execution is surfaced</div>
+                  <p>The frontend and scripts show source proof, Reactive dispatch, and destination outcome.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">Execution chain examples in the deployment: Sepolia -> Lasna -> Sepolia and Sepolia -> Lasna -> Lasna.</div>
+              <div>04</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 04</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-5">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Proof Of Execution</div>
+              <h2 style="margin-top: 14px">Three verified end-to-end paths are already live.</h2>
+            </div>
+
+            <div class="path-grid">
+              <div class="path-card">
+                <div class="path-tag">Path 1</div>
+                <h3>Raw Signal Path</h3>
+                <p>
+                  The minimum loop:
+                  <span class="highlight">emitSignal -> listener -> callback -> execution</span>
+                </p>
+                <div class="tx">Origin: 0xae45...a7d3</div>
+                <div class="tx">Destination: 0x8de1...7584</div>
+              </div>
+
+              <div class="path-card">
+                <div class="path-tag">Path 2</div>
+                <h3>Mirrored Intent + Permissionless <code>poke()</code></h3>
+                <p>
+                  The user stores intent once. A keeper only needs to call
+                  <span class="highlight">poke(wallet, nonce)</span>.
+                </p>
+                <div class="tx">Intent: 0xd2c1...d1e1</div>
+                <div class="tx">Poke: 0x6eb2...d5a9</div>
+                <div class="tx">Dispatch: 0x615e...0e5f</div>
+                <div class="tx">Execution: 0x5e01...7abe</div>
+              </div>
+
+              <div class="path-card">
+                <div class="path-tag">Path 3</div>
+                <h3>Real Protocol Event -> Wallet-Funded Action</h3>
+                <p>
+                  A real Uniswap Sepolia <span class="highlight">Swap</span> triggers a wallet-funded
+                  faucet request.
+                </p>
+                <div class="tx">Source swap: 0xec40...302a</div>
+                <div class="tx">Destination faucet: 0xa38a...6ff9</div>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">This is not a slides-only claim. The repository already ships proof-bearing transactions and tests.</div>
+              <div>05</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 05</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-6">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Strongest Evidence</div>
+              <h2 style="margin-top: 14px">The best demo is not self-authored. It comes from the outside protocol world.</h2>
+            </div>
+
+            <div class="proof-matrix">
+              <div class="proof-box">
+                <strong>Live upstream trigger</strong>
+                <p style="margin-bottom: 16px">
+                  WillLead listens across live Uniswap Sepolia v3 WETH / USDC pools. When a real swap
+                  happens, the Reactive listener routes a callback directly into the autonomous wallet.
+                </p>
+                <div class="proof-stack">
+                  <div class="stack-item">
+                    <strong>Not a fake demo event</strong>
+                    The source trigger is a real protocol event emitted by live external contracts.
+                  </div>
+                  <div class="stack-item">
+                    <strong>Not a bot-controlled wallet action</strong>
+                    The autonomous wallet uses its own execution balance to perform the action.
+                  </div>
+                  <div class="stack-item">
+                    <strong>Not only infrastructure narrative</strong>
+                    This ties Reactive Network capability directly to a credible user-facing product shape.
+                  </div>
+                </div>
+              </div>
+
+              <div class="three-col">
+                <div class="metric-card">
+                  <div class="mini-label">Watched Source</div>
+                  <div class="big-number">4</div>
+                  <p>Live Uniswap v3 Sepolia fee tiers under one multi-source listener.</p>
+                </div>
+                <div class="metric-card">
+                  <div class="mini-label">Trigger Event</div>
+                  <div class="big-number">Swap</div>
+                  <p>Real upstream protocol activity becomes the source event.</p>
+                </div>
+                <div class="metric-card">
+                  <div class="mini-label">Destination Action</div>
+                  <div class="big-number">Faucet</div>
+                  <p>Wallet-funded request executed from the autonomous wallet itself.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">This slide is the clearest proof that WillLead is responding to the world, not only to itself.</div>
+              <div>06</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 06</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-7">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Why Reactive Network Is Essential</div>
+              <h2 style="margin-top: 14px">Without Reactive Network, this collapses back into offchain bot automation.</h2>
+            </div>
+
+            <div class="comparison-grid">
+              <div class="panel">
+                <h3>Offchain bot model</h3>
+                <ul class="bullet-list">
+                  <li>Poll origin events from outside the wallet</li>
+                  <li>Trust external infra to decide when to relay</li>
+                  <li>Execution logic lives in service glue, not wallet state</li>
+                  <li>Automation belongs to the bot operator, not the wallet model</li>
+                </ul>
+              </div>
+
+              <div class="panel">
+                <h3>WillLead on Reactive Network</h3>
+                <ul class="bullet-list">
+                  <li>Reactive contracts listen to the origin-side event path directly</li>
+                  <li>Callbacks are routed into the autonomous wallet</li>
+                  <li>Saved onchain intent is the execution source of truth</li>
+                  <li>Automation becomes wallet-native capability</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="quote-card" style="margin-top: 20px">
+              <div class="quote">
+                Reactive Network is not decoration here.
+                <span class="highlight">It is the condition that makes the wallet model possible.</span>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">The point is not "wallet plus automation." The point is "wallet designed around event-driven execution."</div>
+              <div>07</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 07</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-8">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">What Users Actually Get</div>
+              <h2 style="margin-top: 14px">One setup flow. Ongoing wallet behavior.</h2>
+            </div>
+
+            <div class="two-col" style="align-items: stretch">
+              <div class="panel">
+                <h3>The user does this once</h3>
+                <ul class="bullet-list">
+                  <li>Connect a controller wallet</li>
+                  <li>Create or discover the autonomous wallet</li>
+                  <li>Save a transfer intent or swap intent</li>
+                  <li>Fund execution when needed</li>
+                </ul>
+              </div>
+
+              <div class="panel">
+                <h3>The wallet keeps doing this later</h3>
+                <ul class="bullet-list">
+                  <li>Wait for valid source-side events</li>
+                  <li>Receive Reactive callbacks</li>
+                  <li>Validate route and runtime state</li>
+                  <li>Execute the saved action without reopening the frontend</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="three-col" style="margin-top: 20px">
+              <div class="metric-card">
+                <div class="mini-label">Intent</div>
+                <strong>Stored onchain</strong>
+                <p>Transfer or swap response plan lives inside the wallet.</p>
+              </div>
+              <div class="metric-card">
+                <div class="mini-label">Runtime</div>
+                <strong>Bound to route</strong>
+                <p>Listener, source path, callback path, and execution status remain inspectable.</p>
+              </div>
+              <div class="metric-card">
+                <div class="mini-label">Proof</div>
+                <strong>Readable afterwards</strong>
+                <p>Source, callback, and destination outcomes are visible in the frontend and scripts.</p>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">This is why WillLead feels closer to an autonomous wallet than to a wallet UI with extras.</div>
+              <div>08</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 08</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-9">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Why This Matters To The Ecosystem</div>
+              <h2 style="margin-top: 14px">WillLead is bigger than one demo wallet.</h2>
+            </div>
+
+            <div class="four-col">
+              <div class="roadmap-card">
+                <div class="mini-label">Reference</div>
+                <h3>Reactive-native wallet architecture</h3>
+                <p>A concrete reference implementation for developers exploring the same direction.</p>
+              </div>
+
+              <div class="roadmap-card">
+                <div class="mini-label">Teaching Case</div>
+                <h3>Origin -> Reactive -> Destination</h3>
+                <p>A product-shaped example that explains the execution model with real contracts and proof.</p>
+              </div>
+
+              <div class="roadmap-card">
+                <div class="mini-label">Platform Story</div>
+                <h3>From infra to product form</h3>
+                <p>Shows how Reactive Network can drive user-facing behavior, not only backend automation.</p>
+              </div>
+
+              <div class="roadmap-card">
+                <div class="mini-label">Future Layer</div>
+                <h3>Consumer intent execution</h3>
+                <p>The wallet is only the first entry point. Persistent intent is the larger application pattern.</p>
+              </div>
+            </div>
+
+            <div class="quote-card" style="margin-top: 20px">
+              <div class="quote">
+                The submission is not trying to prove
+                <span class="accent">"wallets can call Reactive Network."</span>
+                It is trying to prove
+                <span class="highlight">"Reactive Network can support a new wallet paradigm."</span>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">That is why this repo can evolve into docs, workshops, starters, and reusable architecture.</div>
+              <div>09</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 09</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-10">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Next Milestones</div>
+              <h2 style="margin-top: 14px">The next stage is not more demo features. It is architecture hardening.</h2>
+            </div>
+
+            <div class="roadmap">
+              <div class="roadmap-card">
+                <div class="roadmap-step">1</div>
+                <h3>Multi-intent wallet</h3>
+                <p>Move beyond a single active flow into richer wallet-native execution composition.</p>
+              </div>
+
+              <div class="roadmap-card">
+                <div class="roadmap-step">2</div>
+                <h3>More live protocol templates</h3>
+                <p>Expand beyond one swap path into additional upstream event patterns.</p>
+              </div>
+
+              <div class="roadmap-card">
+                <div class="roadmap-step">3</div>
+                <h3>Operator / keeper hardening</h3>
+                <p>Stabilize the shared runtime service and failure-recovery posture.</p>
+              </div>
+
+              <div class="roadmap-card">
+                <div class="roadmap-step">4</div>
+                <h3>Cross-chain intent direction</h3>
+                <p>Extend from same-chain response into Reactive-native cross-chain execution flows.</p>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">A clear path exists from hackathon prototype to reusable ecosystem reference implementation.</div>
+              <div>10</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 10</div>
+        </div>
+      </section>
+
+      <section class="slide" id="slide-11">
+        <div class="stage">
+          <div class="stage-inner">
+            <div>
+              <div class="eyebrow">Close</div>
+              <h2 style="margin-top: 14px">WillLead asks a simple question.</h2>
+            </div>
+
+            <div class="split-grid" style="align-items: center">
+              <div class="quote-card">
+                <div class="quote">
+                  If the user defines intent once,
+                  <span class="highlight">why should the wallet stop acting</span>
+                  when the frontend disappears?
+                </div>
+              </div>
+
+              <div class="cover-card">
+                <div>
+                  <div class="mini-label">What WillLead proves now</div>
+                  <div class="cover-points" style="margin-top: 18px">
+                    <div>
+                      <strong>Intent can become wallet state</strong>
+                    </div>
+                    <div>
+                      <strong>Reactive callbacks can keep the wallet acting</strong>
+                    </div>
+                    <div>
+                      <strong>Real protocol events can directly trigger user-side behavior</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="mini-label">Watch the live demo</div>
+                  <p style="font-size: 24px; margin-top: 10px">youtu.be/dqHAGzGRY4E</p>
+                </div>
+
+                <div class="tiny">
+                  Export tip: open this file in a browser, choose Print / Save as PDF, then import the PDF
+                  into Keynote or PowerPoint if you want a final slide deck file.
+                </div>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <div class="footline">WillLead / Reactive-native wallet prototype / English pitch deck</div>
+              <div>11</div>
+            </div>
+          </div>
+          <div class="slide-number">WILLLEAD / 11</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

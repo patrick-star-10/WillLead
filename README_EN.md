@@ -1,5 +1,10 @@
 # WillLead
 
+## Judge Links
+
+- [Pitch Deck (GitHub Pages)](https://patrick-star-10.github.io/WillLead/)
+- [Demo Video](https://youtu.be/dqHAGzGRY4E)
+
 ## Demo Video
 
 Judges can watch the pitch/demo video directly here:
