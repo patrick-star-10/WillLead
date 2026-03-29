@@ -3,7 +3,6 @@
 ## Judge Links
 
 - [Pitch Deck (GitHub Pages)](https://patrick-star-10.github.io/WillLead/)
-- [Demo Video](https://youtu.be/dqHAGzGRY4E)
 
 ## Demo Video
 
@@ -12,7 +11,7 @@ Judges can watch the pitch/demo video directly here:
 - [WillLead Demo Video](https://youtu.be/dqHAGzGRY4E)
 
 Judge-facing project overview.  
-Chinese judge-facing version: [README.md](./README.md)
+Chinese judge-facing version: [README_ZH.md](./README_ZH.md)
 
 WillLead is a **wallet prototype designed natively for Reactive Network, and a reference implementation for exploring a new wallet paradigm**.
 
